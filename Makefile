@@ -8,7 +8,16 @@ help: ## Show this help
 
 .PHONY: build
 build: ## Build the wand binary into bin/
-	go build -ldflags "-X $(PKG)/internal/cli.Version=$(VERSION)" -o $(BIN) ./cmd/wand
+	go build -ldflags "-X $(PKG)/internal/cli.Version=$(VERSION)" -o $(BIN) .
+
+.PHONY: install
+install: ## Install wand onto your PATH (needs $(go env GOPATH)/bin on PATH)
+	go install -ldflags "-X $(PKG)/internal/cli.Version=$(VERSION)" .
+	@echo "Installed to $$(go env GOPATH)/bin/wand"
+
+.PHONY: run
+run: ## Run the TUI from source
+	@go run . ui
 
 .PHONY: test
 test: ## Run the fast suite (tiers 0-2)
@@ -27,7 +36,7 @@ update-goldens: ## Regenerate golden screens, then READ THE DIFF
 
 .PHONY: screen
 screen: ## Print a screen, e.g. make screen SCRIPT=j,enter
-	@go run ./cmd/wand ui --script "$(SCRIPT)" --dump-screen
+	@go run . ui --script "$(SCRIPT)" --dump-screen
 
 .PHONY: fmt
 fmt: ## Format all Go source

@@ -13,7 +13,7 @@ A TUI is the one kind of program you cannot observe by reading its output. So
 the repo renders screens to plain text on demand:
 
 ```bash
-go run ./cmd/wand ui --script "j,enter" --dump-screen
+go run . ui --script "j,enter" --dump-screen
 ```
 
 `--script` is a comma-separated key sequence (`j`, `enter`, `esc`, `ctrl+c`,
@@ -30,7 +30,7 @@ ask the user to look.
 ## Layout
 
 ```
-cmd/wand/            main; hands off to internal/cli
+main.go              at the repo root, per Go CLI convention; hands off to internal/cli
 internal/cli/        cobra commands, fang wiring, the --dump-screen path
 internal/tui/        Bubble Tea models — the app itself
   testdata/screens/  golden screens (plain text pictures of the UI)
@@ -84,12 +84,19 @@ git diff -- '*/testdata/screens/*.txt'   # then actually read it
 ## Commands
 
 ```bash
+go run . ui          # run the TUI interactively (needs a terminal)
 make test            # tiers 0-2, fast
 make test-e2e        # tier 3, needs a pty
 make check           # what CI runs: gofmt, vet, test
 make update-goldens  # then read the diff
 make build           # bin/wand
+make install         # put wand on the user's PATH
+make help            # every target
 ```
+
+`go run . ui` needs a real terminal, so it is not something you can drive from
+a tool call — use `--dump-screen` above to see the UI, and leave the
+interactive run to the user.
 
 ## Dependency notes
 

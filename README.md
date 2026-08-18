@@ -9,14 +9,10 @@ machinery — its covenant, and the blessing path work travels along.
 ## Install
 
 ```bash
-go install github.com/mattwalters/wand/cmd/wand@latest
+go install github.com/mattwalters/wand@latest
 ```
 
-Or build from source:
-
-```bash
-make build   # -> bin/wand
-```
+That puts `wand` in `$(go env GOPATH)/bin`, which needs to be on your `PATH`.
 
 ## Usage
 
@@ -24,6 +20,17 @@ make build   # -> bin/wand
 wand          # help
 wand ui       # the interactive interface
 ```
+
+## Run from a clone
+
+You do not need to install anything to try it:
+
+```bash
+go run . ui
+```
+
+`make run` does the same. To get a binary instead, `make build` writes
+`bin/wand` (gitignored), and `make install` puts `wand` on your `PATH`.
 
 ## Testing a TUI
 
@@ -43,7 +50,8 @@ $ wand ui --script "j,enter" --dump-screen
 ```
 
 `--script` applies a key sequence first, so any screen is reachable from one
-command, and no terminal is needed.
+command, and no terminal is needed. From a clone that is
+`go run . ui --script "j,enter" --dump-screen`, or `make screen SCRIPT=j,enter`.
 
 The test suite renders through the same code path, so those snapshots are
 stored as golden files that read as pictures of the UI:
@@ -65,10 +73,12 @@ keep it deterministic.
 ## Development
 
 ```bash
+go run . ui          # run the TUI from source
 make test            # fast suite
 make test-e2e        # pty smoke test
 make check           # gofmt + vet + test
 make update-goldens  # regenerate screens (then read the diff)
+make help            # every target
 ```
 
 Built with [Bubble Tea](https://github.com/charmbracelet/bubbletea),
