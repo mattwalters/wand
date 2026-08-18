@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Verify formatting
+        run: |
+          unformatted="$(gofmt -l .)"
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Vet
+        run: |
+          go vet ./...
+          go vet -tags e2e ./e2e/...
+
+      - name: Build
+        run: go build ./...
+
+      # Golden screens are plain text rendered at a fixed size with color
+      # forced off, so they must match byte for byte on every runner. A diff
+      # here is a real regression, not a terminal difference.
+      - name: Test
+        run: go test ./...
+
+  e2e:
+    # Allocates a real pty and drives the compiled binary. Kept separate: it is
+    # slower and more environment-sensitive than the rest of the suite.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: End-to-end (pty)
+        run: go test -tags e2e ./e2e/...
