@@ -1,0 +1,23 @@
+   wand
+
+│ init
+│ Set up wand in this repository
+
+  covenant
+  Read and edit the repository covenant
+
+  bless
+  Promote work along the blessing path
+
+
+
+
+
+
+
+
+
+
+
+
+  ↑/k up • ↓/j down • enter select • q quit

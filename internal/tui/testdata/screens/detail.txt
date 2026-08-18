@@ -1,0 +1,7 @@
+ wand covenant
+
+  Read and edit the repository covenant
+
+  "covenant" is not implemented yet.
+
+  esc back • q quit
