@@ -1,0 +1,15 @@
+{{/* The section index — today only /commands/. The entries are derived from
+     the section's own pages rather than curated: a hand-kept index of pages
+     that already exist is a second list to forget to update, and unlike the
+     sidebar this one carries no editorial grouping. Order is each page's
+     weight, which is where the curation lives. */}}
+{{ define "main" }}
+<h1>{{ .Title }}</h1>
+{{ .Content }}
+<dl class="cmdlist">
+  {{ range .Pages.ByWeight }}
+  <dt><a href="{{ .RelPermalink }}"><code>{{ .Title }}</code></a></dt>
+  <dd>{{ .Params.summary }}</dd>
+  {{ end }}
+</dl>
+{{ end }}

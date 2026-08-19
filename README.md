@@ -184,6 +184,9 @@ are versioned with the tool: every release publishes a frozen copy under its
 own tag next to the moving `latest`, so a repo pinned to wand vX.Y.Z reads
 the doctrine matching its covenant schema.
 
+The command reference lives there too — every implemented command, one page
+each, with its flags and its exit codes: [wandcli.com/commands/](https://wandcli.com/commands/).
+
 The site lives in [docs/](docs/) — plain Markdown built by Hugo (a single
 Go binary, keeping with the no-Node rule) with a hand-rolled minimal theme.
 `make docs-serve` previews it locally.
