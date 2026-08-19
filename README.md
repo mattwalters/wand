@@ -205,6 +205,43 @@ go run . ui
 `make run` does the same. To get a binary instead, `make build` writes
 `bin/wand` (gitignored), and `make install` puts `wand` on your `PATH`.
 
+### Which wand am I running?
+
+`make install` writes to Go's bin directory, which on a typical machine
+precedes Homebrew's on `PATH`. So a local build **shadows** an installed
+release: after `make install`, a bare `wand` is your working tree, even with
+the cask installed. That is deliberate. Every repo's `PreToolUse` hook shells
+out to a bare `wand guard`, so if the dev build did not own the name, the
+guard would be the one surface never dogfooded. A shell alias cannot stand in
+for this — hooks are exec'd by the harness, not by an interactive shell, so
+aliases are invisible to them.
+
+The cost is that a broken build breaks Linear writes in every repo, not just
+this one. `make install` therefore builds, smokes the binary — `version` must
+answer and `guard` must still block a promotion to Todo — and only then moves
+it onto your `PATH`. A build that fails the smoke never lands.
+
+These gestures cover everything:
+
+| Intent | Move |
+|---|---|
+| Does my change work, right now? | `make build && ./bin/wand …` — no install, no `PATH` |
+| Live on the tip, in every repo | `make install` |
+| Back to what ships | `make uninstall` |
+| Pin an old release | `make install-release VERSION=v0.1.0` |
+| What do users actually get? | install the cask, run `/opt/homebrew/bin/wand` |
+
+That last row is the one worth remembering: because Go's bin directory wins,
+a bare `wand` after `brew install` still runs your dev build. Comparing
+against a release means the absolute path, every time.
+
+Local builds stamp themselves from `git describe`, so `wand version` tells you
+which one you have — `v0.1.0-5-g22923b1-dirty` is five commits past the tag
+with an unclean tree, where a real release reads exactly `v0.1.0`.
+`make install-release` builds from source at a tag, so it is not byte-identical
+to the published artifact; to exercise what users get, use the cask. Either
+copy can be checked in place with `make smoke BIN=/opt/homebrew/bin/wand`.
+
 ## Testing a TUI
 
 Terminal UIs are awkward to test and nearly impossible for an AI agent to
