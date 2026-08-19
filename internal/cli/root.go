@@ -17,5 +17,6 @@ func Root() *cobra.Command {
 	}
 
 	root.AddCommand(newUICmd())
+	root.AddCommand(newInitCmd())
 	return root
 }
