@@ -140,7 +140,7 @@ Both need `LINEAR_API_KEY` in the environment, and both respect a
 
 The doctrine — the *why* behind every covenant state and rule, which
 deliberately does not live in the covenant file — is at
-[mattwalters.github.io/wand](https://mattwalters.github.io/wand/). The docs
+[wandcli.com](https://wandcli.com/). The docs
 are versioned with the tool: every release publishes a frozen copy under its
 own tag next to the moving `latest`, so a repo pinned to wand vX.Y.Z reads
 the doctrine matching its covenant schema.
@@ -151,8 +151,9 @@ Go binary, keeping with the no-Node rule) with a hand-rolled minimal theme.
 
 Publishing is two parts: the release workflow commits the built site to the
 `gh-pages` branch on every tag, and a one-time repo setting (Settings →
-Pages → deploy from the `gh-pages` branch) tells GitHub to serve it — after
-that, every release publishes on its own.
+Pages → deploy from the `gh-pages` branch, with `wandcli.com` as the
+verified custom domain) tells GitHub to serve it — after that, every
+release publishes on its own.
 
 ## Run from a clone
 

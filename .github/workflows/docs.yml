@@ -1,17 +1,24 @@
-# The versioned docs site. On every release tag the site is built twice —
-# once frozen under /vX.Y.Z, once as the moving /latest — staged together
-# with an updated versions.json manifest, and deployed to GitHub Pages with
-# keep_files, so every released version's docs stay addressable forever and
-# a repo pinned to wand vX.Y.Z can read the doctrine matching its schema.
+# The versioned docs site, at https://wandcli.com. On every release tag the
+# site is built twice — once frozen under /vX.Y.Z, once as the moving /latest
+# — staged together with an updated versions.json manifest, and deployed to
+# GitHub Pages with keep_files, so every released version's docs stay
+# addressable forever and a repo pinned to wand vX.Y.Z can read the doctrine
+# matching its schema.
 #
-# One-time setup: GitHub Pages must be configured (Settings → Pages) to
-# serve from the gh-pages branch; the first deploy creates the branch.
+# workflow_dispatch republishes /latest (and the root redirect) from the
+# current main without cutting a release; frozen versions and the manifest
+# are left untouched.
+#
+# One-time setup, already done: GitHub Pages serves the gh-pages branch
+# (Settings → Pages), with wandcli.com as the verified custom domain and
+# DNS A records pointing at GitHub's Pages addresses.
 name: Docs
 
 on:
   push:
     tags:
       - "v*.*.*"
+  workflow_dispatch:
   pull_request:
     paths:
       - "docs/**"
@@ -37,10 +44,10 @@ jobs:
         with:
           hugo-version: ${{ env.HUGO_VERSION }}
       - name: Build
-        run: hugo --source docs --destination "$PWD/public" --baseURL "https://mattwalters.github.io/wand/latest/"
+        run: hugo --source docs --destination "$PWD/public" --baseURL "https://wandcli.com/latest/"
 
   publish:
-    if: github.event_name == 'push'
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -51,23 +58,27 @@ jobs:
         with:
           hugo-version: ${{ env.HUGO_VERSION }}
 
-      # Build twice: the frozen copy this tag owns forever, and the moving
-      # /latest. Identical content, different baseURL — links inside a build
-      # must stay inside its own version.
+      # A tag build publishes twice: the frozen copy this tag owns forever,
+      # and the moving /latest. Identical content, different baseURL — links
+      # inside a build must stay inside its own version. A dispatch run
+      # rebuilds /latest only.
       - name: Build ${{ github.ref_name }}
-        run: hugo --source docs --destination "$PWD/public/${{ github.ref_name }}" --baseURL "https://mattwalters.github.io/wand/${{ github.ref_name }}/"
+        if: github.ref_type == 'tag'
+        run: hugo --source docs --destination "$PWD/public/${{ github.ref_name }}" --baseURL "https://wandcli.com/${{ github.ref_name }}/"
         env:
           HUGO_PARAMS_VERSION: ${{ github.ref_name }}
 
       - name: Build latest
-        run: hugo --source docs --destination "$PWD/public/latest" --baseURL "https://mattwalters.github.io/wand/latest/"
+        run: hugo --source docs --destination "$PWD/public/latest" --baseURL "https://wandcli.com/latest/"
         env:
           HUGO_PARAMS_VERSION: latest
 
       # The manifest feeding the version picker: append this tag to whatever
       # gh-pages already carries, unique, sorted newest first. The first
-      # release finds no branch and starts from [].
+      # release finds no branch and starts from []. Dispatch runs skip this —
+      # keep_files leaves the existing manifest in place.
       - name: Update versions.json
+        if: github.ref_type == 'tag'
         run: |
           if git fetch origin gh-pages --depth=1 2>/dev/null; then
             git show FETCH_HEAD:versions.json > versions.json || echo "[]" > versions.json
@@ -90,12 +101,15 @@ jobs:
           <a href="./latest/">wand documentation</a>
           EOF
 
-      # keep_files is the point: this deploy adds /vX.Y.Z and overwrites
-      # /latest, versions.json and the root redirect, while every previously
-      # released version's directory stays frozen in place.
+      # keep_files is the point: this deploy adds or overwrites only what it
+      # staged — /latest, the root redirect, and on tag builds /vX.Y.Z and
+      # versions.json — while every previously released version's directory
+      # stays frozen in place. cname re-asserts the custom-domain CNAME file
+      # on every deploy so it can never be lost to a future non-keep deploy.
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           publish_dir: ./public
           keep_files: true
+          cname: wandcli.com
