@@ -240,8 +240,12 @@ terminal emulator to recover the grid of characters a user would see.
 
 Four tiers cover the app: pure `Update` tests, runtime wiring tests, golden
 screens, and one end-to-end test that drives the compiled binary through a real
-pseudo-terminal. See [CLAUDE.md](CLAUDE.md) for the details and the rules that
-keep it deterministic.
+pseudo-terminal. Off to the side sits the worker isolation conformance suite:
+its structural half runs with `make test`, and its live half
+(`make test-conformance`) spawns the real harness and proves a worker
+instructed to write Linear or GitHub fails — it spends a real model call, so
+it is run deliberately, never in CI. See [CLAUDE.md](CLAUDE.md) for the
+details and the rules that keep it deterministic.
 
 ## Development
 
@@ -249,6 +253,7 @@ keep it deterministic.
 go run . ui          # run the TUI from source
 make test            # fast suite
 make test-e2e        # pty smoke test
+make test-conformance # worker isolation against the real harness (spends a model call)
 make check           # gofmt + vet + test
 make update-goldens  # regenerate screens (then read the diff)
 make docs            # build the docs site into docs/public (needs hugo: brew install hugo)
