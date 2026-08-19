@@ -53,6 +53,14 @@ check: ## What CI runs
 	$(MAKE) vet
 	$(MAKE) test
 
+.PHONY: release
+release: ## Tag and push a release (a human act), e.g. make release VERSION=v0.1.0
+	@echo "$(VERSION)" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$$' || { echo "VERSION must look like v1.2.3 (got '$(VERSION)')"; exit 1; }
+	@test -z "$$(git status --porcelain)" || { echo "working tree not clean"; exit 1; }
+	@test "$$(git branch --show-current)" = "main" || { echo "release from main (currently on $$(git branch --show-current))"; exit 1; }
+	git tag $(VERSION)
+	git push origin $(VERSION)
+
 .PHONY: clean
 clean: ## Remove build output
 	rm -rf bin/

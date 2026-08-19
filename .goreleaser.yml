@@ -1,0 +1,70 @@
+# goreleaser configuration — https://goreleaser.com
+#
+# Runs from .github/workflows/release.yml on every v*.*.* tag push. The
+# stamped ldflags feed `wand version`; the var names must match
+# internal/cli/version.go (there is a test holding the defaults in place).
+version: 2
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - windows
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    main: .
+    ldflags:
+      - -s -w
+      - -X github.com/mattwalters/wand/internal/cli.Version={{.Version}}
+      - -X github.com/mattwalters/wand/internal/cli.Commit={{.Commit}}
+      - -X github.com/mattwalters/wand/internal/cli.Date={{.Date}}
+
+archives:
+  - name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_{{- if eq .Os "darwin" }}Darwin{{ else if eq .Os "linux" }}Linux{{ else if eq .Os "windows" }}Windows{{ else }}{{ .Os }}{{ end }}_{{- if eq .Arch "amd64" }}x86_64{{ else }}{{ .Arch }}{{ end }}
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  version_template: "{{ incpatch .Version }}-next"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
+# The cask lands in mattwalters/homebrew-wand; the token is a fine-grained
+# PAT scoped to that repo (Contents: read/write), passed through release.yml.
+# Casks replaced goreleaser's deprecated brews (formulas). The post-install
+# hook is goreleaser's documented workaround for unsigned binaries: Homebrew
+# quarantines cask downloads, and wand's binaries are not notarized.
+homebrew_casks:
+  - name: wand
+    repository:
+      owner: mattwalters
+      name: homebrew-wand
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/mattwalters/wand"
+    description: "An agent toolkit for repositories"
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/wand"]
+          end

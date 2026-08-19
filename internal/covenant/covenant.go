@@ -7,6 +7,13 @@
 // over these types later.
 package covenant
 
+// SchemaVersion is the covenant file schema this binary speaks. A repo's
+// covenant file declares the schema version it was written against, and
+// `wand version` reports this constant — that pairing is how you learn
+// whether a given binary can read a given covenant. Topology upgrades ship
+// by incrementing it.
+const SchemaVersion = 1
+
 // Status is one workflow state the covenant requires on the team.
 type Status struct {
 	Name     string
