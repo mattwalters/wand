@@ -21,7 +21,13 @@
       {{ $section := "" }}
       {{ range site.Menus.main }}
       {{ with .Params.section }}{{ if ne . $section }}{{ $section = . }}<h5>{{ . }}</h5>{{ end }}{{ end }}
-      <a href="{{ .URL | relURL }}"{{ if $.IsMenuCurrent "main" . }} class="active" aria-current="page"{{ end }}>{{ .Name }}</a>
+      {{ $current := $.IsMenuCurrent "main" . }}
+      {{/* Command entries carry mono in hugo.toml: their names are things you
+           type, and a manual sets them in the face you type them in. */}}
+      {{ $classes := slice }}
+      {{ if .Params.mono }}{{ $classes = $classes | append "mono" }}{{ end }}
+      {{ if $current }}{{ $classes = $classes | append "active" }}{{ end }}
+      <a href="{{ .URL | relURL }}"{{ with $classes }} class="{{ delimit . " " }}"{{ end }}{{ if $current }} aria-current="page"{{ end }}>{{ .Name }}</a>
       {{ end }}
     </nav>
     <main>

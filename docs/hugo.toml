@@ -46,3 +46,92 @@ pageRef = "/covenant"
 weight = 20
 [menus.main.params]
 section = "Doctrine"
+
+# The command reference. Names are the command as typed, and each entry
+# carries mono = true so the rail sets them in the face you type them in.
+# Order is curated: setup, then the read layer, then the lifecycle verbs,
+# then the two that need no Linear key. Alphabetical would scatter the
+# verbs that are only meaningful as a sequence.
+[[menus.main]]
+name = "All commands"
+pageRef = "/commands"
+weight = 100
+[menus.main.params]
+section = "Commands"
+
+[[menus.main]]
+name = "wand init"
+pageRef = "/commands/init"
+weight = 110
+[menus.main.params]
+mono = true
+
+[[menus.main]]
+name = "wand doctor"
+pageRef = "/commands/doctor"
+weight = 120
+[menus.main.params]
+mono = true
+
+[[menus.main]]
+name = "wand guard"
+pageRef = "/commands/guard"
+weight = 130
+[menus.main.params]
+mono = true
+
+[[menus.main]]
+name = "wand queue"
+pageRef = "/commands/queue"
+weight = 140
+[menus.main.params]
+mono = true
+
+[[menus.main]]
+name = "wand ticket"
+pageRef = "/commands/ticket"
+weight = 150
+[menus.main.params]
+mono = true
+
+[[menus.main]]
+name = "wand claim"
+pageRef = "/commands/claim"
+weight = 160
+[menus.main.params]
+mono = true
+
+[[menus.main]]
+name = "wand handback"
+pageRef = "/commands/handback"
+weight = 170
+[menus.main.params]
+mono = true
+
+[[menus.main]]
+name = "wand abandon"
+pageRef = "/commands/abandon"
+weight = 180
+[menus.main.params]
+mono = true
+
+[[menus.main]]
+name = "wand file"
+pageRef = "/commands/file"
+weight = 190
+[menus.main.params]
+mono = true
+
+[[menus.main]]
+name = "wand ui"
+pageRef = "/commands/ui"
+weight = 200
+[menus.main.params]
+mono = true
+
+[[menus.main]]
+name = "wand version"
+pageRef = "/commands/version"
+weight = 210
+[menus.main.params]
+mono = true

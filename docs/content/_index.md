@@ -35,3 +35,6 @@ Prebuilt binaries for macOS, Linux and Windows are on the
 reasoning behind every state and rule in it. The covenant file (`wand.toml`)
 carries the parameters; this page carries the *why*, which deliberately does
 not live in the file.
+
+[Commands](commands/) — the reference: every command wand implements, one
+page each, with its flags, its exit codes and what it is for.

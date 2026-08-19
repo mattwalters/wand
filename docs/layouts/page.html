@@ -1,4 +1,6 @@
 {{ define "main" }}
-<h1>{{ .Title }}</h1>
+{{/* Command pages are titled with the command itself, so the heading is set
+     in the face you type it in — the rail's mono entries lead here. */}}
+<h1{{ if eq .Section "commands" }} class="cmd"{{ end }}>{{ .Title }}</h1>
 {{ .Content }}
 {{ end }}
