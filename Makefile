@@ -38,6 +38,16 @@ update-goldens: ## Regenerate golden screens, then READ THE DIFF
 screen: ## Print a screen, e.g. make screen SCRIPT=j,enter
 	@go run . ui --script "$(SCRIPT)" --dump-screen
 
+.PHONY: docs
+docs: ## Build the docs site into docs/public (needs hugo)
+	@command -v hugo >/dev/null || { echo "hugo not found — brew install hugo"; exit 1; }
+	hugo --source docs
+
+.PHONY: docs-serve
+docs-serve: ## Serve the docs site at http://localhost:1313/ with live reload (needs hugo)
+	@command -v hugo >/dev/null || { echo "hugo not found — brew install hugo"; exit 1; }
+	hugo server --source docs --baseURL http://localhost:1313/
+
 .PHONY: fmt
 fmt: ## Format all Go source
 	gofmt -w .

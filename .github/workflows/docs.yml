@@ -1,0 +1,101 @@
+# The versioned docs site. On every release tag the site is built twice —
+# once frozen under /vX.Y.Z, once as the moving /latest — staged together
+# with an updated versions.json manifest, and deployed to GitHub Pages with
+# keep_files, so every released version's docs stay addressable forever and
+# a repo pinned to wand vX.Y.Z can read the doctrine matching its schema.
+#
+# One-time setup: GitHub Pages must be configured (Settings → Pages) to
+# serve from the gh-pages branch; the first deploy creates the branch.
+name: Docs
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  pull_request:
+    paths:
+      - "docs/**"
+      - ".github/workflows/docs.yml"
+
+# Pin the same Hugo everywhere: the standard (non-extended) build is enough
+# because the theme is plain CSS, but a version drifting between local and CI
+# is how a site that "built fine yesterday" breaks on release day.
+env:
+  HUGO_VERSION: "0.165.0"
+
+permissions:
+  contents: read
+
+jobs:
+  # PRs touching the site prove it still builds; nothing is deployed.
+  build:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: ${{ env.HUGO_VERSION }}
+      - name: Build
+        run: hugo --source docs --destination "$PWD/public" --baseURL "https://mattwalters.github.io/wand/latest/"
+
+  publish:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: peaceiris/actions-hugo@v3
+        with:
+          hugo-version: ${{ env.HUGO_VERSION }}
+
+      # Build twice: the frozen copy this tag owns forever, and the moving
+      # /latest. Identical content, different baseURL — links inside a build
+      # must stay inside its own version.
+      - name: Build ${{ github.ref_name }}
+        run: hugo --source docs --destination "$PWD/public/${{ github.ref_name }}" --baseURL "https://mattwalters.github.io/wand/${{ github.ref_name }}/"
+        env:
+          HUGO_PARAMS_VERSION: ${{ github.ref_name }}
+
+      - name: Build latest
+        run: hugo --source docs --destination "$PWD/public/latest" --baseURL "https://mattwalters.github.io/wand/latest/"
+        env:
+          HUGO_PARAMS_VERSION: latest
+
+      # The manifest feeding the version picker: append this tag to whatever
+      # gh-pages already carries, unique, sorted newest first. The first
+      # release finds no branch and starts from [].
+      - name: Update versions.json
+        run: |
+          if git fetch origin gh-pages --depth=1 2>/dev/null; then
+            git show FETCH_HEAD:versions.json > versions.json || echo "[]" > versions.json
+          else
+            echo "[]" > versions.json
+          fi
+          jq --arg v "${{ github.ref_name }}" \
+            '. + [$v] | unique | sort_by(ltrimstr("v") | split(".") | map(tonumber)) | reverse' \
+            versions.json > public/versions.json
+          cat public/versions.json
+
+      # The site root only redirects: every real page lives under a version.
+      - name: Stage root redirect
+        run: |
+          cat > public/index.html <<'EOF'
+          <!DOCTYPE html>
+          <meta charset="utf-8">
+          <meta http-equiv="refresh" content="0; url=./latest/">
+          <title>wand</title>
+          <a href="./latest/">wand documentation</a>
+          EOF
+
+      # keep_files is the point: this deploy adds /vX.Y.Z and overwrites
+      # /latest, versions.json and the root redirect, while every previously
+      # released version's directory stays frozen in place.
+      - name: Deploy
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./public
+          keep_files: true

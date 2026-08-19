@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ if not .IsHome }}{{ .Title }} · {{ end }}{{ site.Title }}</title>
+  <link rel="stylesheet" href="{{ "style.css" | relURL }}">
+</head>
+<body>
+  <header>
+    <nav>
+      <a class="brand" href="{{ site.BaseURL }}">wand</a>
+      {{ range site.RegularPages.ByTitle }}
+      <a href="{{ .RelPermalink }}">{{ .Title }}</a>
+      {{ end }}
+      <a href="https://github.com/mattwalters/wand">GitHub</a>
+    </nav>
+    <span class="version">
+      {{ site.Params.version }}
+      <select id="version-picker" hidden aria-label="Documentation version"></select>
+    </span>
+  </header>
+  <main>
+    {{ block "main" . }}{{ end }}
+  </main>
+  <script>
+    // The version picker. Each release is deployed frozen under /vX.Y.Z/
+    // beside a moving /latest/, and versions.json lives one level above
+    // them all on the gh-pages root. A local preview has no manifest; the
+    // fetch fails and the picker simply never appears.
+    (function () {
+      var root = new URL("..", "{{ site.BaseURL }}");
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          var picker = document.getElementById("version-picker");
+          ["latest"].concat(versions).forEach(function (v) {
+            var option = document.createElement("option");
+            option.value = v;
+            option.textContent = v;
+            option.selected = v === {{ site.Params.version }};
+            picker.appendChild(option);
+          });
+          picker.addEventListener("change", function () {
+            window.location.href = new URL(picker.value + "/", root);
+          });
+          picker.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>

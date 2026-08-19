@@ -136,6 +136,24 @@ Both need `LINEAR_API_KEY` in the environment, and both respect a
 `wand.toml`'s status renames — a board whose blessed column is called
 "Ready" queues from "Ready".
 
+## Docs
+
+The doctrine — the *why* behind every covenant state and rule, which
+deliberately does not live in the covenant file — is at
+[mattwalters.github.io/wand](https://mattwalters.github.io/wand/). The docs
+are versioned with the tool: every release publishes a frozen copy under its
+own tag next to the moving `latest`, so a repo pinned to wand vX.Y.Z reads
+the doctrine matching its covenant schema.
+
+The site lives in [docs/](docs/) — plain Markdown built by Hugo (a single
+Go binary, keeping with the no-Node rule) with a hand-rolled minimal theme.
+`make docs-serve` previews it locally.
+
+Publishing is two parts: the release workflow commits the built site to the
+`gh-pages` branch on every tag, and a one-time repo setting (Settings →
+Pages → deploy from the `gh-pages` branch) tells GitHub to serve it — after
+that, every release publishes on its own.
+
 ## Run from a clone
 
 You do not need to install anything to try it:
@@ -193,6 +211,8 @@ make test            # fast suite
 make test-e2e        # pty smoke test
 make check           # gofmt + vet + test
 make update-goldens  # regenerate screens (then read the diff)
+make docs            # build the docs site into docs/public (needs hugo: brew install hugo)
+make docs-serve      # serve the docs at http://localhost:1313/ with live reload
 make release VERSION=v0.1.0  # tag and push a release (CI does the rest)
 make help            # every target
 ```

@@ -50,6 +50,7 @@ internal/theme/      every lipgloss style, in one place
 internal/screen/     the renderer: model -> real program -> vt -> text
 internal/tuitest/    test-facing layer over internal/screen
 e2e/                 pty smoke test + guard exit-code contract, behind the `e2e` build tag
+docs/                the versioned docs site: Hugo, hand-rolled theme, published per release tag
 ```
 
 `internal/screen` must never import `testing`. Both the test harness and the
@@ -121,8 +122,8 @@ lifecycle — the one it ships — so sessions here follow it:
   forever.
 - **Never push to `main`.** Open a PR and drive it to green.
 - **Docs change with the code.** A change to behavior that README, PLAN.md
-  or the docs describe carries the doc change in the same PR. Docs rot is
-  a code defect.
+  or the docs site (`docs/`) describes carries the doc change in the same
+  PR. Docs rot is a code defect.
 
 ## Commands
 

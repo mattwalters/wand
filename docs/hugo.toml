@@ -1,0 +1,22 @@
+# The docs site. Built by .github/workflows/docs.yml on every release tag,
+# once under /vX.Y.Z and once under /latest — the baseURL below is only the
+# local-preview default; CI overrides it per build.
+#
+# The theme is hand-rolled in layouts/ on purpose: Docsy would drag a Node
+# toolchain into a dependency-free Go repo, and a theme module is one more
+# pinned dependency to justify. The site is a handful of Markdown pages; the
+# layout earns its keep by being small enough to read.
+baseURL = "https://mattwalters.github.io/wand/latest/"
+title = "wand"
+
+disableKinds = ["taxonomy", "term", "rss", "sitemap"]
+
+[markup.highlight]
+# Classes instead of inline styles: no chroma stylesheet is shipped, so code
+# renders on the plain style.css block, which follows light/dark mode.
+noClasses = false
+
+[params]
+# The version this build documents. CI sets HUGO_PARAMS_VERSION to the tag
+# (or "latest"); "dev" means a local preview.
+version = "dev"
