@@ -3,10 +3,12 @@
 A Go CLI and TUI, built on Cobra + [fang](https://github.com/charmbracelet/fang)
 and [Bubble Tea v2](https://charm.land/bubbletea/v2). Public, MIT licensed.
 
-`init` and `guard` are real: `init` bootstraps a Linear team to the covenant
-(parameterized by a checked-in `wand.toml` when present) and installs the
-guard's hook shim; `guard` is the status verdict oracle the shim routes
-Linear writes through. `covenant` and `bless` are stubs today. [PLAN.md](./PLAN.md) is the build order and the
+`init`, `guard` and `doctor` are real: `init` bootstraps a Linear team to the
+covenant (parameterized by a checked-in `wand.toml` when present) and installs
+the guard's hook shim; `guard` is the status verdict oracle the shim routes
+Linear writes through; `doctor` diffs the live team against the covenant and
+reports drift (exit 0 clean, 1 drift, 2 could not check). `covenant` and
+`bless` are stubs today. [PLAN.md](./PLAN.md) is the build order and the
 reasoning — a deliberately mortal document; the Linear tickets are the
 authoritative version of the work. The TUI's verification layer is described
 below; read that before changing anything under `internal/tui`.
@@ -40,6 +42,7 @@ internal/linear/     the Linear GraphQL client — raw net/http, no GraphQL libr
 internal/covenant/   the process contract: fixed topology, parameterized covenant
 internal/bootstrap/  planner/executor over the covenant; all decisions in the pure Plan
 internal/guard/      the one verdict function: which ticket writes an agent may never make
+internal/doctor/     read-only drift report: bootstrap.Plan as the diff, plus what Plan cannot express
 internal/shim/       generates the PreToolUse hook entry that routes save_issue to wand guard
 internal/tui/        Bubble Tea models — the app itself
   testdata/screens/  golden screens (plain text pictures of the UI)
@@ -61,7 +64,7 @@ the goldens identical.
 | 0 | `internal/tui/*_test.go` | `Update` transitions. Pure, instant. **Most tests belong here.** |
 | 1 | `tuitest.FinalModel` | Wiring: keys reach the right branch, commands fire |
 | 2 | `tuitest.AssertScreen` | What the user actually sees, as a golden screen |
-| 3 | `e2e/` | TTY detection, alt-screen, signals, exit codes. One pty smoke test — keep it that way — plus the guard hook's exit-code contract (plain exec, no pty). |
+| 3 | `e2e/` | TTY detection, alt-screen, signals, exit codes. One pty smoke test — keep it that way — plus the guard hook's and doctor's exit-code contracts (plain exec, no pty). |
 
 Tier 2 golden-files the **rendered screen**, not the ANSI byte stream. The byte
 stream contains every intermediate frame plus color escapes: brittle, and
