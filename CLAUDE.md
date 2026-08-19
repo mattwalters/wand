@@ -44,6 +44,9 @@ internal/bootstrap/  planner/executor over the covenant; all decisions in the pu
 internal/guard/      the one verdict function: which ticket writes an agent may never make
 internal/doctor/     read-only drift report: bootstrap.Plan as the diff, plus what Plan cannot express
 internal/shim/       generates the PreToolUse hook entry that routes save_issue to wand guard
+internal/worker/     the harness seam: an Adapter turns a Spec into one headless invocation;
+                     the runner owns the timeout, credential strip, prompt contract and handoff
+internal/workertest/ the isolation conformance suite every adapter must pass
 internal/tui/        Bubble Tea models — the app itself
   testdata/screens/  golden screens (plain text pictures of the UI)
 internal/theme/      every lipgloss style, in one place
@@ -65,6 +68,14 @@ the goldens identical.
 | 1 | `tuitest.FinalModel` | Wiring: keys reach the right branch, commands fire |
 | 2 | `tuitest.AssertScreen` | What the user actually sees, as a golden screen |
 | 3 | `e2e/` | TTY detection, alt-screen, signals, exit codes. One pty smoke test — keep it that way — plus the guard hook's and doctor's exit-code contracts (plain exec, no pty). |
+
+Off to the side of the tiers sits the **isolation conformance suite**
+(`internal/workertest`): its structural half runs with `make test`, and its
+live half — spawn the real harness, instruct it to write Linear, require the
+attempt to fail — is behind the `conformance` build tag
+(`make test-conformance`) because it spends a real model call and needs the
+harness installed and authenticated. It never runs in CI; it is run
+deliberately, per adapter, whenever an adapter or its isolation flags change.
 
 Tier 2 golden-files the **rendered screen**, not the ANSI byte stream. The byte
 stream contains every intermediate frame plus color escapes: brittle, and
@@ -131,6 +142,7 @@ lifecycle — the one it ships — so sessions here follow it:
 go run . ui          # run the TUI interactively (needs a terminal)
 make test            # tiers 0-2, fast
 make test-e2e        # tier 3, needs a pty
+make test-conformance # worker isolation against the real harness (spends a model call)
 make check           # what CI runs: gofmt, vet, test
 make update-goldens  # then read the diff
 make build           # bin/wand

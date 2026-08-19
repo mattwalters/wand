@@ -27,6 +27,10 @@ test: ## Run the fast suite (tiers 0-2)
 test-e2e: ## Run the pty smoke test (tier 3)
 	go test -tags e2e ./e2e/...
 
+.PHONY: test-conformance
+test-conformance: ## Prove worker isolation against the real harness (spends a model call)
+	go test -tags conformance -v -run Isolation ./internal/worker/...
+
 .PHONY: update-goldens
 update-goldens: ## Regenerate golden screens, then READ THE DIFF
 	go test ./... -update
@@ -56,6 +60,7 @@ fmt: ## Format all Go source
 vet: ## Run go vet over everything, including tagged files
 	go vet ./...
 	go vet -tags e2e ./e2e/...
+	go vet -tags conformance ./internal/worker/...
 
 .PHONY: check
 check: ## What CI runs
