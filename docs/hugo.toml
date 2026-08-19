@@ -6,8 +6,16 @@
 # toolchain into a dependency-free Go repo, and a theme module is one more
 # pinned dependency to justify. The site is a handful of Markdown pages; the
 # layout earns its keep by being small enough to read.
-baseURL = "https://wandcli.com/latest/"
+# The baseURL is deliberately the bare domain, never a version subpath, and
+# every emitted link is relative. Frozen version builds must survive a host
+# or path move: the v0.1.0 build predated the wandcli.com migration and its
+# baked path-absolute asset URLs 404'd until the copy was re-stamped by hand
+# on gh-pages. Relative links make every build serve identically from any
+# host and any directory. (Hugo's relativeURLs also mis-relativizes when the
+# baseURL carries a subpath — a second reason the version dir stays out.)
+baseURL = "https://wandcli.com/"
 title = "wand"
+relativeURLs = true
 
 disableKinds = ["taxonomy", "term", "rss", "sitemap"]
 

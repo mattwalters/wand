@@ -44,7 +44,7 @@ jobs:
         with:
           hugo-version: ${{ env.HUGO_VERSION }}
       - name: Build
-        run: hugo --source docs --destination "$PWD/public" --baseURL "https://wandcli.com/latest/"
+        run: hugo --source docs --destination "$PWD/public"
 
   publish:
     if: github.event_name != 'pull_request'
@@ -59,17 +59,18 @@ jobs:
           hugo-version: ${{ env.HUGO_VERSION }}
 
       # A tag build publishes twice: the frozen copy this tag owns forever,
-      # and the moving /latest. Identical content, different baseURL — links
-      # inside a build must stay inside its own version. A dispatch run
-      # rebuilds /latest only.
+      # and the moving /latest. Every emitted link is relative (see
+      # docs/hugo.toml), so no baseURL is passed: the same pages serve from
+      # any host and any directory, and only the stamped version label
+      # differs between the two builds. A dispatch run rebuilds /latest only.
       - name: Build ${{ github.ref_name }}
         if: github.ref_type == 'tag'
-        run: hugo --source docs --destination "$PWD/public/${{ github.ref_name }}" --baseURL "https://wandcli.com/${{ github.ref_name }}/"
+        run: hugo --source docs --destination "$PWD/public/${{ github.ref_name }}"
         env:
           HUGO_PARAMS_VERSION: ${{ github.ref_name }}
 
       - name: Build latest
-        run: hugo --source docs --destination "$PWD/public/latest" --baseURL "https://wandcli.com/latest/"
+        run: hugo --source docs --destination "$PWD/public/latest"
         env:
           HUGO_PARAMS_VERSION: latest
 

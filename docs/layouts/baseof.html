@@ -9,7 +9,7 @@
 <body>
   <header>
     <nav>
-      <a class="brand" href="{{ site.BaseURL }}">wand</a>
+      <a class="brand" href="{{ "" | relURL }}">wand</a>
       {{ range site.RegularPages.ByTitle }}
       <a href="{{ .RelPermalink }}">{{ .Title }}</a>
       {{ end }}
@@ -28,8 +28,14 @@
     // beside a moving /latest/, and versions.json lives one level above
     // them all on the gh-pages root. A local preview has no manifest; the
     // fetch fails and the picker simply never appears.
+    //
+    // No URL from build time appears here. Frozen versions outlive domains
+    // (the pre-wandcli.com v0.1.0 build proved it), so the root is derived
+    // from where the page is actually served: the stylesheet link resolves
+    // to <wherever>/<version>/style.css, and one step up from it is the
+    // directory holding every version and the manifest.
     (function () {
-      var root = new URL("..", "{{ site.BaseURL }}");
+      var root = new URL("..", document.querySelector('link[rel="stylesheet"]').href);
       fetch(new URL("versions.json", root))
         .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
         .then(function (versions) {
