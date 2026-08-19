@@ -33,6 +33,10 @@ wand                        # help
 wand ui                     # the interactive interface
 wand queue --team-key WND   # the ranked, vetted Todo queue
 wand ticket WND-3           # one ticket whole, for a cold reader
+wand claim WND-3            # take a blessed issue: In Progress + assignee, first
+wand handback WND-3 -m "…"  # park it on a human: question first, Needs Input second
+wand abandon WND-3 -m "…"   # return it to Backlog with the evidence that undid it
+wand file "…" --team-key WND  # file a finding into Triage, duplicates searched first
 wand doctor --team-key WND  # report the team's drift from the covenant
 wand version                # build info, and the covenant schema this binary speaks
 ```
@@ -135,6 +139,37 @@ left last.
 Both need `LINEAR_API_KEY` in the environment, and both respect a
 `wand.toml`'s status renames — a board whose blessed column is called
 "Ready" queues from "Ready".
+
+## The lifecycle verbs
+
+The four writes an interactive session performs, as verbs instead of raw
+Linear calls — each encodes an ordering rule that used to live in prose,
+where it was followed only sometimes:
+
+- `wand claim WND-3` vets the issue exactly as queue does (in Todo, not
+  `human-only`, no unresolved blockers), then sets In Progress and the
+  assignee in a single write. Claim **before** anything touches the
+  filesystem: the status move is the cheapest place to lose a race.
+- `wand handback WND-3 -m "…"` posts the question — what you need, the
+  options, your pick — as a comment **first**, then moves to Needs Input,
+  so a failure between the two never leaves a Needs Input ticket with no
+  question on it. That ticket parks forever.
+- `wand abandon WND-3 -m "…" --replace "old wording" --with "corrected"`
+  posts the evidence, then in one write corrects the description, moves to
+  Backlog and unassigns — the body stops asserting the false premise in the
+  same act that demotes it, and the old wording is quoted into the comment.
+  The `--replace` anchor must match the description exactly once; anything
+  else refuses rather than guesses in someone else's prose. Never Canceled,
+  Done or Duplicate: closing is a human's call, and the guard enforces it.
+- `wand file "title" --team-key WND` searches the team for near-duplicates
+  first — candidates are printed and nothing is filed until they are ruled
+  out (`--force`) — then files into Triage with the `agent-filed` label, no
+  priority and no assignee. An agent never promotes what it filed.
+
+Like the reads, the verbs need `LINEAR_API_KEY` in the environment and
+respect a `wand.toml`'s status renames. Every status they write passes
+through the same verdict function as the guard hook, so wand's own write
+path cannot drift from what the guard promises.
 
 ## Docs
 

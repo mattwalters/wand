@@ -13,8 +13,9 @@ import (
 	"github.com/mattwalters/wand/internal/queue"
 )
 
-// readTimeout bounds the Linear reads behind queue and ticket.
-const readTimeout = time.Minute
+// apiTimeout bounds each command's conversation with Linear, reads and
+// writes alike.
+const apiTimeout = time.Minute
 
 // linearFromEnv builds a client from LINEAR_API_KEY, the same contract init
 // documents: the key comes from the environment, never from a file.
@@ -54,7 +55,7 @@ func newQueueCmd() *cobra.Command {
 				return err
 			}
 
-			ctx, cancel := context.WithTimeout(cmd.Context(), readTimeout)
+			ctx, cancel := context.WithTimeout(cmd.Context(), apiTimeout)
 			defer cancel()
 
 			issues, err := cl.TeamIssuesByState(ctx, teamKey, cov.StatusName("todo"))
