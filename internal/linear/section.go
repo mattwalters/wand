@@ -262,23 +262,7 @@ func WithSection(description, id, markdown string) (string, error) {
 // for a private helper. Prefer UpsertSection — a wholesale write is the
 // thing the fencing above exists to avoid.
 func (c *Client) UpdateDescription(ctx context.Context, issueID, markdown string) error {
-	var out struct {
-		IssueUpdate struct {
-			Success bool `json:"success"`
-		} `json:"issueUpdate"`
-	}
-	err := c.Do(ctx, `
-		mutation($id: String!, $input: IssueUpdateInput!) {
-		  issueUpdate(id: $id, input: $input) { success }
-		}`,
-		map[string]any{"id": issueID, "input": map[string]any{"description": markdown}}, &out)
-	if err != nil {
-		return err
-	}
-	if !out.IssueUpdate.Success {
-		return fmt.Errorf("linear: refused the description update")
-	}
-	return nil
+	return c.UpdateIssue(ctx, issueID, IssueUpdate{Description: &markdown})
 }
 
 // UpsertSection writes one fenced section onto an issue, idempotently.

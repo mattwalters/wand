@@ -27,14 +27,17 @@ func WithReplacement(description, old, new string) (string, error) {
 	if old == "" {
 		return "", fmt.Errorf("linear: an empty anchor matches everywhere and pins nothing; quote the exact wording to replace")
 	}
-	switch n := strings.Count(description, old); n {
-	case 0:
+	// Index-based, not strings.Count: Count sees only non-overlapping
+	// occurrences, so a self-overlapping anchor ("very very" in "very very
+	// very") counts as one match while pinning two locations.
+	i := strings.Index(description, old)
+	if i < 0 {
 		return "", fmt.Errorf(
 			"linear: the description does not contain %q; the wording may already have been corrected — re-read the ticket rather than write a correction of text that is not there", old)
-	case 1:
-		return strings.Replace(description, old, new, 1), nil
-	default:
-		return "", fmt.Errorf(
-			"linear: %q appears %d times in the description; an anchor that matches more than once does not pin a location, so quote enough surrounding text to make it unique", old, n)
 	}
+	if strings.Contains(description[i+1:], old) {
+		return "", fmt.Errorf(
+			"linear: %q appears more than once in the description; an anchor that matches more than once does not pin a location, so quote enough surrounding text to make it unique", old)
+	}
+	return description[:i] + new + description[i+len(old):], nil
 }

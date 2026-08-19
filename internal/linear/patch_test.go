@@ -37,7 +37,10 @@ func TestWithReplacementRefusesAnchorsThatDoNotPin(t *testing.T) {
 		// Two matches cannot pin a location; picking one is a guess in
 		// someone else's prose.
 		"ambiguous": {"it fails. it fails.", "it fails."},
-		"empty":     {"anything", ""},
+		// Self-overlapping matches fool strings.Count (it sees one), but the
+		// anchor still pins two locations; the refusal must see both.
+		"overlapping": {"very very very", "very very"},
+		"empty":       {"anything", ""},
 	}
 	for name, tt := range cases {
 		t.Run(name, func(t *testing.T) {

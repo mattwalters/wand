@@ -61,6 +61,17 @@ func TestUpdateIssueSendsOnlyWhatWasSet(t *testing.T) {
 	}
 }
 
+// One wire field, two struct fields: without this refusal the Unassign
+// branch would silently overwrite AssigneeID with null, and a caller that
+// set both would unassign with success reported.
+func TestUpdateIssueRefusesAssignPlusUnassign(t *testing.T) {
+	c := &Client{APIKey: "k", Endpoint: "http://127.0.0.1:0"}
+	err := c.UpdateIssue(context.Background(), "uuid-1", IssueUpdate{AssigneeID: "u1", Unassign: true})
+	if err == nil {
+		t.Fatal("an update that both assigns and unassigns must refuse before the network")
+	}
+}
+
 func TestUpdateIssueRefusesAnEmptyUpdate(t *testing.T) {
 	c := &Client{APIKey: "k", Endpoint: "http://127.0.0.1:0"}
 	if err := c.UpdateIssue(context.Background(), "uuid-1", IssueUpdate{}); err == nil {

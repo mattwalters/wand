@@ -167,9 +167,13 @@ where it was followed only sometimes:
   priority and no assignee. An agent never promotes what it filed.
 
 Like the reads, the verbs need `LINEAR_API_KEY` in the environment and
-respect a `wand.toml`'s status renames. Every status they write passes
-through the same verdict function as the guard hook, so wand's own write
-path cannot drift from what the guard promises.
+respect a `wand.toml`'s status renames (found by walking up from the
+working directory, so a verb run from a subdirectory sees the repo's file).
+Every status they write passes through the same verdict function as the
+guard hook, so wand's own write path cannot drift from what the guard
+promises — and the respect runs both ways: `handback` and `abandon` refuse
+a ticket a human already closed, because reopening a close is as much a
+human's call as making one.
 
 ## Docs
 

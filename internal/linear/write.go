@@ -65,6 +65,9 @@ type IssueUpdate struct {
 // unassignment — go through one call here, so a failure cannot land half of
 // them.
 func (c *Client) UpdateIssue(ctx context.Context, issueID string, u IssueUpdate) error {
+	if u.AssigneeID != "" && u.Unassign {
+		return fmt.Errorf("linear: an update that both assigns and unassigns; the caller must pick one")
+	}
 	input := map[string]any{}
 	if u.StateID != "" {
 		input["stateId"] = u.StateID

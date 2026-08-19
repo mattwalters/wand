@@ -5,7 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"strings"
+	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -21,7 +22,7 @@ func verbSetup(cmd *cobra.Command) (*linear.Client, covenant.Covenant, context.C
 	if err != nil {
 		return nil, covenant.Covenant{}, nil, nil, err
 	}
-	cov, _, err := covenant.Load(covenant.FileName)
+	cov, err := covenantFromCwd()
 	if err != nil {
 		return nil, covenant.Covenant{}, nil, nil, err
 	}
@@ -29,12 +30,46 @@ func verbSetup(cmd *cobra.Command) (*linear.Client, covenant.Covenant, context.C
 	return cl, cov, ctx, cancel, nil
 }
 
+// covenantFromCwd finds the nearest wand.toml walking up from the working
+// directory — the file lives at the repo root, and a verb run from a
+// subdirectory must see the same covenant as one run at the root. A
+// cwd-only lookup would silently vet a claim against the stock covenant on
+// a board whose columns the file renames. No file anywhere up means the
+// stock covenant, same as covenant.Load.
+func covenantFromCwd() (covenant.Covenant, error) {
+	dir, err := os.Getwd()
+	if err != nil {
+		return covenant.Covenant{}, err
+	}
+	for {
+		cov, fromFile, err := covenant.Load(filepath.Join(dir, covenant.FileName))
+		if err != nil {
+			return covenant.Covenant{}, err
+		}
+		if fromFile {
+			return cov, nil
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return covenant.Default(), nil
+		}
+		dir = parent
+	}
+}
+
 // messageOrStdin resolves a comment body: the -m flag when given, stdin
 // otherwise — long markdown reads better from a heredoc than from a quoted
-// flag.
-func messageOrStdin(cmd *cobra.Command, flagValue string) (string, error) {
-	if strings.TrimSpace(flagValue) != "" {
+// flag. Only a flag the user actually passed counts as given (a blank -m is
+// an error the verb reports, not a cue to read stdin), and an interactive
+// terminal refuses rather than blocking on a read the user cannot see.
+func messageOrStdin(cmd *cobra.Command, flagSet bool, flagValue string) (string, error) {
+	if flagSet {
 		return flagValue, nil
+	}
+	if f, ok := cmd.InOrStdin().(*os.File); ok {
+		if fi, err := f.Stat(); err == nil && fi.Mode()&os.ModeCharDevice != 0 {
+			return "", fmt.Errorf("no message: pass -m, or pipe the message on stdin (a heredoc works well for long markdown)")
+		}
 	}
 	data, err := io.ReadAll(cmd.InOrStdin())
 	if err != nil {
@@ -93,7 +128,7 @@ func newHandbackCmd() *cobra.Command {
 			"Requires LINEAR_API_KEY in the environment.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			question, err := messageOrStdin(cmd, message)
+			question, err := messageOrStdin(cmd, cmd.Flags().Changed("message"), message)
 			if err != nil {
 				return err
 			}
@@ -146,7 +181,7 @@ func newAbandonCmd() *cobra.Command {
 				corr = &verbs.Correction{Old: replace, New: with}
 			}
 
-			evidence, err := messageOrStdin(cmd, message)
+			evidence, err := messageOrStdin(cmd, cmd.Flags().Changed("message"), message)
 			if err != nil {
 				return err
 			}

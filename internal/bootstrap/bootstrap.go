@@ -149,19 +149,17 @@ func Read(ctx context.Context, cl Reader, teamID string) (Current, error) {
 // Apply executes a plan against a team, in order: statuses first, because a
 // later automation action may target a status this same plan creates.
 func Apply(ctx context.Context, cl Client, teamID string, actions []Action) error {
-	stateID := map[string]string{}
+	var states []linear.WorkflowState
 	resolve := func(name string) (string, error) {
-		if id, ok := stateID[strings.ToLower(name)]; ok {
+		if id, ok := linear.StateIDByName(states, name); ok {
 			return id, nil
 		}
-		states, err := cl.TeamStates(ctx, teamID)
+		fetched, err := cl.TeamStates(ctx, teamID)
 		if err != nil {
 			return "", err
 		}
-		for _, s := range states {
-			stateID[strings.ToLower(s.Name)] = s.ID
-		}
-		id, ok := stateID[strings.ToLower(name)]
+		states = fetched
+		id, ok := linear.StateIDByName(states, name)
 		if !ok {
 			return "", fmt.Errorf("bootstrap: automation targets status %q, which does not exist on the team", name)
 		}
@@ -177,7 +175,7 @@ func Apply(ctx context.Context, cl Client, teamID string, actions []Action) erro
 			if err != nil {
 				return fmt.Errorf("bootstrap: %s: %w", a, err)
 			}
-			stateID[strings.ToLower(created.Name)] = created.ID
+			states = append(states, created)
 		case CreateLabel:
 			if _, err := cl.CreateLabel(ctx, teamID, a.Label.Name, a.Label.Color); err != nil {
 				return fmt.Errorf("bootstrap: %s: %w", a, err)

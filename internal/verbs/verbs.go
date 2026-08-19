@@ -54,7 +54,7 @@ type Linear interface {
 	CreateComment(ctx context.Context, issueID, body string) error
 	UpdateIssue(ctx context.Context, issueID string, u linear.IssueUpdate) error
 	TeamByKey(ctx context.Context, key string) (linear.Team, error)
-	Labels(ctx context.Context) ([]linear.Label, error)
+	LabelByName(ctx context.Context, name string) (linear.Label, bool, error)
 	CreateIssue(ctx context.Context, in linear.IssueCreate) (linear.Issue, error)
 	SearchIssues(ctx context.Context, teamKey, term string) ([]linear.Issue, error)
 }
@@ -76,13 +76,25 @@ func resolveState(ctx context.Context, cl Linear, cov covenant.Covenant, teamID,
 	if err != nil {
 		return "", err
 	}
-	for _, s := range states {
-		if strings.EqualFold(s.Name, name) {
-			return s.ID, nil
-		}
+	if id, ok := linear.StateIDByName(states, name); ok {
+		return id, nil
 	}
 	return "", fmt.Errorf(
 		"the team has no status named %q; the board has drifted from the covenant — run `wand doctor`, and `wand init` to repair", name)
+}
+
+// refuseIfClosed rejects verbs against a closed ticket. The guard judges only
+// the destination status, so without this gate an abandon or handback against
+// a Done or Canceled ticket would silently reopen it — undoing a close, which
+// is as much a human's call as making one.
+func refuseIfClosed(issue linear.Issue, verb string) error {
+	switch issue.State.Type {
+	case "completed", "canceled":
+		return fmt.Errorf(
+			"%s is closed (%q), and reopening a closed ticket is a human's call — %s would silently undo that close. If the close was wrong, say so in a comment and leave the status to a person",
+			issue.Identifier, issue.State.Name, verb)
+	}
+	return nil
 }
 
 // Claimed is what a successful claim reports: the issue as it stood, and
@@ -135,7 +147,8 @@ func Claim(ctx context.Context, cl Linear, cov covenant.Covenant, identifier str
 // Needs Input second. The order is the contract — if the status write fails,
 // the ticket stays In Progress carrying its question, which a later pass can
 // finish; the reverse failure leaves a Needs Input ticket that asks nothing,
-// and that ticket parks forever.
+// and that ticket parks forever. A ticket a human already closed refuses:
+// reopening a close is their call, not the verb's.
 func Handback(ctx context.Context, cl Linear, cov covenant.Covenant, identifier, question string) (linear.Issue, error) {
 	question = strings.TrimSpace(question)
 	if question == "" {
@@ -146,11 +159,18 @@ func Handback(ctx context.Context, cl Linear, cov covenant.Covenant, identifier,
 	if err != nil {
 		return linear.Issue{}, err
 	}
-	if err := cl.CreateComment(ctx, issue.ID, question); err != nil {
+	if err := refuseIfClosed(issue, "handback"); err != nil {
 		return linear.Issue{}, err
 	}
+	// Resolve the target before the comment: resolveState is a pure read, so
+	// running it first means a drifted board or a guard refusal stops the
+	// verb with nothing written — a failure after the comment would make a
+	// repaired re-run post the question twice.
 	stateID, err := resolveState(ctx, cl, cov, issue.TeamID, "needs_input")
 	if err != nil {
+		return linear.Issue{}, err
+	}
+	if err := cl.CreateComment(ctx, issue.ID, question); err != nil {
 		return linear.Issue{}, err
 	}
 	if err := cl.UpdateIssue(ctx, issue.ID, linear.IssueUpdate{StateID: stateID}); err != nil {
@@ -200,7 +220,9 @@ func blockquote(s string) string {
 // would just be re-blessed on the strength of it.
 //
 // Never Canceled, Done or Duplicate: closing is a human's call however
-// wrong the ticket turned out to be, and the guard enforces it.
+// wrong the ticket turned out to be, and the guard enforces it. The same
+// respect runs the other way — a ticket a human already closed refuses,
+// because reopening a close is as much their call as making one.
 func Abandon(ctx context.Context, cl Linear, cov covenant.Covenant, identifier, evidence string, corr *Correction) (linear.Issue, error) {
 	evidence = strings.TrimSpace(evidence)
 	if evidence == "" {
@@ -209,6 +231,9 @@ func Abandon(ctx context.Context, cl Linear, cov covenant.Covenant, identifier, 
 	}
 	issue, err := cl.IssueByIdentifier(ctx, identifier)
 	if err != nil {
+		return linear.Issue{}, err
+	}
+	if err := refuseIfClosed(issue, "abandon"); err != nil {
 		return linear.Issue{}, err
 	}
 
@@ -225,14 +250,18 @@ func Abandon(ctx context.Context, cl Linear, cov covenant.Covenant, identifier, 
 		comment = evidence + "\n\n" + corr.note()
 	}
 
-	if err := cl.CreateComment(ctx, issue.ID, comment); err != nil {
-		return linear.Issue{}, err
-	}
+	// Resolve the target before the comment: the comment promises the
+	// correction lands "in the same action", so every failure that can be
+	// checked without writing must come first — a comment followed by a
+	// refusal would record a correction that never happened.
 	stateID, err := resolveState(ctx, cl, cov, issue.TeamID, "backlog")
 	if err != nil {
 		return linear.Issue{}, err
 	}
 	update.StateID = stateID
+	if err := cl.CreateComment(ctx, issue.ID, comment); err != nil {
+		return linear.Issue{}, err
+	}
 	if err := cl.UpdateIssue(ctx, issue.ID, update); err != nil {
 		return linear.Issue{}, err
 	}
@@ -305,15 +334,13 @@ func File(ctx context.Context, cl Linear, cov covenant.Covenant, req FileRequest
 }
 
 func agentFiledLabelID(ctx context.Context, cl Linear) (string, error) {
-	labels, err := cl.Labels(ctx)
+	label, found, err := cl.LabelByName(ctx, AgentFiledLabel)
 	if err != nil {
 		return "", err
 	}
-	for _, l := range labels {
-		if strings.EqualFold(l.Name, AgentFiledLabel) {
-			return l.ID, nil
-		}
+	if !found {
+		return "", fmt.Errorf(
+			"no %q label anywhere in the workspace; run `wand init` to bring the team to the covenant", AgentFiledLabel)
 	}
-	return "", fmt.Errorf(
-		"no %q label anywhere in the workspace; run `wand init` to bring the team to the covenant", AgentFiledLabel)
+	return label.ID, nil
 }

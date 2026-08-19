@@ -62,8 +62,13 @@ func (f *fake) TeamByKey(ctx context.Context, key string) (linear.Team, error) {
 	return f.team, nil
 }
 
-func (f *fake) Labels(ctx context.Context) ([]linear.Label, error) {
-	return f.labels, nil
+func (f *fake) LabelByName(ctx context.Context, name string) (linear.Label, bool, error) {
+	for _, l := range f.labels {
+		if strings.EqualFold(l.Name, name) {
+			return l, true, nil
+		}
+	}
+	return linear.Label{}, false, nil
 }
 
 func (f *fake) CreateIssue(ctx context.Context, in linear.IssueCreate) (linear.Issue, error) {
@@ -222,6 +227,47 @@ func TestHandbackFailedCommentStopsTheStatusMove(t *testing.T) {
 	// no question on it parks forever.
 	if len(f.updates) != 0 {
 		t.Errorf("status was moved after the comment failed: %+v", f.updates)
+	}
+}
+
+// The guard judges only the destination, so the verbs must gate the source:
+// a Done or Canceled ticket refuses, or an abandon/handback with stale
+// context silently undoes a human's close.
+func TestHandbackAndAbandonRefuseClosedTickets(t *testing.T) {
+	for name, state := range map[string]linear.IssueState{
+		"done":     {Name: "Done", Type: "completed"},
+		"canceled": {Name: "Canceled", Type: "canceled"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			issue := todoIssue()
+			issue.State = state
+			f := &fake{issue: issue, states: wndStates}
+			if _, err := Handback(context.Background(), f, covenant.Default(), "WND-6", "a question"); err == nil {
+				t.Error("handback of a closed ticket must refuse")
+			}
+			if _, err := Abandon(context.Background(), f, covenant.Default(), "WND-6", "evidence", nil); err == nil {
+				t.Error("abandon of a closed ticket must refuse")
+			}
+			if w := f.writes(); len(w) != 0 {
+				t.Errorf("writes = %v, want none: reopening a close is a human's call", w)
+			}
+		})
+	}
+}
+
+// A drifted board (or a guard refusal) must stop the verb before the
+// comment: a failure after it would leave a comment promising a correction
+// that never happened, and a repaired re-run would post the question twice.
+func TestHandbackAndAbandonResolveTheStateBeforeCommenting(t *testing.T) {
+	f := &fake{issue: todoIssue()} // no states: every resolveState fails as drift
+	if _, err := Handback(context.Background(), f, covenant.Default(), "WND-6", "a question"); err == nil {
+		t.Fatal("want the drift surfaced")
+	}
+	if _, err := Abandon(context.Background(), f, covenant.Default(), "WND-6", "evidence", nil); err == nil {
+		t.Fatal("want the drift surfaced")
+	}
+	if len(f.comments) != 0 {
+		t.Errorf("comments = %q, want none: the refusal must come before any write", f.comments)
 	}
 }
 
