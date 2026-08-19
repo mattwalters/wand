@@ -78,6 +78,19 @@ type Covenant struct {
 	Templates           map[string]string
 }
 
+// StatusName returns the display name of the status with the given semantic
+// key ("todo", "needs_input", …), or "" when the covenant has no such key.
+// This is how code refers to a status: by what it means, letting the
+// covenant file own what it is called.
+func (c Covenant) StatusName(key string) string {
+	for _, s := range c.Statuses {
+		if s.Key == key {
+			return s.Name
+		}
+	}
+	return ""
+}
+
 // Default is the stock covenant: the lifecycle proven in Prosewell.
 //
 // Triage is the inbox agents file into; Backlog is the undifferentiated pool;
