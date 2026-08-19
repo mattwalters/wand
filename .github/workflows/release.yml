@@ -1,0 +1,49 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # goreleaser builds the changelog from tag history.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+
+      # Keep the moving major tag (v1 -> latest v1.x.y) so install
+      # instructions can pin a major and still get fixes.
+      - name: Update major version tag
+        run: |
+          FULL_VERSION=${GITHUB_REF_NAME}
+          MAJOR_VERSION=$(echo "$FULL_VERSION" | sed -E 's/^(v[0-9]+)\..*/\1/')
+
+          echo "Full version: $FULL_VERSION"
+          echo "Major version: $MAJOR_VERSION"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin --tags
+          git tag -f "$MAJOR_VERSION" "$FULL_VERSION"
+          git push -f origin "$MAJOR_VERSION"

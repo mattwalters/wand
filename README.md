@@ -10,17 +10,31 @@ machinery — its covenant, and the blessing path work travels along.
 ## Install
 
 ```bash
+brew install mattwalters/wand/wand
+```
+
+Or with Go:
+
+```bash
 go install github.com/mattwalters/wand@latest
 ```
 
 That puts `wand` in `$(go env GOPATH)/bin`, which needs to be on your `PATH`.
+Prebuilt binaries for macOS, Linux and Windows (amd64 and arm64) are on the
+[releases page](https://github.com/mattwalters/wand/releases); the `v1` tag
+always points at the latest `v1.x.y`.
 
 ## Usage
 
 ```bash
 wand          # help
 wand ui       # the interactive interface
+wand version  # build info, and the covenant schema this binary speaks
 ```
+
+`wand version` reports the covenant schema version alongside the build:
+a repo's covenant file declares the schema it was written against, and
+comparing the two is how you learn whether a given binary can read it.
 
 ## The covenant file
 
@@ -134,6 +148,7 @@ make test            # fast suite
 make test-e2e        # pty smoke test
 make check           # gofmt + vet + test
 make update-goldens  # regenerate screens (then read the diff)
+make release VERSION=v0.1.0  # tag and push a release (CI does the rest)
 make help            # every target
 ```
 

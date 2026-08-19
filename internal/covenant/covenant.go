@@ -9,6 +9,13 @@ package covenant
 
 import "time"
 
+// SchemaVersion is the covenant file schema this binary speaks. A repo's
+// covenant file declares the schema version it was written against, and
+// `wand version` reports this constant — that pairing is how you learn
+// whether a given binary can read a given covenant. Topology upgrades ship
+// by incrementing it.
+const SchemaVersion = 1
+
 // Status is one workflow state the covenant requires on the team.
 //
 // Key is the status's fixed semantic identity ("todo", "needs_input", …) —

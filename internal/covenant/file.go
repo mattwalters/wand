@@ -14,9 +14,6 @@ import (
 // FileName is the covenant file's name, at the root of the repo.
 const FileName = "wand.toml"
 
-// Schema is the covenant schema version this wand speaks.
-const Schema = 1
-
 // File is the parsed covenant file: a checked-in wand.toml that
 // parameterizes the stock covenant. TOML, so the rationale for a value
 // survives as a comment next to the value it justifies. Fields left unset in
@@ -131,13 +128,13 @@ func Parse(data []byte) (File, error) {
 	}
 
 	if !md.IsDefined("schema") {
-		return File{}, fmt.Errorf("schema is required (this wand speaks schema %d)", Schema)
+		return File{}, fmt.Errorf("schema is required (this wand speaks schema %d)", SchemaVersion)
 	}
 	if f.Schema < 1 {
 		return File{}, fmt.Errorf("schema %d is not a covenant schema; the first is 1", f.Schema)
 	}
-	if f.Schema > Schema {
-		return File{}, fmt.Errorf("schema %d is newer than this wand speaks (%d); upgrade wand", f.Schema, Schema)
+	if f.Schema > SchemaVersion {
+		return File{}, fmt.Errorf("schema %d is newer than this wand speaks (%d); upgrade wand", f.Schema, SchemaVersion)
 	}
 
 	if err := validateStatuses(md, f.Statuses); err != nil {
