@@ -2,8 +2,12 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -11,7 +15,50 @@ import (
 	"github.com/mattwalters/wand/internal/bootstrap"
 	"github.com/mattwalters/wand/internal/covenant"
 	"github.com/mattwalters/wand/internal/linear"
+	"github.com/mattwalters/wand/internal/shim"
 )
+
+// settingsPath is where the harness shim lives, relative to the repo root
+// init runs in.
+const settingsPath = ".claude/settings.json"
+
+// installShim ensures the repo's harness settings route Linear issue writes
+// through wand guard. The shim is a build artifact of the covenant:
+// regenerated here, never hand-edited.
+func installShim(out io.Writer, dryRun bool) error {
+	existing, err := os.ReadFile(settingsPath)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	ensured, changed, err := shim.Ensure(existing)
+	if err != nil {
+		return fmt.Errorf("%s: %w", settingsPath, err)
+	}
+	if !changed {
+		fmt.Fprintln(out, "guard hook already installed")
+		return nil
+	}
+	if dryRun {
+		fmt.Fprintf(out, "would install PreToolUse guard hook in %s (%s → wand guard)\n", settingsPath, shim.Matcher)
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(settingsPath, ensured, 0o644); err != nil {
+		return err
+	}
+	// Read back and verify, so "installed" means observed rather than assumed.
+	written, err := os.ReadFile(settingsPath)
+	if err != nil {
+		return err
+	}
+	if _, again, err := shim.Ensure(written); err != nil || again {
+		return fmt.Errorf("guard hook still not installed after writing %s", settingsPath)
+	}
+	fmt.Fprintf(out, "install PreToolUse guard hook in %s (%s → wand guard)\n", settingsPath, shim.Matcher)
+	return nil
+}
 
 func newInitCmd() *cobra.Command {
 	var (
@@ -43,6 +90,12 @@ func newInitCmd() *cobra.Command {
 			cl := &linear.Client{APIKey: apiKey}
 			cov := covenant.Default()
 			out := cmd.OutOrStdout()
+
+			// The harness shim first: it is purely local, and from here on
+			// this very repo's sessions are under the guard.
+			if err := installShim(out, dryRun); err != nil {
+				return err
+			}
 
 			team, err := cl.TeamByKey(ctx, teamKey)
 			if err != nil {
