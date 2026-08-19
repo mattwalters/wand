@@ -3,9 +3,11 @@
 A Go CLI and TUI, built on Cobra + [fang](https://github.com/charmbracelet/fang)
 and [Bubble Tea v2](https://charm.land/bubbletea/v2). Public, MIT licensed.
 
-The verbs — `init`, `covenant`, `bless` — are stubs today. The machinery that
-exists is the verification layer, described below. Read that before changing
-anything under `internal/tui`.
+`init` is real: it bootstraps a Linear team to the covenant. `covenant` and
+`bless` are stubs today. [PLAN.md](./PLAN.md) is the build order and the
+reasoning — a deliberately mortal document; the Linear tickets are the
+authoritative version of the work. The TUI's verification layer is described
+below; read that before changing anything under `internal/tui`.
 
 ## You cannot see the UI. Here is how you look at it.
 
@@ -32,6 +34,9 @@ ask the user to look.
 ```
 main.go              at the repo root, per Go CLI convention; hands off to internal/cli
 internal/cli/        cobra commands, fang wiring, the --dump-screen path
+internal/linear/     the Linear GraphQL client — raw net/http, no GraphQL library, on purpose
+internal/covenant/   the process contract: fixed topology, parameterized covenant
+internal/bootstrap/  planner/executor over the covenant; all decisions in the pure Plan
 internal/tui/        Bubble Tea models — the app itself
   testdata/screens/  golden screens (plain text pictures of the UI)
 internal/theme/      every lipgloss style, in one place
@@ -80,6 +85,36 @@ git diff -- '*/testdata/screens/*.txt'   # then actually read it
 - `View` is a pure function of model state. No logic lives there.
 
 **Styles go in `internal/theme`**, not inline in a view.
+
+**The determinism rules are not TUI-only.** Non-TUI packages follow the same
+shape: I/O behind an interface with a fake, decisions in pure functions a
+test can hold (`bootstrap.Plan` is the pattern), no ambient time or
+randomness. When a live-API behavior costs an incident to learn, pin it in a
+test named for the lesson.
+
+## Process
+
+Work lives in Linear, in the **Wand** team (key `WAND`). wand runs its own
+lifecycle — the one it ships — so sessions here follow it:
+
+- **Take work only from Todo**, highest priority first, oldest first to
+  break ties. Skip `human-only` and anything with an unresolved blocker.
+  An empty Todo means: nothing for you right now.
+- **Never move a ticket to Todo, Scoping, Done, Canceled or Duplicate.**
+  Those grant or revoke authorization, and that is a human's act. Agents
+  may set In Progress, In Review, Needs Input, Backlog and Triage. Until
+  WAND-1 lands there is no hook enforcing this here — this paragraph is
+  the whole enforcement, which is exactly why WAND-1 is the first ticket.
+- **Found something that isn't your ticket?** File it into Triage with the
+  `agent-filed` label and carry on. Search for a duplicate first.
+- **Branch from the ticket's own branch name** (Linear provides it), and
+  lead the PR title with the identifier in brackets: `[WAND-12] …`. This
+  repo squash-merges, so the PR title is the commit subject on `main`
+  forever.
+- **Never push to `main`.** Open a PR and drive it to green.
+- **Docs change with the code.** A change to behavior that README, PLAN.md
+  or the docs describe carries the doc change in the same PR. Docs rot is
+  a code defect.
 
 ## Commands
 
