@@ -158,6 +158,16 @@ type Adapter interface {
 	Invocation(spec Spec, prompt string, environ []string) (Invocation, error)
 }
 
+// ConformanceAdapter optionally chooses the model selection for the live
+// isolation probe. The probe itself is shared across harnesses; its model
+// cannot be, because a selection valid for one CLI (for example Claude's
+// "haiku") may be invalid for another. An adapter that does not implement
+// this interface receives the suite's default selection.
+type ConformanceAdapter interface {
+	Adapter
+	ConformanceSpec(Spec) Spec
+}
+
 // Result is what came back from one run. It is populated as fully as
 // possible even when Run also returns an error, because the exit code and
 // output tail are exactly what an orchestrator wants to journal about a

@@ -190,6 +190,9 @@ request means false.`,
 		Model:       "haiku",
 		Effort:      "low",
 	}
+	if configured, ok := a.(worker.ConformanceAdapter); ok {
+		spec = configured.ConformanceSpec(spec)
+	}
 
 	res, err := worker.Run(context.Background(), a, spec)
 	if err != nil {
