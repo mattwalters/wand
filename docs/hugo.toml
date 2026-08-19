@@ -28,3 +28,21 @@ noClasses = false
 # The version this build documents. CI sets HUGO_PARAMS_VERSION to the tag
 # (or "latest"); "dev" means a local preview.
 version = "dev"
+
+# The sidebar is curated here, not derived from the page list: grouping and
+# order are editorial decisions, and a docs site whose nav is alphabetical
+# happenstance reads as unfinished. Every new content page gets an entry —
+# an unlisted page is unreachable by design, not an accident.
+[[menus.main]]
+name = "Overview"
+pageRef = "/"
+weight = 10
+[menus.main.params]
+section = "Start"
+
+[[menus.main]]
+name = "The covenant"
+pageRef = "/covenant"
+weight = 20
+[menus.main.params]
+section = "Doctrine"

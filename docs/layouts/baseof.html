@@ -8,21 +8,35 @@
 </head>
 <body>
   <header>
-    <nav>
-      <a class="brand" href="{{ "" | relURL }}">wand</a>
-      {{ range site.RegularPages.ByTitle }}
-      <a href="{{ .RelPermalink }}">{{ .Title }}</a>
-      {{ end }}
-      <a href="https://github.com/mattwalters/wand">GitHub</a>
-    </nav>
+    <a class="brand" href="{{ "" | relURL }}">wand</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/mattwalters/wand">GitHub</a>
     <span class="version">
       {{ site.Params.version }}
       <select id="version-picker" hidden aria-label="Documentation version"></select>
     </span>
   </header>
-  <main>
-    {{ block "main" . }}{{ end }}
-  </main>
+  <div class="wrap">
+    <nav class="sidenav">
+      {{ $section := "" }}
+      {{ range site.Menus.main }}
+      {{ with .Params.section }}{{ if ne . $section }}{{ $section = . }}<h5>{{ . }}</h5>{{ end }}{{ end }}
+      <a href="{{ .URL | relURL }}"{{ if $.IsMenuCurrent "main" . }} class="active" aria-current="page"{{ end }}>{{ .Name }}</a>
+      {{ end }}
+    </nav>
+    <main>
+      {{ block "main" . }}{{ end }}
+    </main>
+    {{/* plainify strips the empty <nav> Hugo emits for heading-less pages,
+         so the rail only appears when there is something to point at. */}}
+    {{ $toc := .TableOfContents }}
+    {{ if plainify $toc }}
+    <nav class="toc">
+      <h5>On this page</h5>
+      {{ $toc }}
+    </nav>
+    {{ end }}
+  </div>
   <script>
     // The version picker. Each release is deployed frozen under /vX.Y.Z/
     // beside a moving /latest/, and versions.json lives one level above
