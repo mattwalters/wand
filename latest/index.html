@@ -5,14 +5,14 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>wand</title>
-  <link rel="stylesheet" href="/latest/style.css">
+  <link rel="stylesheet" href="./style.css">
 </head>
 <body>
   <header>
     <nav>
-      <a class="brand" href="https://wandcli.com/latest/">wand</a>
+      <a class="brand" href="./">wand</a>
       
-      <a href="/latest/covenant/">The covenant</a>
+      <a href="./covenant/">The covenant</a>
       
       <a href="https://github.com/mattwalters/wand">GitHub</a>
     </nav>
@@ -54,8 +54,14 @@ not live in the file.</p>
     
     
     
+    
+    
+    
+    
+    
+    
     (function () {
-      var root = new URL("..", "https:\/\/wandcli.com\/latest\/");
+      var root = new URL("..", document.querySelector('link[rel="stylesheet"]').href);
       fetch(new URL("versions.json", root))
         .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
         .then(function (versions) {
