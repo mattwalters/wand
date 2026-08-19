@@ -7,6 +7,7 @@
   --accent: #5e6ad2; /* Linear's brand purple, the board this tool tends. */
   --rule: #e4e4e4;
   --code-bg: #f4f4f4;
+  --header-h: 3.2rem;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -25,42 +26,45 @@
 }
 
 body {
-  margin: 0 auto;
-  max-width: 44rem;
-  padding: 0 1.25rem 4rem;
+  margin: 0;
   background: var(--bg);
   color: var(--fg);
-  font: 17px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
+
+/* ---- header: thin, full-width, sticky ---- */
 
 header {
+  position: sticky;
+  top: 0;
+  z-index: 2;
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 1rem;
-  padding: 1.25rem 0;
-  border-bottom: 1px solid var(--rule);
-  margin-bottom: 2.5rem;
-}
-
-nav {
-  display: flex;
+  align-items: center;
   gap: 1.25rem;
-  flex-wrap: wrap;
+  height: var(--header-h);
+  padding: 0 1.5rem;
+  background: var(--bg);
+  border-bottom: 1px solid var(--rule);
 }
 
-nav a {
-  color: var(--muted);
+header .brand {
+  color: var(--fg);
+  font-weight: 700;
   text-decoration: none;
 }
 
-nav a:hover {
-  color: var(--fg);
+header .spacer {
+  flex: 1;
 }
 
-nav a.brand {
+header a:not(.brand) {
+  color: var(--muted);
+  font-size: 0.95rem;
+  text-decoration: none;
+}
+
+header a:not(.brand):hover {
   color: var(--fg);
-  font-weight: 700;
 }
 
 .version {
@@ -77,6 +81,140 @@ nav a.brand {
   border-radius: 4px;
   padding: 0.1rem 0.3rem;
 }
+
+/* ---- the three regions: sidebar, content, on-this-page ---- */
+
+.wrap {
+  display: grid;
+  grid-template-columns: 14rem minmax(0, 46rem) 12rem;
+  gap: 3rem;
+  max-width: 84rem;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.sidenav {
+  position: sticky;
+  top: var(--header-h);
+  align-self: start;
+  height: calc(100vh - var(--header-h));
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding: 2rem 0 4rem;
+  border-right: 1px solid var(--rule);
+  font-size: 0.92rem;
+}
+
+.sidenav h5,
+.toc h5 {
+  margin: 1.6rem 0 0.4rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.sidenav h5:first-child {
+  margin-top: 0;
+}
+
+.sidenav a {
+  display: block;
+  padding: 0.22rem 0.6rem;
+  margin: 0 0.6rem 0 -0.6rem;
+  border-radius: 4px;
+  color: var(--fg);
+  text-decoration: none;
+}
+
+.sidenav a:hover {
+  background: var(--code-bg);
+}
+
+.sidenav a.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+main {
+  min-width: 0;
+  padding: 2.2rem 0 5rem;
+}
+
+.toc {
+  position: sticky;
+  top: var(--header-h);
+  align-self: start;
+  padding: 2.4rem 0;
+  font-size: 0.85rem;
+}
+
+.toc h5 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+}
+
+.toc ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.toc ul ul {
+  padding-left: 0.9rem;
+}
+
+.toc a {
+  display: block;
+  padding: 0.15rem 0;
+  color: var(--muted);
+  text-decoration: none;
+}
+
+.toc a:hover {
+  color: var(--fg);
+}
+
+/* On narrow screens the rails fold away: the sidebar becomes a compact
+   nav row under the header (roughly the old top-nav) and the page TOC,
+   a luxury at this width, goes. */
+@media (max-width: 60rem) {
+  .wrap {
+    display: block;
+  }
+
+  .sidenav {
+    position: static;
+    height: auto;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0 1.25rem;
+    padding: 0.8rem 0;
+    border-right: none;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .sidenav h5 {
+    display: none;
+  }
+
+  .sidenav a {
+    margin: 0;
+    padding: 0.22rem 0;
+  }
+
+  .sidenav a:hover {
+    background: none;
+  }
+
+  .toc {
+    display: none;
+  }
+}
+
+/* ---- content ---- */
 
 h1, h2, h3 {
   line-height: 1.25;
