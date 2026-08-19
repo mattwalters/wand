@@ -74,6 +74,8 @@ func newInitCmd() *cobra.Command {
 			"and brings it to the covenant: the workflow statuses, the labels, and\n" +
 			"the PR automations. It is idempotent — a team already at the covenant\n" +
 			"plans no writes.\n\n" +
+			"A checked-in wand.toml parameterizes the covenant (status names, caps,\n" +
+			"commands — never its shape); absent one, the stock covenant applies.\n\n" +
 			"Requires LINEAR_API_KEY in the environment, with full access.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			apiKey := os.Getenv("LINEAR_API_KEY")
@@ -88,8 +90,17 @@ func newInitCmd() *cobra.Command {
 			defer cancel()
 
 			cl := &linear.Client{APIKey: apiKey}
-			cov := covenant.Default()
 			out := cmd.OutOrStdout()
+
+			cov, fromFile, err := covenant.Load(covenant.FileName)
+			if err != nil {
+				return err
+			}
+			if fromFile {
+				fmt.Fprintf(out, "using covenant file %s\n", covenant.FileName)
+			} else {
+				fmt.Fprintln(out, "no covenant file; using the stock covenant")
+			}
 
 			// The harness shim first: it is purely local, and from here on
 			// this very repo's sessions are under the guard.

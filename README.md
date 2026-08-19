@@ -22,6 +22,42 @@ wand          # help
 wand ui       # the interactive interface
 ```
 
+## The covenant file
+
+The state graph — Triage → Backlog → Scoping → Todo → Needs Input →
+In Progress → In Review → Done — is wand's opinion, gofmt-style. What a repo
+customizes are the parameters of the machine, never its shape: a checked-in
+`wand.toml` at the repo root carries status *names* over the fixed semantics,
+caps (review rounds, CI attempts, worker timeouts), the estimate scale,
+toggles, the three pluggable commands (verify, provision, run agent), ticket
+templates, and a schema version so topology upgrades ship centrally as wand
+releases. TOML, so the rationale for a value survives as a comment next to
+the value it justifies:
+
+```toml
+schema = 1
+
+[statuses]
+# Our board predates wand and the team reads "Ready" as blessed-to-build.
+todo = "Ready"
+
+[caps]
+review_rounds = 5
+
+[commands]
+verify = "make check"
+```
+
+`wand init` reads it when present and falls back to the stock covenant when
+absent. Validation refuses unknown keys loudly — a misspelled cap silently
+defaulting is the failure mode — and an invalid file is an error, never
+quietly the defaults.
+
+The file must never contain a secret, a machine path, or a harness name:
+those are machine config, not covenant. The test for the split: if two
+clones could legitimately differ, it is config; if a difference means two
+different processes, it is covenant.
+
 ## The guard
 
 Some ticket transitions hand out authorization an agent does not have:
