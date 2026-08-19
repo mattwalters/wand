@@ -111,20 +111,26 @@ func Plan(cov covenant.Covenant, current Current) []Action {
 	return actions
 }
 
+// Reader is the read-only slice of the Linear client Read needs. Read-only
+// verbs (wand doctor) depend on this alone; Apply needs the full Client.
+type Reader interface {
+	TeamStates(ctx context.Context, teamID string) ([]linear.WorkflowState, error)
+	Labels(ctx context.Context) ([]linear.Label, error)
+	GitAutomations(ctx context.Context, teamID string) ([]linear.GitAutomation, error)
+}
+
 // Client is the slice of the Linear client Apply needs, an interface so tests
 // can fake it without a network.
 type Client interface {
-	TeamStates(ctx context.Context, teamID string) ([]linear.WorkflowState, error)
+	Reader
 	CreateWorkflowState(ctx context.Context, teamID string, s linear.WorkflowState, color string) (linear.WorkflowState, error)
-	Labels(ctx context.Context) ([]linear.Label, error)
 	CreateLabel(ctx context.Context, teamID, name, color string) (linear.Label, error)
-	GitAutomations(ctx context.Context, teamID string) ([]linear.GitAutomation, error)
 	CreateGitAutomation(ctx context.Context, teamID, event, stateID string) error
 	UpdateGitAutomation(ctx context.Context, automationID, stateID string) error
 }
 
 // Read fetches the Current state of a team.
-func Read(ctx context.Context, cl Client, teamID string) (Current, error) {
+func Read(ctx context.Context, cl Reader, teamID string) (Current, error) {
 	states, err := cl.TeamStates(ctx, teamID)
 	if err != nil {
 		return Current{}, err
