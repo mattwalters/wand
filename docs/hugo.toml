@@ -6,7 +6,7 @@
 # toolchain into a dependency-free Go repo, and a theme module is one more
 # pinned dependency to justify. The site is a handful of Markdown pages; the
 # layout earns its keep by being small enough to read.
-baseURL = "https://mattwalters.github.io/wand/latest/"
+baseURL = "https://wandcli.com/latest/"
 title = "wand"
 
 disableKinds = ["taxonomy", "term", "rss", "sitemap"]
