@@ -1,11 +1,11 @@
 package worker
 
-import "path/filepath"
-
 // ClaudeCode spawns workers through the Claude Code CLI (`claude -p`).
 //
 // The harness-specific isolation work happens here, because every harness
-// leaks differently. Claude Code's leak paths, and how each is closed:
+// leaks differently. (The harness-agnostic closures — the credential strip,
+// the GH_CONFIG_DIR redirect — are ChildEnviron's, applied before this
+// adapter runs.) Claude Code's own leak paths, and how each is closed:
 //
 //   - MCP servers inherited from user or project config would hand the
 //     worker the same Linear connector the orchestrator uses.
@@ -17,11 +17,6 @@ import "path/filepath"
 //   - Settings files (user, project, local) can add MCP servers, hooks
 //     and permission grants underneath the flags. --setting-sources ""
 //     loads none of them; the worker runs on exactly the flags below.
-//
-//   - gh keeps its own token in its config directory, outside the
-//     environment, so stripping GH_TOKEN is not enough. GH_CONFIG_DIR is
-//     pointed into the run's scratch directory, where no token lives:
-//     gh runs unauthenticated.
 //
 // Permission prompts are bypassed. A headless run has no human to answer
 // them, and the isolation model here is structural — the credentials and
@@ -58,9 +53,5 @@ func (c ClaudeCode) Invocation(spec Spec, prompt string, environ []string) (Invo
 		argv = append(argv, "--effort", spec.Effort)
 	}
 
-	env := make([]string, 0, len(environ)+1)
-	env = append(env, environ...)
-	env = append(env, "GH_CONFIG_DIR="+filepath.Join(spec.ScratchDir, "gh-config"))
-
-	return Invocation{Argv: argv, Env: env, Dir: spec.Dir, Stdin: prompt}, nil
+	return Invocation{Argv: argv, Env: environ, Dir: spec.Dir, Stdin: prompt}, nil
 }

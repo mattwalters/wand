@@ -2,7 +2,6 @@ package worker_test
 
 import (
 	"slices"
-	"strings"
 	"testing"
 
 	"github.com/mattwalters/wand/internal/worker"
@@ -57,16 +56,11 @@ func TestClaudeCodeInvocation(t *testing.T) {
 		t.Errorf("model/effort not passed through: %v", inv.Argv)
 	}
 
-	// gh's out-of-environment token is cut off via a config dir inside the
-	// run's scratch space.
-	ghConfig := ""
-	for _, kv := range inv.Env {
-		if v, ok := strings.CutPrefix(kv, "GH_CONFIG_DIR="); ok {
-			ghConfig = v
-		}
-	}
-	if !strings.HasPrefix(ghConfig, spec.ScratchDir) {
-		t.Errorf("GH_CONFIG_DIR = %q, want a directory under %q", ghConfig, spec.ScratchDir)
+	// The environment Run hands down (already stripped and redirected by
+	// ChildEnviron) passes through unchanged; the shared closures are
+	// asserted by workertest.Structural.
+	if !slices.Contains(inv.Env, "PATH=/usr/bin") {
+		t.Errorf("the handed-down environ did not pass through: %v", inv.Env)
 	}
 
 	if inv.Dir != spec.Dir {

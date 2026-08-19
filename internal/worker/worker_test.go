@@ -57,13 +57,21 @@ func TestSpecValidation(t *testing.T) {
 		"ScratchDir":  func(s *worker.Spec) { s.ScratchDir = "" },
 		"HandoffPath": func(s *worker.Spec) { s.HandoffPath = "" },
 		"Timeout":     func(s *worker.Spec) { s.Timeout = 0 },
+		// Relative paths resolve against the worker's cwd on one side of
+		// the seam and the orchestrator's on the other.
+		"RelativeDir":        func(s *worker.Spec) { s.Dir = "some/worktree" },
+		"RelativeScratchDir": func(s *worker.Spec) { s.ScratchDir = "scratch" },
+		"RelativeHandoff":    func(s *worker.Spec) { s.HandoffPath = "handoff.json" },
+		// The scratch directory is the only write grant an adapter is
+		// required to give, so the handoff must live inside it.
+		"HandoffOutsideScratch": func(s *worker.Spec) { s.HandoffPath = filepath.Join(s.Dir, "handoff.json") },
 	}
 	for name, brk := range breakField {
 		t.Run(name, func(t *testing.T) {
 			spec := specFor(t)
 			brk(&spec)
 			if _, err := worker.Run(context.Background(), &shAdapter{script: "true"}, spec); err == nil {
-				t.Fatalf("Run accepted a Spec with no %s", name)
+				t.Fatalf("Run accepted a Spec with a broken %s", name)
 			}
 		})
 	}
@@ -101,6 +109,14 @@ func TestStripCredentials(t *testing.T) {
 		"GITHUB_TOKEN=secret",
 		"GH_TOKEN=secret",
 		"GH_ENTERPRISE_TOKEN=secret",
+		"GITHUB_ENTERPRISE_TOKEN=secret",
+		// The strip is case-insensitive: Windows resolves env var names
+		// without regard to case, so a case variant is the same leak.
+		"Gh_Token=secret",
+		"github_token=secret",
+		// The orchestrator's ssh-agent is a GitHub write credential in
+		// all but name.
+		"SSH_AUTH_SOCK=/tmp/agent.sock",
 		"HOME=/home/x",
 	})
 	want := []string{"PATH=/usr/bin", "HOME=/home/x"}
@@ -179,13 +195,23 @@ func TestRunErrorsWithoutHandoff(t *testing.T) {
 }
 
 func TestRunRejectsInvalidHandoff(t *testing.T) {
-	spec := specFor(t)
-	_, err := worker.Run(context.Background(), &shAdapter{script: `printf 'not json' > "$HANDOFF"`}, spec)
-	if err == nil || !strings.Contains(err.Error(), "not valid JSON") {
-		t.Fatalf("err = %v, want invalid-JSON error", err)
-	}
-	if _, statErr := os.Stat(spec.HandoffPath); !errors.Is(statErr, os.ErrNotExist) {
-		t.Errorf("invalid handoff was left on disk for a later phase to trip over")
+	// `null` is valid JSON that unmarshals into all-zero fields without an
+	// error — the contract demands a single JSON object, not any value.
+	for name, script := range map[string]string{
+		"NotJSON":    `printf 'not json' > "$HANDOFF"`,
+		"JSONNull":   `printf 'null' > "$HANDOFF"`,
+		"BareString": `printf '"done"' > "$HANDOFF"`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			spec := specFor(t)
+			_, err := worker.Run(context.Background(), &shAdapter{script: script}, spec)
+			if err == nil || !strings.Contains(err.Error(), "not a single JSON object") {
+				t.Fatalf("err = %v, want a not-a-JSON-object error", err)
+			}
+			if _, statErr := os.Stat(spec.HandoffPath); !errors.Is(statErr, os.ErrNotExist) {
+				t.Errorf("invalid handoff was left on disk for a later phase to trip over")
+			}
+		})
 	}
 }
 
@@ -198,6 +224,48 @@ func TestRunTimeout(t *testing.T) {
 	}
 	if !res.TimedOut {
 		t.Errorf("TimedOut = false, want true")
+	}
+}
+
+func TestRunTimeoutKillsProcessGroup(t *testing.T) {
+	// A worker's own children inherit the output pipe, and Wait blocks
+	// until every write end closes. If the deadline kill reaped only the
+	// direct child, the surviving background sleep would hold Run open for
+	// its full 10s instead of the 100ms deadline. The 5s bound is a wide
+	// margin over the deadline but well under the survivor's lifetime.
+	spec := specFor(t)
+	spec.Timeout = 100 * time.Millisecond
+	start := time.Now()
+	res, err := worker.Run(context.Background(),
+		&shAdapter{script: `(sleep 10; echo escaped) & sleep 10`}, spec)
+	elapsed := time.Since(start)
+	if err == nil {
+		t.Fatal("Run reported success for a timed-out worker")
+	}
+	if !res.TimedOut {
+		t.Errorf("TimedOut = false, want true")
+	}
+	if elapsed > 5*time.Second {
+		t.Errorf("Run returned after %s; the worker's process group was not killed at the deadline", elapsed)
+	}
+}
+
+func TestRunDoesNotBlameSpecTimeoutForCallerDeadline(t *testing.T) {
+	// The caller's own context expiring is the caller's act; reporting it
+	// as Spec.Timeout firing would journal a wrong diagnosis.
+	spec := specFor(t)
+	spec.Timeout = time.Minute
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	res, err := worker.Run(ctx, &shAdapter{script: "sleep 10"}, spec)
+	if err == nil {
+		t.Fatal("Run reported success for a run its caller cut short")
+	}
+	if res.TimedOut {
+		t.Errorf("TimedOut = true, but the caller's deadline fired, not Spec.Timeout")
+	}
+	if !strings.Contains(err.Error(), "canceled by the caller") {
+		t.Errorf("error does not attribute the caller's deadline: %v", err)
 	}
 }
 

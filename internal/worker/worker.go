@@ -13,11 +13,13 @@
 //
 //   - Workers never write Linear or GitHub. The orchestrator owns every
 //     external write, because two writers on one ticket cannot be
-//     reconciled afterwards. Run strips the orchestrator's credentials
-//     from the environment before the adapter ever sees it, and each
-//     adapter closes its own harness's leak paths (inherited MCP servers,
-//     ambient CLI auth). The guarantee is proven per adapter by the
-//     isolation conformance suite (internal/workertest), never assumed:
+//     reconciled afterwards. Run builds the child environment through
+//     ChildEnviron before the adapter ever sees it — credentials
+//     stripped, machine-wide ambient credentials (gh's config-dir token)
+//     redirected away — and each adapter closes what is specific to its
+//     own harness (inherited MCP servers, settings files). The guarantee
+//     is proven per adapter by the isolation conformance suite
+//     (internal/workertest), never assumed:
 //     in the reference system it held only by accident, and a different
 //     harness would have broken it silently.
 //
@@ -32,6 +34,7 @@
 package worker
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -39,6 +42,7 @@ import (
 	"io/fs"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -71,7 +75,9 @@ type Spec struct {
 
 	// HandoffPath is where the worker writes its result as a single JSON
 	// object. The runner reads it and then deletes it, so a later phase
-	// cannot consume an earlier phase's output.
+	// cannot consume an earlier phase's output. It must live inside
+	// ScratchDir: the scratch directory is the only write grant an adapter
+	// is required to give the worker.
 	HandoffPath string
 
 	// Timeout bounds the whole run. A worker with no deadline is a zombie
@@ -84,6 +90,11 @@ type Spec struct {
 	Effort string
 }
 
+// Paths in a Spec must be absolute: the worker resolves a relative path
+// against its own working directory (spec.Dir), while the runner's own
+// MkdirAll/ReadFile/Remove resolve the same string against the
+// orchestrator's — a correct worker would hand off into one directory and
+// the runner would look in another.
 func (s Spec) validate() error {
 	switch {
 	case strings.TrimSpace(s.Mode) == "":
@@ -92,14 +103,31 @@ func (s Spec) validate() error {
 		return errors.New("worker: Spec.Prompt is required")
 	case s.Dir == "":
 		return errors.New("worker: Spec.Dir is required")
+	case !filepath.IsAbs(s.Dir):
+		return errors.New("worker: Spec.Dir must be absolute — the worker and the orchestrator resolve relative paths against different directories")
 	case s.ScratchDir == "":
 		return errors.New("worker: Spec.ScratchDir is required — the scratch directory is part of the handed-down contract")
+	case !filepath.IsAbs(s.ScratchDir):
+		return errors.New("worker: Spec.ScratchDir must be absolute — the worker and the orchestrator resolve relative paths against different directories")
 	case s.HandoffPath == "":
 		return errors.New("worker: Spec.HandoffPath is required")
+	case !filepath.IsAbs(s.HandoffPath):
+		return errors.New("worker: Spec.HandoffPath must be absolute — the worker and the orchestrator resolve relative paths against different directories")
+	case !within(s.ScratchDir, s.HandoffPath):
+		return errors.New("worker: Spec.HandoffPath must be inside Spec.ScratchDir — the scratch directory is the only write grant an adapter is required to give the worker")
 	case s.Timeout <= 0:
 		return errors.New("worker: Spec.Timeout is required — a worker with no deadline is a zombie factory")
 	}
 	return nil
+}
+
+// within reports whether path lies strictly inside dir.
+func within(dir, path string) bool {
+	rel, err := filepath.Rel(dir, path)
+	if err != nil {
+		return false
+	}
+	return rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // Invocation is one ready-to-exec headless run, an adapter's whole output.
@@ -107,7 +135,8 @@ type Invocation struct {
 	// Argv is the command and its arguments; Argv[0] is resolved via PATH.
 	Argv []string
 	// Env is the complete child environment. The adapter builds it from
-	// the already-stripped environ Run hands it, plus its own additions.
+	// the environ Run hands it — already stripped and redirected by
+	// ChildEnviron — plus its own harness-specific additions.
 	Env []string
 	// Dir is the working directory.
 	Dir string
@@ -119,10 +148,11 @@ type Invocation struct {
 // Adapter turns a Spec into a harness invocation. Implementations must be
 // pure — same inputs, same Invocation — so a test can hold every decision
 // without spawning anything. prompt is the finished contract-plus-task from
-// Compose, and environ has already had the orchestrator's credentials
-// stripped; the adapter's job is only what is specific to its harness:
-// the command template, the flag spelling of model and effort, and closing
-// the harness's own credential leak paths.
+// Compose, and environ is the finished child environment from ChildEnviron
+// (credentials stripped, ambient-credential redirects applied); the
+// adapter's job is only what is specific to its harness: the command
+// template, the flag spelling of model and effort, and closing the
+// harness's own credential leak paths.
 type Adapter interface {
 	Name() string
 	Invocation(spec Spec, prompt string, environ []string) (Invocation, error)
@@ -133,8 +163,8 @@ type Adapter interface {
 // output tail are exactly what an orchestrator wants to journal about a
 // failed run.
 type Result struct {
-	// Handoff is the worker's JSON handoff, valid JSON, already deleted
-	// from disk. Nil when the worker left none.
+	// Handoff is the worker's JSON handoff, a single JSON object, already
+	// deleted from disk. Nil when the worker left none.
 	Handoff json.RawMessage
 	// ExitCode is the process's exit code; -1 if it never ran or was
 	// killed by a signal (including the timeout).
@@ -214,7 +244,7 @@ func Run(ctx context.Context, a Adapter, spec Spec) (Result, error) {
 		return Result{ExitCode: -1}, err
 	}
 
-	environ := StripCredentials(os.Environ())
+	environ := ChildEnviron(spec, os.Environ())
 	inv, err := a.Invocation(spec, Compose(spec), environ)
 	if err != nil {
 		return Result{ExitCode: -1}, fmt.Errorf("worker: %s: %w", a.Name(), err)
@@ -247,6 +277,14 @@ func Run(ctx context.Context, a Adapter, spec Spec) (Result, error) {
 	cmd.Stdin = strings.NewReader(inv.Stdin)
 	out := &tail{}
 	cmd.Stdout, cmd.Stderr = out, out
+	// The deadline must actually end the run. Killing only the direct
+	// child is not enough: a harness spawns helpers of its own, and any
+	// survivor both keeps running in the worktree and holds the inherited
+	// output pipe open — and Wait blocks until every write end closes. So
+	// the kill targets the whole process group, and WaitDelay bounds the
+	// wait for anything that escapes even that (a double-forked daemon).
+	setupProcessGroup(cmd)
+	cmd.WaitDelay = waitDelay
 
 	runErr := cmd.Run()
 
@@ -254,7 +292,11 @@ func Run(ctx context.Context, a Adapter, spec Spec) (Result, error) {
 	if cmd.ProcessState != nil {
 		res.ExitCode = cmd.ProcessState.ExitCode()
 	}
-	res.TimedOut = errors.Is(runCtx.Err(), context.DeadlineExceeded)
+	// Attribute the deadline honestly: Spec.Timeout fired only if the run
+	// actually failed while the caller's own context was still live. A
+	// caller's earlier deadline or cancellation is the caller's act, and
+	// reporting it as this run overrunning would journal a wrong diagnosis.
+	res.TimedOut = runErr != nil && ctx.Err() == nil && errors.Is(runCtx.Err(), context.DeadlineExceeded)
 
 	if runErr != nil && cmd.ProcessState == nil {
 		// Never started: binary missing, unrunnable, context already dead.
@@ -269,11 +311,20 @@ func Run(ctx context.Context, a Adapter, spec Spec) (Result, error) {
 	switch {
 	case res.TimedOut:
 		return res, fmt.Errorf("worker: %s timed out after %s", a.Name(), spec.Timeout)
+	case runErr != nil && ctx.Err() != nil:
+		return res, fmt.Errorf("worker: %s run canceled by the caller: %w", a.Name(), context.Cause(ctx))
 	case herr != nil:
 		return res, fmt.Errorf("worker: %s exited %d without a usable handoff: %w", a.Name(), res.ExitCode, herr)
 	}
 	return res, nil
 }
+
+// waitDelay bounds how long Run waits, after the child exits or the kill
+// lands, for the output pipe to close. It exists for the escape artists: a
+// descendant that detached into its own process group before the kill still
+// holds the pipe, and without a bound its survival would hold Run open
+// forever.
+const waitDelay = 10 * time.Second
 
 // collect reads the handoff and deletes it. Deletion is not tidiness: a
 // handoff that outlives its read could be consumed again by the next phase,
@@ -289,8 +340,12 @@ func collect(path string) (json.RawMessage, error) {
 	if err := os.Remove(path); err != nil {
 		return nil, fmt.Errorf("deleting handoff after read: %w", err)
 	}
-	if !json.Valid(raw) {
-		return nil, errors.New("handoff is not valid JSON")
+	// The contract says a single JSON object, and json.Valid alone would
+	// also accept `null`, a bare string or an array — any of which a later
+	// phase would unmarshal into all-zero fields without an error.
+	trimmed := bytes.TrimSpace(raw)
+	if len(trimmed) == 0 || trimmed[0] != '{' || !json.Valid(trimmed) {
+		return nil, errors.New("handoff is not a single JSON object")
 	}
-	return json.RawMessage(raw), nil
+	return json.RawMessage(trimmed), nil
 }

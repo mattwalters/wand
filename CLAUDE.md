@@ -71,8 +71,8 @@ the goldens identical.
 
 Off to the side of the tiers sits the **isolation conformance suite**
 (`internal/workertest`): its structural half runs with `make test`, and its
-live half — spawn the real harness, instruct it to write Linear, require the
-attempt to fail — is behind the `conformance` build tag
+live half — spawn the real harness, instruct it to write Linear and GitHub,
+require every attempt to fail — is behind the `conformance` build tag
 (`make test-conformance`) because it spends a real model call and needs the
 harness installed and authenticated. It never runs in CI; it is run
 deliberately, per adapter, whenever an adapter or its isolation flags change.
