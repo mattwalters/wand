@@ -27,6 +27,8 @@ internal/shim/       generates the PreToolUse hook entry that routes save_issue 
 internal/worker/     the harness seam: an Adapter turns a Spec into one headless invocation;
                      the runner owns the timeout, credential strip, prompt contract and handoff
 internal/workertest/ the isolation conformance suite every adapter must pass
+internal/journal/    the crash-only run journal, lease and lock: journal before you act,
+                     exactly one terminal record, and a dead holder provably dead
 internal/tui/        Bubble Tea models — the app itself
   testdata/screens/  golden screens (plain text pictures of the UI)
 internal/theme/      every lipgloss style, in one place
@@ -56,6 +58,16 @@ require every attempt to fail — is behind the `conformance` build tag
 (`make test-conformance`) because it spends a real model call and needs the
 harness installed and authenticated. It never runs in CI; it is run
 deliberately, per adapter, whenever an adapter or its isolation flags change.
+
+Also off to the side: `internal/journal`'s **crash tests** spawn the test
+binary as a child, let it take a run, and kill it outright. They run with
+`make test` and need nothing installed. Do not replace them with a fake that
+unlocks on request — the property under test is that the *kernel* releases
+the lock when a process dies in a way the process never gets to handle, and
+a fake would be testing the fake. (A child that waits on `select {}` trips
+Go's deadlock detector and ends itself, which is not the death under test;
+`internal/journal/crash_test.go` sleeps instead and asserts the kill is what
+ended it.)
 
 Tier 2 golden-files the **rendered screen**, not the ANSI byte stream. The byte
 stream contains every intermediate frame plus color escapes: brittle, and
