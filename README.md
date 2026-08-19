@@ -10,6 +10,12 @@ machinery — its covenant, and the blessing path work travels along.
 ## Install
 
 ```bash
+brew install mattwalters/wand/wand
+```
+
+Or with Go:
+
+```bash
 go install github.com/mattwalters/wand@latest
 ```
 

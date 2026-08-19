@@ -29,8 +29,7 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # When the Homebrew tap exists (see .goreleaser.yml), pass
-          # HOMEBREW_TAP_GITHUB_TOKEN through here as well.
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
 
       # Keep the moving major tag (v1 -> latest v1.x.y) so install
       # instructions can pin a major and still get fixes.

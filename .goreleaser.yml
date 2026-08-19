@@ -46,9 +46,25 @@ changelog:
       - "^docs:"
       - "^test:"
 
-# Homebrew tap: deliberately deferred (WND-14). Prerequisites before adding a
-# brews: block here:
-#   1. A mattwalters/homebrew-wand repo.
-#   2. A PAT with write access to it, stored as the HOMEBREW_TAP_GITHUB_TOKEN
-#      secret and passed through in release.yml.
-# Do not block releases on it.
+# The cask lands in mattwalters/homebrew-wand; the token is a fine-grained
+# PAT scoped to that repo (Contents: read/write), passed through release.yml.
+# Casks replaced goreleaser's deprecated brews (formulas). The post-install
+# hook is goreleaser's documented workaround for unsigned binaries: Homebrew
+# quarantines cask downloads, and wand's binaries are not notarized.
+homebrew_casks:
+  - name: wand
+    repository:
+      owner: mattwalters
+      name: homebrew-wand
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/mattwalters/wand"
+    description: "An agent toolkit for repositories"
+    commit_author:
+      name: goreleaserbot
+      email: bot@goreleaser.com
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/wand"]
+          end
