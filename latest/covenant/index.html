@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The covenant · wand</title>
+  <link rel="stylesheet" href="/wand/latest/style.css">
+</head>
+<body>
+  <header>
+    <nav>
+      <a class="brand" href="https://mattwalters.github.io/wand/latest/">wand</a>
+      
+      <a href="/wand/latest/covenant/">The covenant</a>
+      
+      <a href="https://github.com/mattwalters/wand">GitHub</a>
+    </nav>
+    <span class="version">
+      latest
+      <select id="version-picker" hidden aria-label="Documentation version"></select>
+    </span>
+  </header>
+  <main>
+    
+<h1>The covenant</h1>
+<p>The covenant is the process contract wand maintains in Linear: the states a
+team&rsquo;s board must have, the rules about who may move work between them, and
+the parameters of the lifecycle wand runs through it. This page is the
+rationale — the <em>why</em> behind each state and rule, which deliberately does
+not live in the covenant file. The file carries values; values without
+their reasons rot into cargo cult.</p>
+<p>The lifecycle was not designed on a whiteboard. It is extracted from a
+private production system where it ran for months, agents and humans
+working the same board, and where every rule below was paid for by a
+specific failure.</p>
+<h2 id="why-the-shape-is-fixed">Why the shape is fixed</h2>
+<p>The state graph — Triage → Backlog → Scoping → Todo → Needs Input →
+In Progress → In Review → Done — is wand&rsquo;s opinion, gofmt-style. A repo&rsquo;s
+covenant file (<code>wand.toml</code>) customizes the parameters of the machine:
+status <em>names</em> over the fixed semantics, caps, the estimate scale, toggles,
+the pluggable commands, ticket templates. Never its shape.</p>
+<p>Every state exists because of a failure mode every team running agents
+will eventually hit, and the rules below only hold if the states they
+refer to mean the same thing everywhere. A configurable topology would
+turn each rule back into a per-repo negotiation — exactly the prose-only
+enforcement that failed in the reference system. Topology changes ship as
+wand upgrades, for everyone, versioned by the covenant file&rsquo;s <code>schema</code>
+field: the file declares the schema it was written against, <code>wand version</code>
+reports the schema the binary speaks, and comparing the two is how you
+learn whether a given binary can read a given file.</p>
+<h2 id="the-states-and-why-each-exists">The states, and why each exists</h2>
+<p>The board is a map of <em>authorization</em>, not just progress. Reading the
+states as &ldquo;how done is this?&rdquo; misses their point; read them as &ldquo;who has
+decided what may happen to this next?&rdquo;</p>
+<table>
+	<thead>
+			<tr>
+					<th>State</th>
+					<th>What it authorizes</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td>Triage</td>
+					<td>Nothing. The inbox agents file into.</td>
+			</tr>
+			<tr>
+					<td>Backlog</td>
+					<td>Nothing. The undifferentiated pool.</td>
+			</tr>
+			<tr>
+					<td>Scoping</td>
+					<td>A scout may research this unattended.</td>
+			</tr>
+			<tr>
+					<td>Todo</td>
+					<td>A bot may build this unattended.</td>
+			</tr>
+			<tr>
+					<td>Needs Input</td>
+					<td>Nothing — a question is parked on a human.</td>
+			</tr>
+			<tr>
+					<td>In Progress</td>
+					<td>Claimed; a worker is (or should be) behind it.</td>
+			</tr>
+			<tr>
+					<td>In Review</td>
+					<td>The work is under review.</td>
+			</tr>
+			<tr>
+					<td>Done / Canceled / Duplicate</td>
+					<td>Closed. Terminal, and human-granted.</td>
+			</tr>
+	</tbody>
+</table>
+<p><strong>Triage</strong> is the inbox. Agents constantly notice work that is not their
+ticket — a bug in passing, a missing test, a doc gone stale. The rule is:
+file it into Triage with the <code>agent-filed</code> label and carry on. Without a
+designated inbox those observations either get lost or, worse, get acted
+on mid-task, and the session that was fixing one thing comes back having
+&ldquo;improved&rdquo; five. Nothing in Triage is authorized; it is raw material for a
+human to sort.</p>
+<p><strong>Backlog</strong> is the undifferentiated pool: real work, not yet blessed.
+It is also the one state agents may move work <em>down</em> into. Demotion is
+safe where promotion is not, because it removes authorization rather than
+granting it — a ticket that turns out to be wrong mid-flight gets handed
+back to Backlog with a comment, never quietly closed.</p>
+<p><strong>Scoping</strong> blesses research. A ticket sitting in Scoping is one a
+dispatcher may spend a scout on unattended — real tokens, real time. That
+is an authorization, the same shape as Todo one rung lower, which is why
+agents may not put work there either. A scout finishing its scope moves
+the ticket <em>out</em> of Scoping to Needs Input, posting approaches, a
+recommendation and an estimate; moving out is what every scope ends with,
+and it hands the decision back to a person.</p>
+<p><strong>Todo</strong> is the gate between &ldquo;written down&rdquo; and &ldquo;a bot may act on this
+unattended&rdquo;. It is the single most consequential state on the board, and
+promotion into it is a human act — the blessing. The failure it guards
+against is concrete: in the reference system the no-promotion rule was
+written down in two places, in prose, and a run still landed a ticket in
+Todo — where it rejoined the queue looking startable, carrying no comment
+and no branch, and the next dispatcher pass spent a slot rediscovering the
+same wall. A correctly written instruction that is only sometimes followed
+looks, from the outside, exactly like one that was never written.</p>
+<p><strong>Needs Input</strong> parks a question on a human. Without it, a blocked agent
+has two bad options: guess, or stall in In Progress looking healthy. Needs
+Input makes being blocked <em>visible and cheap</em> — the ticket says what it is
+waiting for, and surfacing that queue is the whole job of the cockpit.
+It is deliberately an <code>unstarted</code> state: answering the question re-blesses
+the work, it does not resume it automatically.</p>
+<p><strong>In Progress</strong> and <strong>In Review</strong> track claimed and reviewed work, and
+Linear&rsquo;s PR automations mirror them: opening a PR (draft included) targets
+In Progress — a claimed ticket is already there, so the write changes
+nothing — review targets In Review, and merge closes the ticket.</p>
+<p><strong>Done, Canceled and Duplicate</strong> close a ticket, and closing is a human&rsquo;s
+call however obsolete the ticket looks. An agent that decides mid-task
+that a ticket is moot might be right — but &ldquo;might be right&rdquo; is exactly the
+confidence level that recommends in a comment rather than acts. Done also
+arrives on its own: the on-merge automation sets it within seconds of a
+human merging, so the human act it encodes (the merge) has already
+happened.</p>
+<h2 id="the-forbidden-transitions">The forbidden transitions</h2>
+<p>Five statuses grant or revoke authorization an agent does not have, so an
+agent may never set them: <strong>Todo</strong>, <strong>Scoping</strong>, <strong>Done</strong>, <strong>Canceled</strong>,
+<strong>Duplicate</strong>. Everything an agent legitimately sets is left alone:
+In Progress, In Review, Needs Input, Backlog, Triage.</p>
+<p>Note which <em>direction</em> is blocked. Moving a ticket into Scoping is a
+promotion and is refused; moving one out of Scoping to Needs Input is how
+every scope ends, and is allowed. The guard sees only the destination.</p>
+<p>This rule is enforced, not requested. Every rule in wand lives in exactly
+one of four tiers, and being honest about which tier a rule occupies is
+itself a rule:</p>
+<table>
+	<thead>
+			<tr>
+					<th>Tier</th>
+					<th>Mechanism</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td>Structural</td>
+					<td>The violation cannot be expressed</td>
+			</tr>
+			<tr>
+					<td>Code gate</td>
+					<td>The attempt is refused with a reason</td>
+			</tr>
+			<tr>
+					<td>Harness hook</td>
+					<td>The agent&rsquo;s tool call is intercepted</td>
+			</tr>
+			<tr>
+					<td>Prose</td>
+					<td>Written down, hoped for, audited</td>
+			</tr>
+	</tbody>
+</table>
+<p>The forbidden transitions live at the harness-hook tier: <code>wand init</code>
+installs a PreToolUse shim that routes every Linear issue write through
+<code>wand guard</code>, and the same verdict function backs wand&rsquo;s own write path,
+so the two cannot drift. When the guard blocks a write it says where to go
+instead — a stopped agent that is not redirected improvises, which is how
+tickets reached Todo in the first place.</p>
+<h2 id="caps">Caps</h2>
+<p>The run loop&rsquo;s limits — review rounds, CI attempts, worker timeout — are
+hard caps, and a cap running out is never silent convergence. The failure
+they guard against is false &ldquo;Done&rdquo;: a terminal state reached by exhaustion
+rather than evidence — a round cap quietly running out, a crashed
+reviewer, a review thread outdated by a partial revision. Under the
+covenant, terminal success is reached only on positive evidence;
+exhaustion is a hand-back that says so. A cap set to zero is refused
+outright, because a cap of nothing is a request to loop forever.</p>
+<h2 id="what-belongs-in-the-covenant-file">What belongs in the covenant file</h2>
+<p>The file is checked in, and it carries parameters only. The test for
+whether a value belongs there: could two clones of the repo legitimately
+differ on it? If they could — a secret, a machine path, a harness name —
+it is machine config and belongs elsewhere. If a difference between two
+clones would mean two different <em>processes</em>, it is covenant. TOML, so the
+rationale for a value survives as a comment next to the value it
+justifies.</p>
+<p>A missing file means the stock covenant applies unchanged. A present but
+broken file is a loud error, never a quiet fall-back to defaults — a
+misspelled key silently defaulting is the failure mode the parser exists
+to prevent.</p>
+
+
+  </main>
+  <script>
+    
+    
+    
+    
+    (function () {
+      var root = new URL("..", "https:\/\/mattwalters.github.io\/wand\/latest\/");
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          var picker = document.getElementById("version-picker");
+          ["latest"].concat(versions).forEach(function (v) {
+            var option = document.createElement("option");
+            option.value = v;
+            option.textContent = v;
+            option.selected = v === "latest";
+            picker.appendChild(option);
+          });
+          picker.addEventListener("change", function () {
+            window.location.href = new URL(picker.value + "/", root);
+          });
+          picker.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>
