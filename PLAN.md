@@ -103,9 +103,14 @@ same act as the comment that contradicts it) encoded rather than remembered.
 
 **Phase 4 — orchestration foundations (WAND-7, 8).** The run journal and
 lease store — crash-only from day one, every transition journaled before it
-happens, `wand resume` as a first-class verb — and the worker adapter
-interface with its isolation conformance test: a worker instructed to write
-Linear must fail, proven per harness, never assumed.
+happens, a killed holder provably dead, and reopening a run as the one
+recovery act — and the worker adapter interface with its isolation
+conformance test: a worker instructed to write Linear must fail, proven per
+harness, never assumed. `wand resume` is the verb over the store, and it
+ships with the first orchestrator that has a phase graph to re-enter
+(phases 5 and 6): the store answers *where the run was*, the orchestrator
+owns *what comes next*, and a verb shipped before the second half exists
+would only be able to refuse.
 
 **Phase 5 — the first orchestrator (WAND-9).** `wand scope`: a cold scout
 researches one blessed ticket, a validated handoff becomes a plan in the
