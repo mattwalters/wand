@@ -14,13 +14,21 @@ go install github.com/mattwalters/wand@latest
 ```
 
 That puts `wand` in `$(go env GOPATH)/bin`, which needs to be on your `PATH`.
+Prebuilt binaries for macOS, Linux and Windows (amd64 and arm64) are on the
+[releases page](https://github.com/mattwalters/wand/releases); the `v1` tag
+always points at the latest `v1.x.y`.
 
 ## Usage
 
 ```bash
 wand          # help
 wand ui       # the interactive interface
+wand version  # build info, and the covenant schema this binary speaks
 ```
+
+`wand version` reports the covenant schema version alongside the build:
+a repo's covenant file declares the schema it was written against, and
+comparing the two is how you learn whether a given binary can read it.
 
 ## The guard
 
