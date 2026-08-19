@@ -1,0 +1,136 @@
+/* Plain CSS on purpose: SCSS would require Hugo's extended build. */
+
+:root {
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #6b6b6b;
+  --accent: #5e6ad2; /* Linear's brand purple, the board this tool tends. */
+  --rule: #e4e4e4;
+  --code-bg: #f4f4f4;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #16161a;
+    --fg: #e8e8e8;
+    --muted: #9a9a9a;
+    --accent: #8a93e8;
+    --rule: #33333a;
+    --code-bg: #22222a;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0 auto;
+  max-width: 44rem;
+  padding: 0 1.25rem 4rem;
+  background: var(--bg);
+  color: var(--fg);
+  font: 17px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  padding: 1.25rem 0;
+  border-bottom: 1px solid var(--rule);
+  margin-bottom: 2.5rem;
+}
+
+nav {
+  display: flex;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+}
+
+nav a {
+  color: var(--muted);
+  text-decoration: none;
+}
+
+nav a:hover {
+  color: var(--fg);
+}
+
+nav a.brand {
+  color: var(--fg);
+  font-weight: 700;
+}
+
+.version {
+  color: var(--muted);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.version select {
+  font: inherit;
+  color: inherit;
+  background: var(--bg);
+  border: 1px solid var(--rule);
+  border-radius: 4px;
+  padding: 0.1rem 0.3rem;
+}
+
+h1, h2, h3 {
+  line-height: 1.25;
+  margin: 2.2rem 0 0.8rem;
+}
+
+h1 {
+  margin-top: 0;
+}
+
+a {
+  color: var(--accent);
+}
+
+code {
+  font: 0.86em ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  background: var(--code-bg);
+  border-radius: 4px;
+  padding: 0.12em 0.35em;
+}
+
+pre {
+  background: var(--code-bg);
+  border-radius: 6px;
+  padding: 0.9rem 1.1rem;
+  overflow-x: auto;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1rem 0;
+}
+
+th, td {
+  text-align: left;
+  padding: 0.45rem 0.8rem 0.45rem 0;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+
+th {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+blockquote {
+  margin: 1rem 0;
+  padding-left: 1rem;
+  border-left: 3px solid var(--rule);
+  color: var(--muted);
+}
