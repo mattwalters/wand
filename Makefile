@@ -44,9 +44,9 @@ docs: ## Build the docs site into docs/public (needs hugo)
 	hugo --source docs
 
 .PHONY: docs-serve
-docs-serve: ## Serve the docs site locally with live reload (needs hugo)
+docs-serve: ## Serve the docs site at http://localhost:1313/ with live reload (needs hugo)
 	@command -v hugo >/dev/null || { echo "hugo not found — brew install hugo"; exit 1; }
-	hugo server --source docs
+	hugo server --source docs --baseURL http://localhost:1313/
 
 .PHONY: fmt
 fmt: ## Format all Go source
