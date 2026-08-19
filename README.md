@@ -5,8 +5,9 @@ machinery — its covenant, and the blessing path work travels along.
 
 > **Status: early.** `init` bootstraps a Linear team to the covenant and
 > installs the guard hook; `guard` enforces the covenant's authorization
-> rules; `queue` and `ticket` are the read layer. The `covenant` and
-> `bless` verbs are stubs.
+> rules; `queue` and `ticket` are the read layer; `doctor` reports a
+> team's drift from the covenant. The `covenant` and `bless` verbs are
+> stubs.
 
 ## Install
 
@@ -32,6 +33,7 @@ wand                        # help
 wand ui                     # the interactive interface
 wand queue --team-key WND   # the ranked, vetted Todo queue
 wand ticket WND-3           # one ticket whole, for a cold reader
+wand doctor --team-key WND  # report the team's drift from the covenant
 wand version                # build info, and the covenant schema this binary speaks
 ```
 
@@ -65,8 +67,8 @@ review_rounds = 5
 verify = "make check"
 ```
 
-`wand init` reads it when present and falls back to the stock covenant when
-absent. Validation refuses unknown keys loudly — a misspelled cap silently
+`wand init` and `wand doctor` read it when present and fall back to the stock
+covenant when absent. Validation refuses unknown keys loudly — a misspelled cap silently
 defaulting is the failure mode — and an invalid file is an error, never
 quietly the defaults.
 
@@ -74,6 +76,26 @@ The file must never contain a secret, a machine path, or a harness name:
 those are machine config, not covenant. The test for the split: if two
 clones could legitimately differ, it is config; if a difference means two
 different processes, it is covenant.
+
+## The doctor
+
+`wand doctor --team-key WAND` reads the team's statuses, labels, PR
+automations and settings, diffs them against the covenant, and reports the
+drift. It writes nothing — `wand init` is the verb that repairs — and it
+exits diff-style, so scripts and CI can hold a team to the covenant
+continuously instead of a human verifying the settings pages once:
+
+- `0` — the team satisfies the covenant
+- `1` — drift found (each finding on its own `drift:` line)
+- `2` — the check could not run (no API key, no such team, API failure)
+
+The covenant, not Linear's settings pages, is the source of truth — the API
+exposes everything doctor needs, git automations included. Extra statuses
+outside the machine's path (a team's own "Design" column upstream of
+Backlog), extra labels, and automations on events the covenant does not
+mention are tolerated strangers, not drift. Renamed or missing covenant
+statuses, repointed automations, missing labels, and changed team settings
+are drift.
 
 ## The guard
 
