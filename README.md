@@ -106,6 +106,7 @@ make test            # fast suite
 make test-e2e        # pty smoke test
 make check           # gofmt + vet + test
 make update-goldens  # regenerate screens (then read the diff)
+make release VERSION=v0.1.0  # tag and push a release (CI does the rest)
 make help            # every target
 ```
 
