@@ -18,9 +18,11 @@ import (
 	"github.com/mattwalters/wand/internal/shim"
 )
 
-// settingsPath is where the harness shim lives, relative to the repo root
-// init runs in.
-const settingsPath = ".claude/settings.json"
+// harness shim paths, relative to the repo root init runs in.
+const (
+	settingsPath   = ".claude/settings.json"
+	codexHooksPath = ".codex/hooks.json"
+)
 
 // installShim ensures the repo's harness settings route Linear issue writes
 // through wand guard. The shim is a build artifact of the covenant:
@@ -34,29 +36,44 @@ func installShim(out io.Writer, dryRun bool) error {
 	if err != nil {
 		return fmt.Errorf("%s: %w", settingsPath, err)
 	}
+	if err := installOneShim(out, dryRun, settingsPath, ensured, changed, shim.Ensure); err != nil {
+		return err
+	}
+
+	codexExisting, err := os.ReadFile(codexHooksPath)
+	if err != nil && !errors.Is(err, fs.ErrNotExist) {
+		return err
+	}
+	codexEnsured, codexChanged, err := shim.EnsureCodex(codexExisting)
+	if err != nil {
+		return fmt.Errorf("%s: %w", codexHooksPath, err)
+	}
+	return installOneShim(out, dryRun, codexHooksPath, codexEnsured, codexChanged, shim.EnsureCodex)
+}
+
+func installOneShim(out io.Writer, dryRun bool, path string, ensured []byte, changed bool, ensure func([]byte) ([]byte, bool, error)) error {
 	if !changed {
-		fmt.Fprintln(out, "guard hook already installed")
+		fmt.Fprintf(out, "guard hook already installed in %s\n", path)
 		return nil
 	}
 	if dryRun {
-		fmt.Fprintf(out, "would install PreToolUse guard hook in %s (%s → wand guard)\n", settingsPath, shim.Matcher)
+		fmt.Fprintf(out, "would install PreToolUse guard hook in %s (%s → wand guard)\n", path, shim.Matcher)
 		return nil
 	}
-	if err := os.MkdirAll(filepath.Dir(settingsPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	if err := os.WriteFile(settingsPath, ensured, 0o644); err != nil {
+	if err := os.WriteFile(path, ensured, 0o644); err != nil {
 		return err
 	}
-	// Read back and verify, so "installed" means observed rather than assumed.
-	written, err := os.ReadFile(settingsPath)
+	written, err := os.ReadFile(path)
 	if err != nil {
 		return err
 	}
-	if _, again, err := shim.Ensure(written); err != nil || again {
-		return fmt.Errorf("guard hook still not installed after writing %s", settingsPath)
+	if _, again, err := ensure(written); err != nil || again {
+		return fmt.Errorf("guard hook still not installed after writing %s", path)
 	}
-	fmt.Fprintf(out, "install PreToolUse guard hook in %s (%s → wand guard)\n", settingsPath, shim.Matcher)
+	fmt.Fprintf(out, "install PreToolUse guard hook in %s (%s → wand guard)\n", path, shim.Matcher)
 	return nil
 }
 

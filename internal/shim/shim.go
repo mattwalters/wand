@@ -38,12 +38,17 @@ type hookEntry struct {
 	Hooks   []settingsHook `json:"hooks"`
 }
 
-// Ensure returns settings bytes carrying the guard hook entry, merging into
-// existing content rather than clobbering it: every key this function does
-// not need to touch survives. existing may be nil (no settings file yet).
-// changed is false when the entry is already exactly present, in which case
-// out is the input, byte-identical.
+// Ensure returns Claude settings bytes carrying the guard hook entry.
 func Ensure(existing []byte) (out []byte, changed bool, err error) {
+	return ensure(existing, "settings file")
+}
+
+// ensure merges the guard into either harness's JSON hook document. It holds
+// every layer as raw JSON until the one PreToolUse entry it owns is replaced,
+// so fields added by a harness (or another tool) cannot be silently dropped.
+// existing may be nil or whitespace-only. changed is false when the entry is
+// already exactly present, in which case out is the input, byte-identical.
+func ensure(existing []byte, name string) (out []byte, changed bool, err error) {
 	desired, err := json.Marshal(hookEntry{
 		Matcher: Matcher,
 		Hooks:   []settingsHook{{Type: "command", Command: Command}},
@@ -57,21 +62,21 @@ func Ensure(existing []byte) (out []byte, changed bool, err error) {
 	top := map[string]json.RawMessage{}
 	if len(bytes.TrimSpace(existing)) > 0 {
 		if err := json.Unmarshal(existing, &top); err != nil {
-			return nil, false, fmt.Errorf("settings file is not a JSON object: %w", err)
+			return nil, false, fmt.Errorf("%s is not a JSON object: %w", name, err)
 		}
 	}
 
 	hooks := map[string]json.RawMessage{}
 	if raw, ok := top["hooks"]; ok {
 		if err := json.Unmarshal(raw, &hooks); err != nil {
-			return nil, false, fmt.Errorf("settings \"hooks\" is not an object: %w", err)
+			return nil, false, fmt.Errorf("%s \"hooks\" is not an object: %w", name, err)
 		}
 	}
 
 	var pre []json.RawMessage
 	if raw, ok := hooks["PreToolUse"]; ok {
 		if err := json.Unmarshal(raw, &pre); err != nil {
-			return nil, false, fmt.Errorf("settings \"hooks.PreToolUse\" is not an array: %w", err)
+			return nil, false, fmt.Errorf("%s \"hooks.PreToolUse\" is not an array: %w", name, err)
 		}
 	}
 

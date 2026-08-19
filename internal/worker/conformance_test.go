@@ -23,3 +23,13 @@ func TestClaudeCodeIsolation(t *testing.T) {
 	}
 	workertest.Isolation(t, worker.ClaudeCode{})
 }
+
+// TestCodexIsolation is the equivalent live proof for codex exec. In
+// particular it catches a regression where --ignore-user-config stops
+// preventing MCP servers in $CODEX_HOME/config.toml from reaching workers.
+func TestCodexIsolation(t *testing.T) {
+	if _, err := exec.LookPath("codex"); err != nil {
+		t.Fatal("codex is not on PATH; the conformance run proves the real harness or it proves nothing")
+	}
+	workertest.Isolation(t, worker.Codex{})
+}

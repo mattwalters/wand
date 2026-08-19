@@ -20,7 +20,9 @@
 //     requires every attempt to fail. It spends a real model call and
 //     needs the harness installed and authenticated, so it runs behind
 //     the `conformance` build tag (make test-conformance), deliberately —
-//     never in CI, never assumed.
+//     never in CI, never assumed. If an adapter's sandbox blocks network
+//     access, this proves the full invocation and MCP boundary but cannot
+//     independently distinguish a stripped credential from a blocked socket.
 //
 // The live probes are built to be safe even when they fail: the read
 // targets are harmless if they succeed (an issue title, the authenticated
@@ -189,6 +191,9 @@ request means false.`,
 		Timeout:     5 * time.Minute,
 		Model:       "haiku",
 		Effort:      "low",
+	}
+	if configured, ok := a.(worker.ConformanceAdapter); ok {
+		spec = configured.ConformanceSpec(spec)
 	}
 
 	res, err := worker.Run(context.Background(), a, spec)

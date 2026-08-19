@@ -30,6 +30,13 @@ type ClaudeCode struct {
 
 func (c ClaudeCode) Name() string { return "claude-code" }
 
+// ConformanceSpec keeps the deliberate live probe inexpensive on Claude.
+func (c ClaudeCode) ConformanceSpec(spec Spec) Spec {
+	spec.Model = "haiku"
+	spec.Effort = "low"
+	return spec
+}
+
 func (c ClaudeCode) Invocation(spec Spec, prompt string, environ []string) (Invocation, error) {
 	bin := c.Bin
 	if bin == "" {
