@@ -31,6 +31,9 @@ func TestCodexInvocation(t *testing.T) {
 			t.Errorf("cold worker isolation flag %q missing from %v", flag, inv.Argv)
 		}
 	}
+	if !hasFlag(inv.Argv, "--disable", "hooks") {
+		t.Errorf("repository hooks are not disabled: %v", inv.Argv)
+	}
 	if !hasFlag(inv.Argv, "--sandbox", "workspace-write") ||
 		!hasFlag(inv.Argv, "--ask-for-approval", "never") ||
 		!hasFlag(inv.Argv, "--cd", spec.Dir) ||

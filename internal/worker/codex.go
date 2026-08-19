@@ -4,11 +4,12 @@ package worker
 //
 // Codex normally reads MCP servers from $CODEX_HOME/config.toml. That is a
 // credential boundary: the parent's Linear connector would otherwise become a
-// tool available to the worker. --ignore-user-config makes the invocation
-// start without that configuration (while still retaining the CLI's own login
-// material), so the worker has no inherited MCP servers. The flag is
-// deliberately paired with --ignore-rules and --ephemeral: a cold worker must
-// not inherit policy files or leave a resumable session behind.
+// tool available to the worker. --ignore-user-config excludes those
+// user-configured servers while retaining the CLI's login material. Plugins
+// may still contribute their own MCP servers, so the adapter does not claim a
+// blanket "no MCP servers" guarantee. --disable hooks, --ignore-rules, and
+// --ephemeral keep a cold worker from inheriting repository hooks, policy
+// files, or a resumable session.
 //
 // The shared ChildEnviron closure has already removed Linear/GitHub/SSH
 // credentials and redirected gh's on-disk credentials by the time this
@@ -47,6 +48,7 @@ func (c Codex) Invocation(spec Spec, prompt string, environ []string) (Invocatio
 		"exec",
 		"--ignore-user-config",
 		"--ignore-rules",
+		"--disable", "hooks",
 		"--ephemeral",
 		"--skip-git-repo-check",
 		"--cd", spec.Dir,
