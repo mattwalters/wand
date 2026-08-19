@@ -50,6 +50,8 @@ type Issue struct {
 	Title       string
 	Description string
 	URL         string
+	BranchName  string // the branch Linear names for this issue
+	TeamID      string
 	Priority    int
 	CreatedAt   time.Time
 	State       IssueState
@@ -77,7 +79,8 @@ type Comment struct {
 // shipped that exact regression; this comment and TestTeamIssuesInTodo are
 // where the lesson is pinned.
 const issueFields = `
-	id identifier title description url priority createdAt
+	id identifier title description url branchName priority createdAt
+	team { id }
 	state { name type }
 	assignee { name }
 	labels(first: 250) { nodes { name } }
@@ -92,10 +95,14 @@ type issueNode struct {
 	Title       string     `json:"title"`
 	Description string     `json:"description"`
 	URL         string     `json:"url"`
+	BranchName  string     `json:"branchName"`
 	Priority    int        `json:"priority"`
 	CreatedAt   time.Time  `json:"createdAt"`
 	State       IssueState `json:"state"`
-	Assignee    *struct {
+	Team        *struct {
+		ID string `json:"id"`
+	} `json:"team"`
+	Assignee *struct {
 		Name string `json:"name"`
 	} `json:"assignee"`
 	Labels struct {
@@ -121,9 +128,13 @@ func (n issueNode) flatten() Issue {
 		Title:       n.Title,
 		Description: n.Description,
 		URL:         n.URL,
+		BranchName:  n.BranchName,
 		Priority:    n.Priority,
 		CreatedAt:   n.CreatedAt,
 		State:       n.State,
+	}
+	if n.Team != nil {
+		issue.TeamID = n.Team.ID
 	}
 	if n.Assignee != nil {
 		issue.Assignee = n.Assignee.Name

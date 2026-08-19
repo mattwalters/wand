@@ -26,7 +26,7 @@ func newTicketCmd() *cobra.Command {
 				return err
 			}
 
-			ctx, cancel := context.WithTimeout(cmd.Context(), readTimeout)
+			ctx, cancel := context.WithTimeout(cmd.Context(), apiTimeout)
 			defer cancel()
 
 			issue, err := cl.IssueByIdentifier(ctx, args[0])

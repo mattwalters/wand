@@ -1,6 +1,9 @@
 package linear
 
-import "context"
+import (
+	"context"
+	"strings"
+)
 
 // WorkflowState is one status column on a team's board.
 type WorkflowState struct {
@@ -104,6 +107,19 @@ func (c *Client) TeamStates(ctx context.Context, teamID string) ([]WorkflowState
 	return out.Team.States.Nodes, err
 }
 
+// StateIDByName finds the state whose display name matches, ignoring case —
+// Linear preserves whatever casing the board holds, and every wand caller
+// wants the human's spelling to count as a match. The one name-to-id rule,
+// shared so the bootstrap and verb paths cannot drift.
+func StateIDByName(states []WorkflowState, name string) (string, bool) {
+	for _, s := range states {
+		if strings.EqualFold(s.Name, name) {
+			return s.ID, true
+		}
+	}
+	return "", false
+}
+
 // CreateWorkflowState adds a status to a team's board.
 func (c *Client) CreateWorkflowState(ctx context.Context, teamID string, s WorkflowState, color string) (WorkflowState, error) {
 	var out struct {
@@ -137,6 +153,30 @@ func (c *Client) Labels(ctx context.Context) ([]Label, error) {
 	err := c.Do(ctx, `
 		query { issueLabels(first: 250) { nodes { id name } } }`, nil, &out)
 	return out.IssueLabels.Nodes, err
+}
+
+// LabelByName returns the one label with the given name, matched
+// case-insensitively server-side. Label names are unique across the
+// workspace, so found is a yes/no — and unlike scanning Labels, this cannot
+// miss a label that sits beyond the first page of a label-heavy workspace.
+func (c *Client) LabelByName(ctx context.Context, name string) (Label, bool, error) {
+	var out struct {
+		IssueLabels struct {
+			Nodes []Label `json:"nodes"`
+		} `json:"issueLabels"`
+	}
+	err := c.Do(ctx, `
+		query($name: String!) {
+		  issueLabels(filter: {name: {eqIgnoreCase: $name}}, first: 1) { nodes { id name } }
+		}`,
+		map[string]any{"name": name}, &out)
+	if err != nil {
+		return Label{}, false, err
+	}
+	if len(out.IssueLabels.Nodes) == 0 {
+		return Label{}, false, nil
+	}
+	return out.IssueLabels.Nodes[0], true, nil
 }
 
 // CreateLabel creates a team-scoped label.

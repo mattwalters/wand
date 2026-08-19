@@ -53,9 +53,10 @@ var saveIssue = regexp.MustCompile(`^mcp__.+__save_issue$`)
 
 // The reason texts are most of the value of a block: an agent that is
 // stopped without being told where to go next improvises, which is how
-// tickets reach Todo in the first place. Each names the correct alternative.
-// When wand's own lifecycle verbs land (claim, handback, abandon — phase 3),
-// these should name them.
+// tickets reach Todo in the first place. Each names the correct alternative,
+// verb included — `wand handback` and `wand abandon` encode the orderings
+// (comment before status, description corrected with the demotion) that a
+// raw status write skips.
 const (
 	reasonTodo = "Moving a ticket to **Todo** is the human's call. Todo is the gate between " +
 		"\"written down\" and \"a bot may act on this unattended\", so an agent never " +
@@ -67,15 +68,17 @@ const (
 		"comment you wrote, and stop — saying that the status is missing and that a " +
 		"human has to add it in Linear's team settings.\n\n" +
 		"If the ticket turns out to be wrong rather than blocked, hand it back to " +
-		"**Backlog** — the one downward move an agent may make, safe because it " +
-		"removes authorization rather than granting it."
+		"**Backlog** with `wand abandon` — the one downward move an agent may make, " +
+		"safe because it removes authorization rather than granting it."
 
 	reasonClose = "Closing a ticket is the human's call, however obsolete it looks. An agent " +
 		"never sets Done, Canceled or Duplicate.\n\n" +
 		"Recommend it in a comment instead, with what you found and why. If the " +
 		"ticket is wrong rather than finished, hand it back to **Backlog** " +
-		"unassigned — the one downward move an agent may make, and safe because it " +
-		"removes authorization rather than granting it.\n\n" +
+		"unassigned with `wand abandon` — it posts your evidence, corrects the " +
+		"description in the same act, and makes the one downward move an agent " +
+		"may make, safe because it removes authorization rather than granting " +
+		"it.\n\n" +
 		"Done also arrives on its own: Linear's on-PR-merge automation sets it " +
 		"within seconds of the human merging."
 
@@ -85,8 +88,9 @@ const (
 		"authorizes it rather than describing it.\n\n" +
 		"If you are a scout finishing a scope, the move you want is **Needs " +
 		"Input** — post the approaches, the recommendation and the estimate, then " +
-		"transition there. That is allowed, and it is what hands the decision back " +
-		"to a person.\n\n" +
+		"transition there (`wand handback` does both, in the order that cannot " +
+		"strand a question-less ticket). That is allowed, and it is what hands " +
+		"the decision back to a person.\n\n" +
 		"If you have found something that ought to be scoped, say so in a comment " +
 		"and leave the status alone. A human promotes it."
 

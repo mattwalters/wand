@@ -22,6 +22,10 @@ func Root() *cobra.Command {
 	root.AddCommand(newGuardCmd())
 	root.AddCommand(newQueueCmd())
 	root.AddCommand(newTicketCmd())
+	root.AddCommand(newClaimCmd())
+	root.AddCommand(newHandbackCmd())
+	root.AddCommand(newAbandonCmd())
+	root.AddCommand(newFileCmd())
 	root.AddCommand(newVersionCmd())
 	return root
 }

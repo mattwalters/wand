@@ -45,7 +45,7 @@ func Build(issues []linear.Issue) (ready []linear.Issue, skips []Skip) {
 	sort.SliceStable(ranked, func(i, j int) bool { return less(ranked[i], ranked[j]) })
 
 	for _, issue := range ranked {
-		if reason := vet(issue); reason != "" {
+		if reason := Vet(issue); reason != "" {
 			skips = append(skips, Skip{Issue: issue, Reason: reason})
 			continue
 		}
@@ -99,8 +99,10 @@ func splitIdentifier(id string) (team string, number int, ok bool) {
 	return id[:i], n, true
 }
 
-// vet returns why an issue may not be started, or "" when it may.
-func vet(issue linear.Issue) string {
+// Vet returns why an issue may not be started, or "" when it may. Exported
+// because `wand claim` must refuse for exactly the reasons the queue skips:
+// two vetting rules would drift, and the claim path is the one that acts.
+func Vet(issue linear.Issue) string {
 	var reasons []string
 	for _, label := range issue.Labels {
 		if strings.EqualFold(label, HumanOnlyLabel) {
