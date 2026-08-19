@@ -4,8 +4,9 @@ A Go CLI and TUI, built on Cobra + [fang](https://github.com/charmbracelet/fang)
 and [Bubble Tea v2](https://charm.land/bubbletea/v2). Public, MIT licensed.
 
 `init` and `guard` are real: `init` bootstraps a Linear team to the covenant
-and installs the guard's hook shim; `guard` is the status verdict oracle the
-shim routes Linear writes through. `covenant` and `bless` are stubs today. [PLAN.md](./PLAN.md) is the build order and the
+(parameterized by a checked-in `wand.toml` when present) and installs the
+guard's hook shim; `guard` is the status verdict oracle the shim routes
+Linear writes through. `covenant` and `bless` are stubs today. [PLAN.md](./PLAN.md) is the build order and the
 reasoning — a deliberately mortal document; the Linear tickets are the
 authoritative version of the work. The TUI's verification layer is described
 below; read that before changing anything under `internal/tui`.
