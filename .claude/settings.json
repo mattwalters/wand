@@ -1,0 +1,15 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "mcp__.*__save_issue",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "wand guard"
+          }
+        ]
+      }
+    ]
+  }
+}

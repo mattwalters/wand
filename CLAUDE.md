@@ -3,8 +3,9 @@
 A Go CLI and TUI, built on Cobra + [fang](https://github.com/charmbracelet/fang)
 and [Bubble Tea v2](https://charm.land/bubbletea/v2). Public, MIT licensed.
 
-`init` is real: it bootstraps a Linear team to the covenant. `covenant` and
-`bless` are stubs today. [PLAN.md](./PLAN.md) is the build order and the
+`init` and `guard` are real: `init` bootstraps a Linear team to the covenant
+and installs the guard's hook shim; `guard` is the status verdict oracle the
+shim routes Linear writes through. `covenant` and `bless` are stubs today. [PLAN.md](./PLAN.md) is the build order and the
 reasoning — a deliberately mortal document; the Linear tickets are the
 authoritative version of the work. The TUI's verification layer is described
 below; read that before changing anything under `internal/tui`.
@@ -37,12 +38,14 @@ internal/cli/        cobra commands, fang wiring, the --dump-screen path
 internal/linear/     the Linear GraphQL client — raw net/http, no GraphQL library, on purpose
 internal/covenant/   the process contract: fixed topology, parameterized covenant
 internal/bootstrap/  planner/executor over the covenant; all decisions in the pure Plan
+internal/guard/      the one verdict function: which ticket writes an agent may never make
+internal/shim/       generates the PreToolUse hook entry that routes save_issue to wand guard
 internal/tui/        Bubble Tea models — the app itself
   testdata/screens/  golden screens (plain text pictures of the UI)
 internal/theme/      every lipgloss style, in one place
 internal/screen/     the renderer: model -> real program -> vt -> text
 internal/tuitest/    test-facing layer over internal/screen
-e2e/                 pty smoke test, behind the `e2e` build tag
+e2e/                 pty smoke test + guard exit-code contract, behind the `e2e` build tag
 ```
 
 `internal/screen` must never import `testing`. Both the test harness and the
@@ -56,7 +59,7 @@ the goldens identical.
 | 0 | `internal/tui/*_test.go` | `Update` transitions. Pure, instant. **Most tests belong here.** |
 | 1 | `tuitest.FinalModel` | Wiring: keys reach the right branch, commands fire |
 | 2 | `tuitest.AssertScreen` | What the user actually sees, as a golden screen |
-| 3 | `e2e/` | TTY detection, alt-screen, signals, exit codes. One smoke test — keep it that way. |
+| 3 | `e2e/` | TTY detection, alt-screen, signals, exit codes. One pty smoke test — keep it that way — plus the guard hook's exit-code contract (plain exec, no pty). |
 
 Tier 2 golden-files the **rendered screen**, not the ANSI byte stream. The byte
 stream contains every intermediate frame plus color escapes: brittle, and
@@ -94,7 +97,7 @@ test named for the lesson.
 
 ## Process
 
-Work lives in Linear, in the **Wand** team (key `WAND`). wand runs its own
+Work lives in Linear, in the **Wand** team (key `WND`). wand runs its own
 lifecycle — the one it ships — so sessions here follow it:
 
 - **Take work only from Todo**, highest priority first, oldest first to
@@ -102,13 +105,14 @@ lifecycle — the one it ships — so sessions here follow it:
   An empty Todo means: nothing for you right now.
 - **Never move a ticket to Todo, Scoping, Done, Canceled or Duplicate.**
   Those grant or revoke authorization, and that is a human's act. Agents
-  may set In Progress, In Review, Needs Input, Backlog and Triage. Until
-  WAND-1 lands there is no hook enforcing this here — this paragraph is
-  the whole enforcement, which is exactly why WAND-1 is the first ticket.
+  may set In Progress, In Review, Needs Input, Backlog and Triage. This is
+  enforced, not requested: `.claude/settings.json` routes every `save_issue`
+  through `wand guard` (needs `wand` on PATH — `make install`), and the
+  verdicts live in `internal/guard`.
 - **Found something that isn't your ticket?** File it into Triage with the
   `agent-filed` label and carry on. Search for a duplicate first.
 - **Branch from the ticket's own branch name** (Linear provides it), and
-  lead the PR title with the identifier in brackets: `[WAND-12] …`. This
+  lead the PR title with the identifier in brackets: `[WND-12] …`. This
   repo squash-merges, so the PR title is the commit subject on `main`
   forever.
 - **Never push to `main`.** Open a PR and drive it to green.
