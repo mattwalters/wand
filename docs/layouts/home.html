@@ -1,3 +1,13 @@
 {{ define "main" }}
+{{/* The site root is the latest build, so this page is the project's front
+     door and the first page of the manual at once — there is no second,
+     unversioned marketing site to keep in sync with it. The hero's words
+     live in content/_index.md's front matter; only their arrangement is
+     here. Everything below the hero is ordinary Markdown. */}}
+<section class="hero">
+  <h1 class="wordmark">{{ .Title }}</h1>
+  <p class="tagline">{{ .Params.tagline }}</p>
+  {{ with .Params.lede }}<div class="lede">{{ . | markdownify }}</div>{{ end }}
+</section>
 {{ .Content }}
 {{ end }}

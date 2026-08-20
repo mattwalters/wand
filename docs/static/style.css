@@ -223,6 +223,50 @@ main {
   }
 }
 
+/* ---- the homepage hero ----
+   The site root is the latest build, so the front door lives inside the
+   same shell as the manual: the hero is a block at the top of the content
+   column, not a separate full-width layout with its own rails to maintain. */
+
+.hero {
+  margin-bottom: 2.6rem;
+  padding-bottom: 2rem;
+  border-bottom: 1px solid var(--rule);
+}
+
+.hero .wordmark {
+  margin: 0;
+  font-size: 3.4rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.hero .tagline {
+  margin: 0.5rem 0 0;
+  font-size: 1.35rem;
+  line-height: 1.35;
+  color: var(--fg);
+}
+
+.hero .lede {
+  margin-top: 1.2rem;
+  color: var(--muted);
+}
+
+.hero .lede p {
+  margin: 0;
+}
+
+@media (max-width: 60rem) {
+  .hero .wordmark {
+    font-size: 2.6rem;
+  }
+
+  .hero .tagline {
+    font-size: 1.15rem;
+  }
+}
+
 /* ---- content ---- */
 
 h1, h2, h3 {

@@ -1,6 +1,7 @@
-# The docs site. Built by .github/workflows/docs.yml on every release tag,
-# once under /vX.Y.Z and once under /latest — the baseURL below is only the
-# local-preview default; CI overrides it per build.
+# The docs site. Built by .github/workflows/docs.yml: the root is the latest
+# build (it tracks main), /latest/ is that same build published again for
+# links that predate the layout, and every release tag freezes a copy under
+# /vX.Y.Z. The baseURL below is only the local-preview default.
 #
 # The theme is hand-rolled in layouts/ on purpose: Docsy would drag a Node
 # toolchain into a dependency-free Go repo, and a theme module is one more
@@ -34,7 +35,7 @@ version = "dev"
 # happenstance reads as unfinished. Every new content page gets an entry —
 # an unlisted page is unreachable by design, not an accident.
 [[menus.main]]
-name = "Overview"
+name = "Home"
 pageRef = "/"
 weight = 10
 [menus.main.params]
@@ -119,6 +120,13 @@ mono = true
 name = "wand file"
 pageRef = "/commands/file"
 weight = 190
+[menus.main.params]
+mono = true
+
+[[menus.main]]
+name = "wand scope"
+pageRef = "/commands/scope"
+weight = 195
 [menus.main.params]
 mono = true
 

@@ -319,23 +319,29 @@ re-enter.
 
 The doctrine — the *why* behind every covenant state and rule, which
 deliberately does not live in the covenant file — is at
-[wandcli.com](https://wandcli.com/). The docs
-are versioned with the tool: every release publishes a frozen copy under its
-own tag next to the moving `latest`, so a repo pinned to wand vX.Y.Z reads
-the doctrine matching its covenant schema.
+[wandcli.com](https://wandcli.com/), along with the command reference:
+every implemented command, one page each, with its flags and its exit
+codes, at [wandcli.com/commands/](https://wandcli.com/commands/).
 
-The command reference lives there too — every implemented command, one page
-each, with its flags and its exit codes: [wandcli.com/commands/](https://wandcli.com/commands/).
+**The root is the latest build.** `wandcli.com/` is the homepage and
+`wandcli.com/commands/` the current reference, both tracking `main` — which
+is what lets a doc fix ship without cutting a release, and matches this
+repo's rule that docs change with the code in the same PR. Every release
+additionally freezes a copy at `wandcli.com/vX.Y.Z/`, so a repo pinned to
+wand vX.Y.Z reads the doctrine matching its covenant schema; pick the
+version in the site header. `/latest/` is the root build published a second
+time, so links written before this layout still resolve.
 
 The site lives in [docs/](docs/) — plain Markdown built by Hugo (a single
 Go binary, keeping with the no-Node rule) with a hand-rolled minimal theme.
 `make docs-serve` previews it locally.
 
-Publishing is two parts: the release workflow commits the built site to the
-`gh-pages` branch on every tag, and a one-time repo setting (Settings →
-Pages → deploy from the `gh-pages` branch, with `wandcli.com` as the
-verified custom domain) tells GitHub to serve it — after that, every
-release publishes on its own.
+Publishing is two parts: the docs workflow commits the built site to the
+`gh-pages` branch — on every push to `main` and again on every tag — and a
+one-time repo setting (Settings → Pages → deploy from the `gh-pages`
+branch, with `wandcli.com` as the verified custom domain) tells GitHub to
+serve it. The deploy keeps existing files, so a frozen version directory is
+never touched again after the tag that wrote it.
 
 ## Run from a clone
 

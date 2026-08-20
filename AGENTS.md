@@ -50,7 +50,8 @@ internal/theme/      every lipgloss style, in one place
 internal/screen/     the renderer: model -> real program -> vt -> text
 internal/tuitest/    test-facing layer over internal/screen
 e2e/                 pty smoke test + the exit-code contracts, behind the `e2e` build tag
-docs/                the versioned docs site: Hugo, hand-rolled theme, published per release tag
+docs/                the versioned docs site: Hugo, hand-rolled theme. The root is the
+                     latest build (main); every release tag also freezes a /vX.Y.Z copy
 ```
 
 `internal/screen` must never import `testing`. Both the test harness and the
