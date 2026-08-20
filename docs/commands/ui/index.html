@@ -166,7 +166,7 @@ the flags below live on — and the one to reach for outside a terminal, where
 bare <code>wand</code> falls back to printing help instead.</p>
 <h2 id="synopsis">Synopsis</h2>
 <pre tabindex="0"><code>wand
-wand ui --team-key WND
+wand ui --team-key WND [--harness &lt;name&gt;] [--model &lt;m&gt;] [--effort &lt;e&gt;] [--interval &lt;duration&gt;]
 wand ui --sample
 wand ui --dump-screen [--script KEYS] [--width N] [--height N]
 </code></pre><h2 id="the-four-queues">The four queues</h2>
@@ -312,6 +312,46 @@ already holds and now refuses, which would leave the duplicate permanently
 uncompletable through the only screen that can complete it.</p>
 <p>Every status is named by what it <em>means</em>, so a covenant that renames <code>todo</code>
 to <code>Ready</code> gets a screen that says <code>→ Ready</code>.</p>
+<h2 id="engage-mode">Engage mode</h2>
+<p>Press <code>e</code> to engage. While engaged, the cockpit polls Todo and Scoping on
+<code>--interval</code> (default <code>1m</code>) exactly the way <code>wand dispatch --watch</code> (see
+<a href="../dispatch/"><code>wand dispatch</code></a>) does — because it <em>is</em> that mechanism,
+reused rather than reimplemented: each poll counts lanes, ranks
+and vets Todo and Scoping, and when a winner exists spawns it as a
+<strong>detached child process</strong> through <code>wand run</code> or <code>wand scope</code>, the same way
+<code>--watch</code> does. That child survives the cockpit: closing the UI, or the
+whole terminal it runs in, never kills work already spawned. Press <code>e</code>
+again to disengage.</p>
+<p>The header names what engage mode is doing:</p>
+<pre tabindex="0"><code> wand cockpit · WND                                             6 waiting on you
+  engaged · idle · next poll in 40s
+</code></pre><pre tabindex="0"><code> wand cockpit · WND                                             6 waiting on you
+  engaged · dispatched WND-9 (run) · next poll in 60s
+</code></pre><p><strong>Engaging is always a deliberate key press, never a default.</strong> Bare
+<code>wand</code> opens the cockpit read-for-work but never pre-engaged — opening a
+dashboard must not start spending money. Nothing engages it for you.</p>
+<p><strong>Multiple engaged cockpits, and an engaged cockpit alongside a standalone
+<code>wand dispatch</code>, are all safe together.</strong> Engaging acquires the same
+per-repo dispatch lock <code>wand dispatch</code> itself arbitrates: the loser of a
+pass — whichever process asks for the lock second — simply cannot toggle
+on, and the <code>e</code> key says why. Disengaging, or quitting the cockpit while
+engaged, releases the lock; a killed terminal releases it the same way
+<code>--watch</code> does, through the lock&rsquo;s own dead-holder reclaim rather than
+through any code in the cockpit.</p>
+<p>Engage mode needs the same dependencies <code>wand dispatch</code> needs to run a
+winner — <code>LINEAR_API_KEY</code>, an authenticated <code>gh</code>, <code>commands.verify</code> in
+<code>wand.toml</code>, and a resolvable team key — plus whichever of <code>--harness</code>,
+<code>--model</code> and <code>--effort</code> you want a spawned winner to run with. Missing any
+of them does not stop the cockpit from opening: it opens exactly as it
+always has, read and judge still work, and only the <code>e</code> key refuses, saying
+why.</p>
+<p><code>wand dispatch</code>&rsquo;s own conformance gate, wherever it lands, applies here
+unchanged — engage mode selects a winner through the same <code>dispatch.Select</code>
+every standalone pass uses, so a gate placed there covers both without
+engage mode needing its own copy of it.</p>
+<p>Left out of this pass, deliberately: engage mode does not also run periodic
+<code>wand sweep</code> passes, and the poll interval is a flag, not a covenant
+parameter. Both are natural extensions if engage mode earns them.</p>
 <h2 id="looking-at-the-interface-without-a-terminal">Looking at the interface without a terminal</h2>
 <p>A terminal interface is the one kind of program you cannot observe by
 reading its output, which makes it the one kind an agent cannot check its
@@ -393,6 +433,26 @@ reason on it.</p>
 					<td><code>24</code></td>
 					<td>Terminal height to render at. Requires <code>--dump-screen</code>.</td>
 			</tr>
+			<tr>
+					<td><code>--harness</code></td>
+					<td><code>claude-code</code></td>
+					<td>Worker harness engage mode runs a winner through: <code>claude-code</code> or <code>codex</code>. Does not apply with <code>--sample</code> or <code>--dump-screen</code>.</td>
+			</tr>
+			<tr>
+					<td><code>--model</code></td>
+					<td>—</td>
+					<td>Model engage mode gives every worker. Default: the harness&rsquo;s default. Does not apply with <code>--sample</code> or <code>--dump-screen</code>.</td>
+			</tr>
+			<tr>
+					<td><code>--effort</code></td>
+					<td>—</td>
+					<td>Reasoning effort engage mode gives every worker. Default: the harness&rsquo;s default. Does not apply with <code>--sample</code> or <code>--dump-screen</code>.</td>
+			</tr>
+			<tr>
+					<td><code>--interval</code></td>
+					<td><code>1m</code></td>
+					<td>How often engage mode polls once engaged. Does not apply with <code>--sample</code> or <code>--dump-screen</code>.</td>
+			</tr>
 	</tbody>
 </table>
 <p>The size flags are explicit rather than read from the ambient terminal: a
@@ -451,6 +511,7 @@ trapped inside a full-screen app you have to quit out of to read.</p>
     <li><a href="#the-four-queues">The four queues</a></li>
     <li><a href="#blessing">Blessing</a></li>
     <li><a href="#the-six-judgments">The six judgments</a></li>
+    <li><a href="#engage-mode">Engage mode</a></li>
     <li><a href="#looking-at-the-interface-without-a-terminal">Looking at the interface without a terminal</a>
       <ul>
         <li><a href="#scripts">Scripts</a></li>
