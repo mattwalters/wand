@@ -154,6 +154,7 @@ type IssueCreate struct {
 	Description string
 	StateID     string
 	LabelIDs    []string
+	ProjectID   string // "" leaves the issue unassigned to any project
 }
 
 // CreateIssue files one issue and returns it as created.
@@ -168,6 +169,9 @@ func (c *Client) CreateIssue(ctx context.Context, in IssueCreate) (Issue, error)
 	}
 	if len(in.LabelIDs) > 0 {
 		input["labelIds"] = in.LabelIDs
+	}
+	if in.ProjectID != "" {
+		input["projectId"] = in.ProjectID
 	}
 
 	var out struct {
@@ -230,9 +234,22 @@ func (c *Client) SearchIssues(ctx context.Context, teamKey, term string) ([]Issu
 // written here, by the cockpit, in the same act as setting Duplicate status.
 const RelationDuplicate = "duplicate"
 
+// RelationBlocks is the relation type marking one issue as blocking another.
+// The direction matters: issueId is the blocker, relatedIssueId is the
+// blocked issue — the same convention issueFields' inverseRelations read
+// depends on (issue.go). Getting this backwards is the exact regression
+// documented there; prefer CreateBlocker over calling CreateRelation with
+// this constant directly.
+const RelationBlocks = "blocks"
+
+// RelationRelated is the relation type marking two issues as related, with
+// no direction implied.
+const RelationRelated = "related"
+
 // CreateRelation links two issues. For RelationDuplicate the direction
 // matters and reads as the sentence does: issueID is the duplicate,
-// relatedID is the canonical issue it duplicates.
+// relatedID is the canonical issue it duplicates. For RelationBlocks, prefer
+// CreateBlocker, which pins the direction so call sites cannot flip it.
 func (c *Client) CreateRelation(ctx context.Context, issueID, relatedID, relType string) error {
 	if issueID == relatedID {
 		return fmt.Errorf("linear: an issue cannot be related to itself")
@@ -258,4 +275,14 @@ func (c *Client) CreateRelation(ctx context.Context, issueID, relatedID, relType
 		return fmt.Errorf("linear: refused the %s relation", relType)
 	}
 	return nil
+}
+
+// CreateBlocker records that blockedIssueID is blocked by blockerIssueID.
+// The arguments are named and ordered the way a human reads the relationship
+// ("the blocked issue is blocked by the blocker"), so a call site cannot flip
+// the direction the way a bare CreateRelation(ctx, a, b, RelationBlocks) call
+// could — issue.go's inverseRelations comment documents that exact mistake
+// having shipped once already.
+func (c *Client) CreateBlocker(ctx context.Context, blockedIssueID, blockerIssueID string) error {
+	return c.CreateRelation(ctx, blockerIssueID, blockedIssueID, RelationBlocks)
 }
