@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -36,11 +37,21 @@ type fakeBoard struct {
 	states []linear.WorkflowState
 	labels map[string]linear.Label
 
+	// humanEdit, when set, is appended to the description on every fetch
+	// after the first — a human editing the ticket while the worker runs.
+	humanEdit string
+	fetches   int
+
 	calls []boardCall
 }
 
 func (b *fakeBoard) IssueByIdentifier(context.Context, string) (linear.Issue, error) {
-	return b.issue, nil
+	b.fetches++
+	issue := b.issue
+	if b.humanEdit != "" && b.fetches > 1 {
+		issue.Description += b.humanEdit
+	}
+	return issue, nil
 }
 func (b *fakeBoard) TeamStates(context.Context, string) ([]linear.WorkflowState, error) {
 	return b.states, nil
@@ -702,6 +713,101 @@ func TestWorkerSpecsCarryTheContract(t *testing.T) {
 	}
 	if !strings.Contains(review.Prompt, "git diff main...HEAD") {
 		t.Errorf("review prompt does not point at the diff:\n%s", review.Prompt)
+	}
+}
+
+// A journal store that fails after the claim must not leave the ticket
+// silently In Progress behind an exit code that promises "nothing to
+// sweep": the claim is handed straight back, comment before status.
+func TestJournalFailureHandsTheClaimBack(t *testing.T) {
+	f := newFixture(t)
+	blocker := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(blocker, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	f.store.Root = filepath.Join(blocker, "state") // Create must fail
+
+	_, err := Execute(context.Background(), f.deps, f.store, "WND-1")
+	if err == nil {
+		t.Fatal("Execute succeeded with a store that cannot open")
+	}
+	if !strings.Contains(err.Error(), "handed back") {
+		t.Errorf("the error does not say the claim was handed back: %v", err)
+	}
+	if got := f.board.statusWrites(); !equal(got, []string{stateInProgress, stateNeedsInput}) {
+		t.Errorf("status writes %v, want claim then Needs Input", got)
+	}
+	if c := f.board.lastComment(); !strings.Contains(c, "run journal") {
+		t.Errorf("the hand-back comment does not name the journal failure:\n%s", c)
+	}
+}
+
+// A blocked worker that committed nothing must not be described as having
+// committed work: a human who trusts "committed on the branch" and deletes
+// the preserved worktree would destroy the only copy.
+func TestBlockedWithNoCommitsSaysSo(t *testing.T) {
+	f := newFixture(t)
+	f.git.ahead = 0
+	f.workers.steps = []workerStep{{handoff: `{"status": "blocked", "summary": "s", "reason": "which API should this use?"}`}}
+
+	out := f.execute(t)
+
+	if out.Kind != journal.HandedBack {
+		t.Fatalf("outcome %+v, want handed back", out)
+	}
+	c := f.board.lastComment()
+	if strings.Contains(c, "committed on branch") {
+		t.Errorf("the comment claims committed work on an empty branch:\n%s", c)
+	}
+	if !strings.Contains(c, "no commits yet") {
+		t.Errorf("the comment does not state the branch is empty:\n%s", c)
+	}
+}
+
+// A pre-push hand-back with commits must say the branch never reached
+// origin — the branch name alone reads like something a human can fetch.
+func TestPrePushHandbackNamesTheUnpushedBranch(t *testing.T) {
+	f := newFixture(t)
+	f.workers.steps = []workerStep{{handoff: `{"status": "blocked", "summary": "s", "reason": "stopping"}`}}
+
+	out := f.execute(t) // git.ahead = 1, nothing pushed yet
+
+	if out.Kind != journal.HandedBack {
+		t.Fatalf("outcome %+v, want handed back", out)
+	}
+	if c := f.board.lastComment(); !strings.Contains(c, "has not been pushed") {
+		t.Errorf("the comment does not say the branch is local-only:\n%s", c)
+	}
+}
+
+// Corrections anchor against the ticket as it is at correction time, and
+// the prompt-facing render follows: a human's mid-run edit survives the
+// correction, and the next reviewer reads the corrected wording — never
+// the claim the run itself disproved.
+func TestCorrectionsUseTheFreshDescriptionAndRefreshThePrompt(t *testing.T) {
+	f := newFixture(t)
+	f.board.humanEdit = "\n\nAlso check the TTL." // lands after the claim
+	f.workers.steps = []workerStep{
+		{handoff: `{"status": "done", "summary": "implemented it",
+			"description_corrections": [{"old": "the cache is warm", "new": "the cache starts cold"}]}`},
+		{handoff: approveHandoff},
+	}
+	f.shell.steps = []shellStep{{ok: true}}
+
+	out := f.execute(t)
+	if out.Kind != journal.Converged {
+		t.Fatalf("outcome %+v", out)
+	}
+	if !strings.Contains(f.board.issue.Description, "the cache starts cold") {
+		t.Errorf("the correction did not land: %q", f.board.issue.Description)
+	}
+	if !strings.Contains(f.board.issue.Description, "Also check the TTL.") {
+		t.Errorf("the human's mid-run edit was clobbered: %q", f.board.issue.Description)
+	}
+	review := f.workers.specs[1]
+	if !strings.Contains(review.Prompt, "the cache starts cold") ||
+		strings.Contains(review.Prompt, "the cache is warm") {
+		t.Errorf("the review prompt was not re-rendered after the correction:\n%s", review.Prompt)
 	}
 }
 

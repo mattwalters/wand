@@ -79,6 +79,12 @@ crash into a clean pass. Parking writes only the journal, deliberately, so
 it is reachable even when Linear itself is what failed. The worktree is
 preserved for inspection.
 
+A later run of the same ticket resumes its branch: a preserved worktree
+that is clean (everything committed on the branch) is removed and replaced;
+one holding uncommitted work makes the new run refuse, naming the old
+worktree's path — work at risk is a human's call, never collateral of a
+resume.
+
 ## What the handoff carries back
 
 Beyond its status, a worker's handoff can carry **description
@@ -106,6 +112,11 @@ The codes are a contract a scheduler can read:
 | `1` | The run never started — refused claim, missing configuration, no journal. Nothing to sweep. |
 | `2` | Handed back: Needs Input, with the reason posted as a comment. |
 | `3` | Parked: the journal has the reason; the worktree is preserved. |
+
+Exit 1 keeps its "nothing to sweep" promise even when the failure lands
+after the claim: a run whose journal will not open hands the ticket
+straight back (Needs Input, with the store failure as the comment) before
+exiting.
 
 ## Requirements
 

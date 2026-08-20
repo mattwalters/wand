@@ -92,10 +92,12 @@ func (o Outcome) ExitCode() int {
 
 // Execute owns one ticket from claim to a terminal state.
 //
-// An error return means no run happened: the claim was refused or the
-// journal could not open, and the caller exits 1. Once a run exists, every
-// path ends in exactly one Outcome instead — including interrupts, which
-// park with the signal as the reason.
+// An error return means no run happened — and nothing is left claimed: a
+// refused claim wrote nothing, and a journal that would not open hands the
+// claim straight back before the error surfaces. Exit 1's "nothing to
+// sweep" promise is kept in code, not by hoping the store never fails.
+// Once a run exists, every path ends in exactly one Outcome instead —
+// including interrupts, which park with the signal as the reason.
 func Execute(ctx context.Context, d Deps, store *journal.Store, identifier string) (Outcome, error) {
 	if err := d.validate(); err != nil {
 		return Outcome{}, err
@@ -122,8 +124,16 @@ func Execute(ctx context.Context, d Deps, store *journal.Store, identifier strin
 		Harness: d.Harness,
 	})
 	if err != nil {
+		// The claim already landed, and exit 1 promises a scheduler there
+		// is nothing to sweep — so nothing may stay silently claimed. Hand
+		// the ticket back with the journal failure as the reason.
+		comment := fmt.Sprintf("This run claimed the ticket but could not open its run journal, so it stopped before doing any work. The store must be fixed before a rerun: %v", err)
+		if _, herr := verbs.Handback(ctx, d.Board, d.Cov, issue.Identifier, comment); herr != nil {
+			return Outcome{}, fmt.Errorf(
+				"%s is claimed (In Progress, assigned) but the run journal would not open: %w — and the hand-back failed too (%v); hand the ticket back or fix the store before retrying", issue.Identifier, err, herr)
+		}
 		return Outcome{}, fmt.Errorf(
-			"%s is claimed (In Progress, assigned) but the run journal would not open: %w — hand the ticket back or fix the store before retrying", issue.Identifier, err)
+			"the run journal would not open: %w — %s was handed back (Needs Input) with that as the reason", err, issue.Identifier)
 	}
 	defer r.Close()
 	fmt.Fprintf(d.Out, "run %s journaling to %s\n", r.ID(), r.Dir())
@@ -146,6 +156,7 @@ type loop struct {
 	branch string
 	base   string
 	prURL  string
+	pushed bool // the branch has reached origin at least once
 
 	ticketText string
 	ciFailures int
@@ -165,20 +176,13 @@ type phaseDetail struct {
 // journalTail bounds the output tail a journal record keeps.
 const journalTail = 4 << 10
 
-func tailOf(s string) string {
-	if len(s) <= journalTail {
-		return s
-	}
-	return "[… clipped …]\n" + s[len(s)-journalTail:]
-}
-
 func (l *loop) run(ctx context.Context) Outcome {
 	caps := l.d.Cov.Caps
 
 	// --- workspace ---------------------------------------------------
 	base, err := l.d.Git.DefaultBranch(ctx, l.d.Repo)
 	if err != nil {
-		return *l.park(fmt.Sprintf("could not resolve the default branch: %v", err))
+		return *l.park(ctx, fmt.Sprintf("could not resolve the default branch: %v", err))
 	}
 	branch := l.issue.BranchName
 	if branch == "" {
@@ -186,7 +190,7 @@ func (l *loop) run(ctx context.Context) Outcome {
 	}
 	tree := filepath.Join(l.r.Dir(), "tree")
 	if err := l.d.Git.AddWorktree(ctx, l.d.Repo, tree, branch, base); err != nil {
-		return *l.park(fmt.Sprintf("could not create the worktree: %v", err))
+		return *l.park(ctx, fmt.Sprintf("could not create the worktree: %v", err))
 	}
 	l.tree, l.branch, l.base = tree, branch, base
 	fmt.Fprintf(l.d.Out, "worktree %s on branch %s (base %s)\n", tree, branch, base)
@@ -194,16 +198,16 @@ func (l *loop) run(ctx context.Context) Outcome {
 	if p := l.d.Cov.Commands.Provision; p != "" {
 		ok, output, err := l.shell(ctx, p)
 		if err != nil {
-			return *l.parkCtx(ctx, fmt.Sprintf("the provision command could not run: %v", err))
+			return *l.park(ctx, fmt.Sprintf("the provision command could not run: %v", err))
 		}
 		if !ok {
-			return *l.park(fmt.Sprintf("the provision command failed:\n%s", tailOf(output)))
+			return *l.park(ctx, fmt.Sprintf("the provision command failed:\n%s", worker.Clip(output, journalTail)))
 		}
 	}
 
 	comments, err := l.d.Board.IssueComments(ctx, l.issue.ID)
 	if err != nil {
-		return *l.parkCtx(ctx, fmt.Sprintf("could not read the ticket's comments: %v", err))
+		return *l.park(ctx, fmt.Sprintf("could not read the ticket's comments: %v", err))
 	}
 	l.ticketText = ticket.Render(l.issue, comments)
 
@@ -214,7 +218,7 @@ func (l *loop) run(ctx context.Context) Outcome {
 	}
 	impl, err := ParseWork(res.Handoff)
 	if err != nil {
-		return *l.park(fmt.Sprintf("the implement worker's handoff is unusable: %v", err))
+		return *l.park(ctx, fmt.Sprintf("the implement worker's handoff is unusable: %v", err))
 	}
 	if out := l.afterWork(ctx, "implement", impl); out != nil {
 		return *out
@@ -224,10 +228,10 @@ func (l *loop) run(ctx context.Context) Outcome {
 	}
 	ahead, err := l.d.Git.CommitsAhead(ctx, l.tree, l.base)
 	if err != nil {
-		return *l.park(fmt.Sprintf("could not count the branch's commits: %v", err))
+		return *l.park(ctx, fmt.Sprintf("could not count the branch's commits: %v", err))
 	}
 	if ahead == 0 {
-		return *l.park(`the implement worker reported "done" but made no commits; a run with nothing on its branch has nothing to review`)
+		return *l.park(ctx, `the implement worker reported "done" but made no commits; a run with nothing on its branch has nothing to review`)
 	}
 
 	// --- CI, then the PR ---------------------------------------------
@@ -252,7 +256,7 @@ func (l *loop) run(ctx context.Context) Outcome {
 		if err != nil {
 			// The one explicitly-parked failure: a converging default here
 			// would turn every reviewer crash into a clean pass.
-			return *l.park(fmt.Sprintf("the round-%d reviewer produced no parseable handoff: %v — a run does not converge on a reviewer it could not read", round, err))
+			return *l.park(ctx, fmt.Sprintf("the round-%d reviewer produced no parseable handoff: %v — a run does not converge on a reviewer it could not read", round, err))
 		}
 		if out := l.requireClean(ctx, "review"); out != nil {
 			return *out
@@ -273,11 +277,11 @@ func (l *loop) run(ctx context.Context) Outcome {
 			// are real findings; hand them to a human whole.
 			if len(findings) == 0 {
 				return *l.handback(ctx,
-					vagueReviewComment(caps.ReviewRounds, l.branch, l.prURL, l.tree),
-					fmt.Sprintf("the review-round cap (%d) ran out; the reviewer withheld approval but raised no concrete findings", caps.ReviewRounds))
+					vagueReviewComment(caps.ReviewRounds, l.branch, l.prURL, l.tree, l.workState(ctx)),
+					fmt.Sprintf("the review-round cap (%d) ran out; the final reviewer withheld approval but raised no concrete findings", caps.ReviewRounds))
 			}
 			return *l.handback(ctx,
-				reviewCapComment(caps.ReviewRounds, findings, l.branch, l.prURL, l.tree),
+				reviewCapComment(caps.ReviewRounds, findings, l.branch, l.prURL, l.tree, l.workState(ctx)),
 				fmt.Sprintf("the review-round cap (%d) ran out with %d finding(s) still standing", caps.ReviewRounds, len(findings)))
 		}
 		if len(findings) == 0 {
@@ -292,7 +296,7 @@ func (l *loop) run(ctx context.Context) Outcome {
 		}
 		rev, err := ParseWork(res.Handoff)
 		if err != nil {
-			return *l.park(fmt.Sprintf("the round-%d revise worker's handoff is unusable: %v", round, err))
+			return *l.park(ctx, fmt.Sprintf("the round-%d revise worker's handoff is unusable: %v", round, err))
 		}
 		if out := l.afterWork(ctx, "revise", rev); out != nil {
 			return *out
@@ -316,7 +320,7 @@ func (l *loop) work(ctx context.Context, phase string, round int, rules []string
 	fmt.Fprintf(l.d.Out, "phase %s round %d: spawning worker (%s)\n", phase, round, l.d.Harness)
 	if err := l.r.StartPhase(phase, round); err != nil {
 		// An unjournaled phase must not run; that is the package's one rule.
-		return worker.Result{}, l.park(fmt.Sprintf("could not journal phase %s: %v", phase, err))
+		return worker.Result{}, l.park(ctx, fmt.Sprintf("could not journal phase %s: %v", phase, err))
 	}
 	spec := worker.Spec{
 		Mode:        phase,
@@ -337,16 +341,16 @@ func (l *loop) work(ctx context.Context, phase string, round int, rules []string
 	}
 	if err != nil {
 		detail.Error = err.Error()
-		detail.OutputTail = tailOf(res.Output)
+		detail.OutputTail = worker.Clip(res.Output, journalTail)
 	}
 	if jerr := l.r.EndPhase(detail); jerr != nil {
-		return res, l.park(fmt.Sprintf("could not journal the end of phase %s: %v", phase, jerr))
+		return res, l.park(ctx, fmt.Sprintf("could not journal the end of phase %s: %v", phase, jerr))
 	}
 	if ctx.Err() != nil {
-		return res, l.park(context.Cause(ctx).Error())
+		return res, l.park(ctx, "the run was interrupted")
 	}
 	if err != nil {
-		return res, l.park(fmt.Sprintf("the %s worker (round %d) failed: %v", phase, round, err))
+		return res, l.park(ctx, fmt.Sprintf("the %s worker (round %d) failed: %v", phase, round, err))
 	}
 	return res, nil
 }
@@ -359,7 +363,7 @@ func (l *loop) afterWork(ctx context.Context, phase string, h WorkHandoff) *Outc
 	l.applyCorrections(ctx, phase, h.DescriptionCorrections)
 	if h.Status == "blocked" {
 		return l.handback(ctx,
-			blockedComment(phase, h.Reason, l.branch, l.prURL, l.tree),
+			blockedComment(phase, h.Reason, l.branch, l.prURL, l.tree, l.workState(ctx)),
 			fmt.Sprintf("the %s worker reported blocked: %s", phase, firstLine(h.Reason)))
 	}
 	return nil
@@ -373,7 +377,15 @@ func (l *loop) applyCorrections(ctx context.Context, phase string, corrs []Corre
 	if len(corrs) == 0 {
 		return
 	}
-	desc := l.issue.Description
+	// Anchor against the ticket as it is now, not the claim-time snapshot:
+	// a human may have edited the description while the worker ran, and an
+	// update built on a stale base would silently erase their words.
+	fresh, err := l.d.Board.IssueByIdentifier(ctx, l.issue.Identifier)
+	if err != nil {
+		l.note("description corrections skipped: could not re-read the ticket", map[string]string{"error": err.Error()})
+		return
+	}
+	desc := fresh.Description
 	var applied []Correction
 	for _, c := range corrs {
 		next, err := linear.WithReplacement(desc, c.Old, c.New)
@@ -398,7 +410,21 @@ func (l *loop) applyCorrections(ctx context.Context, phase string, corrs []Corre
 		return
 	}
 	l.issue.Description = desc
+	l.refreshTicketText(ctx)
 	fmt.Fprintf(l.d.Out, "%s: applied %d description correction(s)\n", phase, len(applied))
+}
+
+// refreshTicketText re-renders the prompt-facing ticket after the run
+// itself changed it: a reviewer must not be handed wording the run already
+// disproved and corrected. Best-effort — on failure the old render stands,
+// which is exactly the state before the correction existed.
+func (l *loop) refreshTicketText(ctx context.Context) {
+	comments, err := l.d.Board.IssueComments(ctx, l.issue.ID)
+	if err != nil {
+		l.note("ticket text not refreshed after corrections", map[string]string{"error": err.Error()})
+		return
+	}
+	l.ticketText = ticket.Render(l.issue, comments)
 }
 
 // requireClean parks on a dirty tree. Work phases must commit; the reviewer
@@ -407,12 +433,29 @@ func (l *loop) applyCorrections(ctx context.Context, phase string, corrs []Corre
 func (l *loop) requireClean(ctx context.Context, phase string) *Outcome {
 	dirty, err := l.d.Git.Dirty(ctx, l.tree)
 	if err != nil {
-		return l.park(fmt.Sprintf("could not check the tree after %s: %v", phase, err))
+		return l.park(ctx, fmt.Sprintf("could not check the tree after %s: %v", phase, err))
 	}
 	if dirty {
-		return l.park(fmt.Sprintf("the %s worker left the tree dirty; uncommitted changes are work at risk, so the run parks with the worktree preserved at %s", phase, l.tree))
+		return l.park(ctx, fmt.Sprintf("the %s worker left the tree dirty; uncommitted changes are work at risk, so the run parks with the worktree preserved at %s", phase, l.tree))
 	}
 	return nil
+}
+
+// workState reads what a hand-back can truthfully say about where the work
+// sits. Best-effort — a hand-back must not fail because git could not be
+// read — so !known means the comment says less, never that it guesses.
+func (l *loop) workState(ctx context.Context) workState {
+	s := workState{pushed: l.pushed}
+	if l.tree == "" {
+		return s
+	}
+	ahead, aerr := l.d.Git.CommitsAhead(ctx, l.tree, l.base)
+	dirty, derr := l.d.Git.Dirty(ctx, l.tree)
+	if aerr != nil || derr != nil {
+		return s
+	}
+	s.known, s.ahead, s.dirty = true, ahead, dirty
+	return s
 }
 
 // green runs the verify command until it passes, spawning a fix-CI worker
@@ -425,7 +468,7 @@ func (l *loop) green(ctx context.Context) *Outcome {
 		fmt.Fprintf(l.d.Out, "verify: %s\n", verify)
 		ok, output, err := l.shell(ctx, verify)
 		if err != nil {
-			return l.parkCtx(ctx, fmt.Sprintf("the verify command could not run: %v", err))
+			return l.park(ctx, fmt.Sprintf("the verify command could not run: %v", err))
 		}
 		if ok {
 			fmt.Fprintln(l.d.Out, "verify: green")
@@ -435,7 +478,7 @@ func (l *loop) green(ctx context.Context) *Outcome {
 		fmt.Fprintf(l.d.Out, "verify: red (failure %d, cap %d)\n", l.ciFailures, caps.CIAttempts)
 		if l.ciFailures > caps.CIAttempts {
 			return l.handback(ctx,
-				ciCapComment(caps.CIAttempts, verify, output, l.branch, l.prURL, l.tree),
+				ciCapComment(caps.CIAttempts, verify, output, l.branch, l.prURL, l.tree, l.workState(ctx)),
 				fmt.Sprintf("the fix-CI cap (%d) ran out with verify still failing", caps.CIAttempts))
 		}
 		res, out := l.work(ctx, "fix-ci", l.ciFailures, l.workRules(), fixCIPrompt(verify, output))
@@ -444,7 +487,7 @@ func (l *loop) green(ctx context.Context) *Outcome {
 		}
 		h, err := ParseWork(res.Handoff)
 		if err != nil {
-			return l.park(fmt.Sprintf("the fix-CI worker's handoff is unusable: %v", err))
+			return l.park(ctx, fmt.Sprintf("the fix-CI worker's handoff is unusable: %v", err))
 		}
 		if out := l.afterWork(ctx, "fix-ci", h); out != nil {
 			return out
@@ -465,8 +508,9 @@ func (l *loop) shell(ctx context.Context, command string) (bool, string, error) 
 
 func (l *loop) push(ctx context.Context) *Outcome {
 	if err := l.d.Git.Push(ctx, l.tree, l.branch); err != nil {
-		return l.park(fmt.Sprintf("push failed: %v", err))
+		return l.park(ctx, fmt.Sprintf("push failed: %v", err))
 	}
+	l.pushed = true
 	return nil
 }
 
@@ -476,12 +520,12 @@ func (l *loop) push(ctx context.Context) *Outcome {
 func (l *loop) ensurePR(ctx context.Context, title, body string) *Outcome {
 	pr, found, err := l.d.Hub.PRForBranch(ctx, l.tree, l.branch)
 	if err != nil {
-		return l.park(fmt.Sprintf("could not look up the branch's PR: %v", err))
+		return l.park(ctx, fmt.Sprintf("could not look up the branch's PR: %v", err))
 	}
 	if !found {
 		url, err := l.d.Hub.OpenPR(ctx, l.tree, l.base, l.branch, title, body)
 		if err != nil {
-			return l.park(fmt.Sprintf("could not open the PR: %v", err))
+			return l.park(ctx, fmt.Sprintf("could not open the PR: %v", err))
 		}
 		l.prURL = url
 		fmt.Fprintf(l.d.Out, "opened PR %s\n", url)
@@ -496,7 +540,7 @@ func (l *loop) repairTitle(ctx context.Context, pr PR) *Outcome {
 	l.prURL = pr.URL
 	if want := RepairTitle(l.issue.Identifier, pr.Title); want != pr.Title {
 		if err := l.d.Hub.RetitlePR(ctx, l.tree, pr.Number, want); err != nil {
-			return l.park(fmt.Sprintf("could not repair the PR title: %v", err))
+			return l.park(ctx, fmt.Sprintf("could not repair the PR title: %v", err))
 		}
 		fmt.Fprintf(l.d.Out, "repaired PR title to %q\n", want)
 	}
@@ -509,10 +553,10 @@ func (l *loop) repairTitle(ctx context.Context, pr PR) *Outcome {
 func (l *loop) converge(ctx context.Context, round int, reviewSummary string) Outcome {
 	pr, found, err := l.d.Hub.PRForBranch(ctx, l.tree, l.branch)
 	if err != nil {
-		return *l.parkCtx(ctx, fmt.Sprintf("could not look up the branch's PR: %v", err))
+		return *l.park(ctx, fmt.Sprintf("could not look up the branch's PR: %v", err))
 	}
 	if !found {
-		return *l.park(fmt.Sprintf("the PR for branch %s is gone; it was open earlier in this run", l.branch))
+		return *l.park(ctx, fmt.Sprintf("the PR for branch %s is gone; it was open earlier in this run", l.branch))
 	}
 	if out := l.repairTitle(ctx, pr); out != nil {
 		return *out
@@ -523,7 +567,7 @@ func (l *loop) converge(ctx context.Context, round int, reviewSummary string) Ou
 	// it hangs on. The reviewer's approval does not answer a human.
 	threads, err := l.d.Hub.UnresolvedThreads(ctx, l.tree, pr.Number)
 	if err != nil {
-		return *l.parkCtx(ctx, fmt.Sprintf("could not read the PR's review threads: %v", err))
+		return *l.park(ctx, fmt.Sprintf("could not read the PR's review threads: %v", err))
 	}
 	if threads > 0 {
 		return *l.handback(ctx,
@@ -534,25 +578,25 @@ func (l *loop) converge(ctx context.Context, round int, reviewSummary string) Ou
 	// Resolve everything checkable before the first write.
 	stateID, err := verbs.ResolveState(ctx, l.d.Board, l.d.Cov, l.issue.TeamID, "in_review")
 	if err != nil {
-		return *l.parkCtx(ctx, fmt.Sprintf("could not resolve the In Review status: %v", err))
+		return *l.park(ctx, fmt.Sprintf("could not resolve the In Review status: %v", err))
 	}
 	label, found, err := l.d.Board.LabelByName(ctx, ReadyForHumanLabel)
 	if err != nil {
-		return *l.parkCtx(ctx, fmt.Sprintf("could not resolve the %s label: %v", ReadyForHumanLabel, err))
+		return *l.park(ctx, fmt.Sprintf("could not resolve the %s label: %v", ReadyForHumanLabel, err))
 	}
 	if !found {
-		return *l.park(fmt.Sprintf("no %q label anywhere in the workspace; run `wand init` to bring the team to the covenant", ReadyForHumanLabel))
+		return *l.park(ctx, fmt.Sprintf("no %q label anywhere in the workspace; run `wand init` to bring the team to the covenant", ReadyForHumanLabel))
 	}
 
 	comment := convergedComment(round, reviewSummary, l.prURL, l.deviations)
 	if err := l.d.Board.CreateComment(ctx, l.issue.ID, comment); err != nil {
-		return *l.parkCtx(ctx, fmt.Sprintf("converged, but the summary comment failed: %v", err))
+		return *l.park(ctx, fmt.Sprintf("converged, but the summary comment failed: %v", err))
 	}
 	if err := l.d.Board.AddLabel(ctx, l.issue.ID, label.ID); err != nil {
-		return *l.parkCtx(ctx, fmt.Sprintf("converged and commented, but labeling failed: %v", err))
+		return *l.park(ctx, fmt.Sprintf("converged and commented, but labeling failed: %v", err))
 	}
 	if err := l.d.Board.UpdateIssue(ctx, l.issue.ID, linear.IssueUpdate{StateID: stateID}); err != nil {
-		return *l.parkCtx(ctx, fmt.Sprintf("converged, commented and labeled, but the In Review move failed: %v", err))
+		return *l.park(ctx, fmt.Sprintf("converged, commented and labeled, but the In Review move failed: %v", err))
 	}
 
 	// The branch is pushed and the tree is clean; the worktree has nothing
@@ -574,7 +618,7 @@ func (l *loop) converge(ctx context.Context, round int, reviewSummary string) Ou
 // it could not.
 func (l *loop) handback(ctx context.Context, comment, reason string) *Outcome {
 	if _, err := verbs.Handback(ctx, l.d.Board, l.d.Cov, l.issue.Identifier, comment); err != nil {
-		return l.parkCtx(ctx, fmt.Sprintf("hand-back failed: %v (the run was handing back because: %s)", err, reason))
+		return l.park(ctx, fmt.Sprintf("hand-back failed: %v (the run was handing back because: %s)", err, reason))
 	}
 	if err := l.r.HandedBack(reason); err != nil {
 		fmt.Fprintf(l.d.Out, "journal: %v\n", err)
@@ -583,22 +627,18 @@ func (l *loop) handback(ctx context.Context, comment, reason string) *Outcome {
 }
 
 // park ends the run without deciding, journal-only: reachable even when
-// Linear is what broke.
-func (l *loop) park(reason string) *Outcome {
+// Linear is what broke. When the context is what killed the operation, the
+// interrupt's own sentence wins — "interrupted by SIGTERM" explains a run;
+// "Post …: context canceled" does not — and the choice lives here, in the
+// one function every ending path calls, so no call site can forget it.
+func (l *loop) park(ctx context.Context, reason string) *Outcome {
+	if ctx.Err() != nil {
+		reason = context.Cause(ctx).Error()
+	}
 	if err := l.r.Parked(reason); err != nil {
 		fmt.Fprintf(l.d.Out, "journal: %v\n", err)
 	}
 	return &Outcome{Kind: journal.Parked, Reason: reason, PRURL: l.prURL}
-}
-
-// parkCtx parks, preferring the interrupt's own sentence when the context
-// is what killed the operation — "interrupted by SIGTERM" explains a run;
-// "Post …: context canceled" does not.
-func (l *loop) parkCtx(ctx context.Context, reason string) *Outcome {
-	if ctx.Err() != nil {
-		return l.park(context.Cause(ctx).Error())
-	}
-	return l.park(reason)
 }
 
 // note journals a non-transition worth reading later; failing to write one
