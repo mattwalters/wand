@@ -205,15 +205,17 @@ because the connector id changes when Linear is reconnected;</li>
 <p>Matching is on the trimmed, whitespace-collapsed, lowercased value, and
 covers Linear&rsquo;s state <em>types</em> as well as its names: <code>completed</code> and
 <code>canceled</code> block, and <code>unstarted</code> blocks with a message asking the caller
-to name the status instead, since it covers Todo, Needs Input and Scoping
-alike.</p>
+to name the status instead, since it covers Todo, Needs Input, Scoping and
+Scoped alike.</p>
 <p>Every status an agent legitimately sets passes: <strong>In Progress</strong>, <strong>In
-Review</strong>, <strong>Needs Input</strong>, <strong>Backlog</strong>, <strong>Triage</strong>. So does every write
-that is not a status move — assigning, relabelling, editing a description.
-A guard that blocked ordinary work would be routed around within a day.</p>
+Review</strong>, <strong>Needs Input</strong>, <strong>Scoped</strong>, <strong>Backlog</strong>, <strong>Triage</strong>. So does
+every write that is not a status move — assigning, relabelling, editing a
+description. A guard that blocked ordinary work would be routed around
+within a day.</p>
 <p>Note the direction. Moving a ticket <em>into</em> Scoping is a promotion and is
-refused; moving one <em>out</em> of Scoping to Needs Input is what every scope
-ends with, and it is allowed. The guard sees only the destination.</p>
+refused; moving one <em>out</em> of Scoping is what every scope ends with, either
+way it ends — to Needs Input, a blocking question, or to Scoped, a
+finished plan — and both are allowed. The guard sees only the destination.</p>
 <h3 id="the-block-message-is-most-of-the-value">The block message is most of the value</h3>
 <p>A blocked agent that is not told where to go next improvises, which is how
 tickets reach Todo in the first place. Each refusal names the correct

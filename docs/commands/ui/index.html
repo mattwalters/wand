@@ -194,8 +194,10 @@ invisible until something puts it on one screen:</p>
 <li><strong>Triage</strong> — what agents filed, waiting to be judged. Ranked in the same
 order <a href="../queue/"><code>wand queue</code></a> ranks work, so the ticket you bless first
 is the one an agent starts first.</li>
-<li><strong>Needs Input</strong> — runs parked on a question. This is where a scope ends
-and where a run hands back.</li>
+<li><strong>Needs Input</strong> — runs parked on a question: a scope that judged the
+ticket&rsquo;s premise wrong, or a run that hands back. It means one thing —
+answer me — never &ldquo;a plan is ready to bless,&rdquo; which is
+<a href="../../covenant/#the-states-and-why-each-exists">Scoped&rsquo;s</a> job.</li>
 <li><strong>Ready for human</strong> — every open issue carrying the <code>ready-for-human</code>
 label: a pull request to review, a merge to press. Closed issues are
 dropped, because the label outlives the merge that answered it.</li>

@@ -203,6 +203,22 @@ Raising it is a migration — it asserts that the states exist on your board
 <a href="#the-states-and-why-each-exists">Scoped</a> included. The number holds at 1
 until wand is distributed: an increment is a promise to other people&rsquo;s
 covenant files, and there are no other people yet.</p>
+<h2 id="two-doors-out-of-backlog">Two doors out of Backlog</h2>
+<p>Every ticket leaves Backlog through one of two doors, and a human opens
+both. The cheap door is <code>Backlog → Todo</code>: a ticket small enough that
+writing a plan and reviewing it would cost more than just building it, so
+a person blesses it straight into Todo. The deliberate door is
+<code>Backlog → Scoping → Scoped → Todo</code>: a person blesses the <em>research</em>
+first, an agent researches it and writes a plan, and a person blesses that
+plan onward. Both doors end at the same gate — a human choosing Todo — the
+deliberate one just puts a plan in front of that choice instead of asking
+for it blind.</p>
+<p>Scoped is what makes the deliberate door&rsquo;s last step first-class. A ticket
+sitting there is exactly a PR sitting in In Review: finished, argued, and
+waiting on nothing but a human&rsquo;s judgment. Reviewing a plan is not lesser
+work than reviewing the code that follows from it, and giving it its own
+state — rather than folding it into Needs Input, which means something
+else entirely — is how the board says so.</p>
 <h2 id="the-states-and-why-each-exists">The states, and why each exists</h2>
 <p>The board is a map of <em>authorization</em>, not just progress. Reading the
 states as &ldquo;how done is this?&rdquo; misses their point; read them as &ldquo;who has
@@ -289,12 +305,15 @@ for a build — an agent may set it unattended, and the guard treats the two
 identically. Neither may an agent move a ticket <em>out</em> of Scoped: that
 destination is Todo (blessing) or one of the three close statuses, all
 five already forbidden regardless of where the ticket is moving from.</p>
-<p>Scoped is the newest state, and wand&rsquo;s own verbs move onto it one release
-at a time. Until they do, <code>wand scope</code> still ends at Needs Input, and a
-team bootstrapped before Scoped existed will see the missing state reported
-by <a href="../commands/doctor/"><code>wand doctor</code></a> and created by <code>wand init</code>. (It
-ships inside schema 1: wand is undistributed, so topology changes do not
-yet spend schema increments.)</p>
+<p><code>wand scope</code>&rsquo;s happy path ends there: the plan, the argued options and the
+estimate land on the ticket, then the move to Scoped is the last write,
+advertising that all three are there to read. Needs Input is the scout&rsquo;s
+other ending, and only that one now — a blocking question, nothing else,
+with the question as the comment. A team bootstrapped before Scoped
+existed will see the missing state reported by
+<a href="../commands/doctor/"><code>wand doctor</code></a> and created by <code>wand init</code>. (It ships
+inside schema 1: wand is undistributed, so topology changes do not yet
+spend schema increments.)</p>
 <p><strong>Todo</strong> is the gate between &ldquo;written down&rdquo; and &ldquo;a bot may act on this
 unattended&rdquo;. It is the single most consequential state on the board, and
 promotion into it is a human act — the blessing. The failure it guards
@@ -315,7 +334,10 @@ Input makes being blocked <em>visible and cheap</em> — the ticket says what it
 waiting for, and surfacing that queue is one quarter of the whole job of
 <a href="../commands/ui/">the cockpit</a>.
 It is deliberately an <code>unstarted</code> state: answering the question re-blesses
-the work, it does not resume it automatically.</p>
+the work, it does not resume it automatically. It means exactly one thing —
+answer me — never &ldquo;review this,&rdquo; which is Scoped&rsquo;s job and In Review&rsquo;s;
+a queue that means two things is a queue a person has to open before they
+know what it is asking of them.</p>
 <p><strong>In Progress</strong> and <strong>In Review</strong> track claimed and reviewed work, and
 Linear&rsquo;s PR automations mirror them: opening a PR (draft included) targets
 In Progress — a claimed ticket is already there, so the write changes
@@ -439,6 +461,7 @@ to prevent.</p>
       <nav id="TableOfContents">
   <ul>
     <li><a href="#why-the-shape-is-fixed">Why the shape is fixed</a></li>
+    <li><a href="#two-doors-out-of-backlog">Two doors out of Backlog</a></li>
     <li><a href="#the-states-and-why-each-exists">The states, and why each exists</a></li>
     <li><a href="#the-forbidden-transitions">The forbidden transitions</a></li>
     <li><a href="#caps">Caps</a></li>

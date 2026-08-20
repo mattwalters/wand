@@ -161,7 +161,7 @@
 <p><code>scope</code> is the research orchestrator. It sends a cold, read-only scout over
 your repository to research one ticket, validates what the scout hands back,
 and writes the result onto the ticket: the plan into the description, the
-approaches and their trade-offs as a comment, the estimate, and Needs Input
+approaches and their trade-offs as a comment, the estimate, and Scoped
 last.</p>
 <p>It is the smallest orchestrator wand has — no worktree, no branch, no PR, no
 CI — and the one to run first if you want to see the machinery work before
@@ -187,10 +187,10 @@ merged and never appended to.</li>
 every approach with its trade-off, which one is recommended and why,
 what the plan rests on, what is still open, and the ask.</li>
 <li><strong>The estimate</strong>, on the team&rsquo;s scale.</li>
-<li><strong>Needs Input</strong>.</li>
+<li><strong>Scoped</strong>.</li>
 </ol>
 <p>Each deliverable lands before the transition that advertises it. A ticket in
-Needs Input promises a scope to read, so the status move is last, and if
+Scoped promises a finished plan to judge, so the status move is last, and if
 anything before it fails the ticket stays in Scoping — carrying whatever
 did land, and nothing claiming to be finished.</p>
 <p>The comment comes before the estimate for the same reason: a ticket carrying
@@ -317,7 +317,7 @@ else&rsquo;s.</p>
 	<tbody>
 			<tr>
 					<td><code>0</code></td>
-					<td>Scoped. The plan, the options and the estimate are on the ticket, and it is in Needs Input.</td>
+					<td>Scoped. The plan, the options and the estimate are on the ticket, and it is in Scoped for a human to judge.</td>
 			</tr>
 			<tr>
 					<td><code>1</code></td>
@@ -325,7 +325,7 @@ else&rsquo;s.</p>
 			</tr>
 			<tr>
 					<td><code>2</code></td>
-					<td>Handed back. The scout judged the ticket&rsquo;s premise wrong; its account is on the ticket and no plan was written.</td>
+					<td>Handed back. The scout judged the ticket&rsquo;s premise wrong; its account is on the ticket, no plan was written, and it is in Needs Input for a human to answer.</td>
 			</tr>
 			<tr>
 					<td><code>3</code></td>
