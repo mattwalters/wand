@@ -15,6 +15,7 @@ type keyMap struct {
 	Confirm key.Binding
 	Back    key.Binding
 	Refresh key.Binding
+	Engage  key.Binding
 	Quit    key.Binding
 	// ForceQuit works from everywhere, typing included. Quit does not:
 	// "q" is a letter someone may be part-way through typing into a
@@ -52,6 +53,10 @@ func defaultKeyMap() keyMap {
 		Refresh: key.NewBinding(
 			key.WithKeys("r"),
 			key.WithHelp("r", "refresh"),
+		),
+		Engage: key.NewBinding(
+			key.WithKeys("e"),
+			key.WithHelp("e", "engage"),
 		),
 		Quit: key.NewBinding(
 			key.WithKeys("q"),
