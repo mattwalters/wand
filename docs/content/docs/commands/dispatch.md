@@ -12,8 +12,8 @@ orchestrators the ticket belongs to.
 ## Synopsis
 
 ```
-wand dispatch --team-key <key> [--harness <name>] [--model <m>] [--effort <e>]
-wand dispatch --team-key <key> --watch [--interval <duration>] [...]
+wand dispatch [--team-key <key>] [--harness <name>] [--model <m>] [--effort <e>]
+wand dispatch [--team-key <key>] --watch [--interval <duration>] [...]
 ```
 
 ## What it does
@@ -92,7 +92,7 @@ each pass it dispatches is a detached child, not this process's own exit.
 
 | Flag | Meaning |
 |---|---|
-| `--team-key` | Linear team key, e.g. `WND`. Required. |
+| `--team-key` | Linear team key, e.g. `WND`. Falls back to `[team] key` in the nearest `wand.toml` — since dispatch is run from inside the repository, that is normally where it comes from, and the flag is only for running against another team. |
 | `--harness` | Worker harness: `claude-code` (default) or `codex`. |
 | `--model` | Model for every worker. Default: the harness's default. |
 | `--effort` | Reasoning effort for every worker. Default: the harness's default. |
@@ -103,7 +103,8 @@ each pass it dispatches is a detached child, not this process's own exit.
 
 Same as `wand run` and `wand scope`: `LINEAR_API_KEY`, an authenticated
 `gh`, `commands.verify` in [`wand.toml`](../../covenant/), run from inside
-the repository.
+the repository — which is also where the team key comes from, unless
+`--team-key` overrides it.
 
 `caps.lanes` in the covenant sets how many `wand run` loops this repository
 runs at once (default `1`); a Scoping ticket never counts against it.

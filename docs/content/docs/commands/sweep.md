@@ -13,7 +13,7 @@ nothing else in wand watches for them.
 ## Synopsis
 
 ```
-wand sweep --team-key <key>
+wand sweep [--team-key <key>]
 ```
 
 ## What it acts on
@@ -52,18 +52,26 @@ reap: no lease to prove dead, no run to reopen. "Looks stuck" and "is
 stuck" are different claims, and only a person can tell which this is, so
 sweep prints it and moves on.
 
+## Flags
+
+| Flag | Meaning |
+|---|---|
+| `--team-key KEY` | The Linear team key, e.g. `WND`. Falls back to `[team] key` in the nearest `wand.toml` — since sweep is run from inside the repository, that is normally where it comes from, and the flag is only for running against another team. |
+
 ## Exit codes
 
 `sweep` exits `0` on a completed pass — whether or not it found anything
 to act on — and `1` on a failure that stopped the pass before it could
-finish reading or acting, with the reason on stderr.
+finish reading or acting, with the reason on stderr — including no
+resolvable team key (neither `--team-key` nor `[team] key` in `wand.toml`).
 
 ## Requirements
 
 `LINEAR_API_KEY` and an authenticated `gh` (sweep reads a converged
 ticket's PR the same way `wand run`'s own convergence check does — the
 checkout it is run from, since a converged run already removed its own
-worktree). Run it from inside the repository.
+worktree). Run it from inside the repository, which is also where the team
+key comes from unless `--team-key` overrides it.
 
 ## See also
 

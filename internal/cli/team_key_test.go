@@ -97,10 +97,9 @@ func TestCovenantFromCwdNoFileIsStock(t *testing.T) {
 	}
 }
 
-// runQueue, runFile and runDoctorCmd below drive each of the five
-// team-scoped commands the same way ui_test.go drives ui: through the real
-// cobra command, so what is proven is the wiring, not just resolveTeamKey in
-// isolation. Every command is checked for team-key resolution up to, but not
+// The runners below drive each of the team-scoped commands the same way
+// ui_test.go drives ui: through the real cobra command, so what is proven is
+// the wiring, not just resolveTeamKey in isolation. Every command is checked for team-key resolution up to, but not
 // past, the point network I/O would be needed — LINEAR_API_KEY is left
 // unset, and the assertion is which error surfaces: "no team key" means
 // resolution failed, an error naming LINEAR_API_KEY means it succeeded and
@@ -361,6 +360,136 @@ func TestDoctorTeamKeyResolution(t *testing.T) {
 		}
 		if strings.Contains(out.String(), "team key") {
 			t.Fatalf("output = %q, want the walk to find the root's wand.toml", out.String())
+		}
+	})
+}
+
+// dispatch and sweep landed on a branch that predates the resolution helper
+// and carried their own hard "--team-key is required" check. They are the
+// two commands most likely to be run unattended from inside a repository —
+// exactly the case a wand.toml key exists to serve — so the wiring is
+// pinned here alongside the rest.
+
+func runSweep(t *testing.T, args ...string) (string, error) {
+	t.Helper()
+	cmd := newSweepCmd()
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs(args)
+	return out.String(), cmd.Execute()
+}
+
+func TestSweepTeamKeyResolution(t *testing.T) {
+	t.Run("neither flag nor file", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		_, err := runSweep(t)
+		if err == nil || !strings.Contains(err.Error(), bothFixes) {
+			t.Fatalf("err = %v, want the both-fixes error", err)
+		}
+	})
+
+	t.Run("file supplies the key", func(t *testing.T) {
+		t.Setenv("LINEAR_API_KEY", "")
+		dir := t.TempDir()
+		writeKeyedWandToml(t, dir, "WND")
+		t.Chdir(dir)
+		_, err := runSweep(t)
+		if err == nil || strings.Contains(err.Error(), "team key") {
+			t.Fatalf("err = %v, want resolution to succeed and fail past it", err)
+		}
+		if !strings.Contains(err.Error(), "LINEAR_API_KEY") {
+			t.Errorf("err = %v, want it to mention LINEAR_API_KEY", err)
+		}
+	})
+
+	t.Run("flag beats file", func(t *testing.T) {
+		t.Setenv("LINEAR_API_KEY", "")
+		dir := t.TempDir()
+		writeKeyedWandToml(t, dir, "OTHER")
+		t.Chdir(dir)
+		_, err := runSweep(t, "--team-key", "WND")
+		if err == nil || strings.Contains(err.Error(), "team key") {
+			t.Fatalf("err = %v, want resolution to succeed and fail past it", err)
+		}
+	})
+
+	t.Run("subdirectory walk resolves", func(t *testing.T) {
+		t.Setenv("LINEAR_API_KEY", "")
+		root := t.TempDir()
+		writeKeyedWandToml(t, root, "WND")
+		sub := filepath.Join(root, "a", "b")
+		if err := os.MkdirAll(sub, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		t.Chdir(sub)
+		_, err := runSweep(t)
+		if err == nil || strings.Contains(err.Error(), "team key") {
+			t.Fatalf("err = %v, want the walk to find the root's wand.toml", err)
+		}
+	})
+}
+
+// dispatch's own Run calls os.Exit, so the resolution is driven through
+// dispatchDeps — the first thing that Run reaches, and where the team key
+// is settled — rather than through Execute.
+func runDispatchDeps(t *testing.T, teamKey string) error {
+	t.Helper()
+	cmd := &cobra.Command{Use: "dispatch-test"}
+	cmd.SetContext(context.Background())
+	var out bytes.Buffer
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	_, _, err := dispatchDeps(cmd, teamKey, "claude-code", "", "")
+	return err
+}
+
+func TestDispatchTeamKeyResolution(t *testing.T) {
+	t.Run("neither flag nor file", func(t *testing.T) {
+		t.Chdir(t.TempDir())
+		err := runDispatchDeps(t, "")
+		if err == nil || !strings.Contains(err.Error(), bothFixes) {
+			t.Fatalf("err = %v, want the both-fixes error", err)
+		}
+	})
+
+	t.Run("file supplies the key", func(t *testing.T) {
+		t.Setenv("LINEAR_API_KEY", "")
+		dir := t.TempDir()
+		writeKeyedWandToml(t, dir, "WND")
+		t.Chdir(dir)
+		err := runDispatchDeps(t, "")
+		if err == nil || strings.Contains(err.Error(), "team key") {
+			t.Fatalf("err = %v, want resolution to succeed and fail past it", err)
+		}
+		if !strings.Contains(err.Error(), "LINEAR_API_KEY") {
+			t.Errorf("err = %v, want it to mention LINEAR_API_KEY", err)
+		}
+	})
+
+	t.Run("flag beats file", func(t *testing.T) {
+		t.Setenv("LINEAR_API_KEY", "")
+		dir := t.TempDir()
+		writeKeyedWandToml(t, dir, "OTHER")
+		t.Chdir(dir)
+		err := runDispatchDeps(t, "WND")
+		if err == nil || strings.Contains(err.Error(), "team key") {
+			t.Fatalf("err = %v, want resolution to succeed and fail past it", err)
+		}
+	})
+
+	t.Run("subdirectory walk resolves", func(t *testing.T) {
+		t.Setenv("LINEAR_API_KEY", "")
+		root := t.TempDir()
+		writeKeyedWandToml(t, root, "WND")
+		sub := filepath.Join(root, "a", "b")
+		if err := os.MkdirAll(sub, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		t.Chdir(sub)
+		err := runDispatchDeps(t, "")
+		if err == nil || strings.Contains(err.Error(), "team key") {
+			t.Fatalf("err = %v, want the walk to find the root's wand.toml", err)
 		}
 	})
 }
