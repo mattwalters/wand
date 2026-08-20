@@ -51,6 +51,7 @@ func Root() *cobra.Command {
 	root.AddCommand(newAbandonCmd())
 	root.AddCommand(newFileCmd())
 	root.AddCommand(newScopeCmd())
+	root.AddCommand(newPMCmd())
 	root.AddCommand(newDispatchCmd())
 	root.AddCommand(newSweepCmd())
 	root.AddCommand(newVersionCmd())
