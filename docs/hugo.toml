@@ -135,6 +135,13 @@ weight = 195
 mono = true
 
 [[menus.main]]
+name = "wand run"
+pageRef = "/docs/commands/run"
+weight = 196
+[menus.main.params]
+mono = true
+
+[[menus.main]]
 name = "wand ui"
 pageRef = "/docs/commands/ui"
 weight = 200

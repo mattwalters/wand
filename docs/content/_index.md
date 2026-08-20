@@ -15,26 +15,37 @@ install: brew install mattwalters/wand/wand
 ## What it is
 
 ```console
-$ wand ui
+$ wand ui --team-key WND
 
-   wand
+ wand cockpit · WND                                             6 waiting on you
 
- │ init
- │ Set up wand in this repository
+  Triage  2 to judge
+› WND-42  doctor prints an empty drift section on a clean board              Low
+  WND-41  guard: a raw state UUID is not matched
 
-   covenant
-   Read and edit the repository covenant
+  Needs Input  1 to answer
+  WND-38  Second harness adapter: which one?                                High
 
-   bless
-   Promote work along the blessing path
+  Ready for human  1 to look at
+  WND-35  Run journal and lease store                                  In Review
 
-   ↑/k up • ↓/j down • enter select • q quit
+  Lanes  2 to resolve
+  stuck    WND-36  held by pid 48213 on studio.local, which is gone; the run …
+  parked   WND-33  the worktree was dirty at handoff; refusing to park noise …
+
+  judge  t ✦Todo  s ✦Scoping  b Backlog  u unranked  d duplicate  x cancel
+  ↑/k ↓/j move • enter open • q quit
 ```
+
+One screen answering one question — *what is waiting on me?* — and the one
+place in wand where a human blesses work. Everything on it is a decision an
+agent is not allowed to make on its own.
 
 > **Status: early.** `init` bootstraps a Linear team to the covenant and
 > installs the guard hook, `guard` enforces the covenant's authorization
 > rules, `queue` and `ticket` are the read layer, `doctor` reports drift,
-> and `scope` is the first orchestrator. `covenant` and `bless` are stubs.
+> and `scope` and `run` are the first two orchestrators. `dispatch`, the
+> last one, is not built yet.
 
 **A covenant, not a config file.** The state graph — Triage → Backlog →
 Scoping → Todo → Needs Input → In Progress → In Review → Done — is wand's
@@ -55,10 +66,12 @@ prose, where it was followed only sometimes: the question is posted before
 the ticket parks on it, the evidence before the demotion, the duplicate
 search before the filing.
 
-**Orchestrators that hand back.** [`wand scope`](docs/commands/scope/) sends a
-cold, read-only scout over one ticket and writes a plan plus the argued
-options a human blesses it on — ending at Needs Input, never at Todo. An
-agent does not bless its own plan.
+**Orchestrators that hand back.** [`wand scope`](docs/commands/scope/) sends
+a cold, read-only scout over one ticket and writes a plan plus the argued
+options a human blesses it on — ending at Needs Input, never at Todo.
+[`wand run`](docs/commands/run/) takes a ticket a human *has* blessed and
+drives it through implement → CI → review → revise. Neither ever blesses
+its own work.
 
 ## Install
 
