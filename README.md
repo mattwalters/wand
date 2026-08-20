@@ -6,9 +6,11 @@ machinery — its covenant, and the blessing path work travels along.
 > **Status: early.** `init` bootstraps a Linear team to the covenant and
 > installs the guard hook; `guard` enforces the covenant's authorization
 > rules; `queue` and `ticket` are the read layer; `doctor` reports a
-> team's drift from the covenant; `run` drives one blessed ticket through
-> the implement → CI → review → revise loop. The `covenant` and `bless`
-> verbs are stubs.
+> team's drift from the covenant; `scope` is the first orchestrator — a
+> cold scout that turns one blessed-for-research ticket into a plan a human
+> can bless for building; `run` drives one blessed ticket through the
+> implement → CI → review → revise loop. The `covenant` and `bless` verbs
+> are stubs.
 
 ## Install
 
@@ -38,6 +40,7 @@ wand claim WND-3            # take a blessed issue: In Progress + assignee, firs
 wand handback WND-3 -m "…"  # park it on a human: question first, Needs Input second
 wand abandon WND-3 -m "…"   # return it to Backlog with the evidence that undid it
 wand file "…" --team-key WND  # file a finding into Triage, duplicates searched first
+wand scope WND-3            # research one Scoping ticket into a plan, ending at Needs Input
 wand run WND-3              # own one blessed ticket: implement → CI → review → revise
 wand doctor --team-key WND  # report the team's drift from the covenant
 wand version                # build info, and the covenant schema this binary speaks
@@ -82,6 +85,35 @@ The file must never contain a secret, a machine path, or a harness name:
 those are machine config, not covenant. The test for the split: if two
 clones could legitimately differ, it is config; if a difference means two
 different processes, it is covenant.
+
+## The scope orchestrator
+
+`wand scope WND-3` sends a cold, read-only scout over the repository to
+research one ticket, validates what it hands back, and writes the result:
+the plan into a marker-fenced region of the description, the approaches and
+their trade-offs as a comment, the estimate, then Needs Input. Promoting the
+result to Todo is yours — an agent does not bless its own plan.
+
+Two rules carry most of the weight. **A handoff that fails validation
+writes nothing at all**: one to three approaches each with a trade-off, a
+recommendation naming one of them, files cited as `path:line`, an estimate
+on the covenant's scale, and a plan with ordered steps and a test story.
+Half a scope reads like a whole one, and a human blesses it on the strength
+of the argument beside it. And **each deliverable lands before the
+transition that advertises it** — Needs Input says "there is a scope here to
+read", so it is written last, and anything that fails before it leaves the
+ticket in Scoping rather than claiming to be finished.
+
+There is no worktree: the scout reads your checkout and may not change it,
+and a run whose worker touched the tree parks with the change left in front
+of you. `--interactive` grills you over the draft first — questions ordered
+worst-consequence first, each quoting the draft — and hands your answers to
+a second, fresh session, because a session that has just argued for an
+approach defends it. `toggles.scope_critic` adds a cold critic ahead of
+that.
+
+Exit codes are a scheduler contract: `0` scoped, `2` handed back (the scout
+judged the ticket's premise wrong), `3` parked, `1` never started.
 
 ## The doctor
 

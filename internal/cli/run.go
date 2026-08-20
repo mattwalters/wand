@@ -70,7 +70,7 @@ func runRun(cmd *cobra.Command, identifier, harness, model, effort string) int {
 	if err != nil {
 		return fail(err)
 	}
-	repo, err := repoRoot()
+	repo, err := repoRoot("run")
 	if err != nil {
 		return fail(err)
 	}
@@ -105,13 +105,14 @@ func runRun(cmd *cobra.Command, identifier, harness, model, effort string) int {
 	return outcome.ExitCode()
 }
 
-// repoRoot resolves the repository the run acts on from the working
-// directory — the worktree, the journal's Meta.Repo, and every git
-// operation all hang off it.
-func repoRoot() (string, error) {
+// repoRoot resolves the repository an orchestrator acts on from the working
+// directory — the run's worktree, the scout's working directory, and the
+// journal's Meta.Repo all hang off it. Shared by both orchestrators, so the
+// verb names itself in the error rather than the helper guessing.
+func repoRoot(verb string) (string, error) {
 	out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
 	if err != nil {
-		return "", fmt.Errorf("not inside a git repository: wand run acts on the repo it is run from")
+		return "", fmt.Errorf("not inside a git repository: wand %s acts on the repo it is run from", verb)
 	}
 	return strings.TrimSpace(string(out)), nil
 }

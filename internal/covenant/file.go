@@ -89,19 +89,11 @@ type FileEstimates struct {
 	Scale string `toml:"scale"`
 }
 
-// estimateScales are the values Linear's issueEstimationType accepts.
-var estimateScales = map[string]bool{
-	"notUsed":     true,
-	"exponential": true,
-	"fibonacci":   true,
-	"linear":      true,
-	"tShirt":      true,
-}
-
 // FileToggles switch optional lifecycle stages. Pointers, because "off" and
 // "not mentioned" are different answers.
 type FileToggles struct {
 	ScopeInterview *bool `toml:"scope_interview"`
+	ScopeCritic    *bool `toml:"scope_critic"`
 }
 
 // FileCommands are the three pluggable commands.
@@ -143,7 +135,7 @@ func Parse(data []byte) (File, error) {
 	if err := validateCaps(md, f.Caps); err != nil {
 		return File{}, err
 	}
-	if md.IsDefined("estimates", "scale") && !estimateScales[f.Estimates.Scale] {
+	if _, known := estimateScales[f.Estimates.Scale]; md.IsDefined("estimates", "scale") && !known {
 		return File{}, fmt.Errorf("estimates.scale %q is not one Linear speaks (notUsed, exponential, fibonacci, linear, tShirt)", f.Estimates.Scale)
 	}
 	if err := validateCommands(md, f.Commands); err != nil {
@@ -244,6 +236,9 @@ func (f File) Covenant() Covenant {
 	}
 	if f.Toggles.ScopeInterview != nil {
 		cov.Toggles.ScopeInterview = *f.Toggles.ScopeInterview
+	}
+	if f.Toggles.ScopeCritic != nil {
+		cov.Toggles.ScopeCritic = *f.Toggles.ScopeCritic
 	}
 	if f.Commands.Verify != "" {
 		cov.Commands.Verify = f.Commands.Verify

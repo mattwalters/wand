@@ -380,3 +380,18 @@ func collect(path string) (json.RawMessage, error) {
 	}
 	return json.RawMessage(trimmed), nil
 }
+
+// AdapterFor resolves a harness name to its adapter. Empty means the
+// default. The registry lives here, with the adapters, so every
+// orchestrator resolves the same names to the same harnesses — a second
+// copy of this switch is how one verb grows a harness another does not
+// have.
+func AdapterFor(name string) (Adapter, error) {
+	switch name {
+	case "", "claude-code":
+		return ClaudeCode{}, nil
+	case "codex":
+		return Codex{}, nil
+	}
+	return nil, fmt.Errorf("worker: no adapter named %q (have claude-code, codex)", name)
+}

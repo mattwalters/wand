@@ -59,13 +59,23 @@ type Linear interface {
 	SearchIssues(ctx context.Context, teamKey, term string) ([]linear.Issue, error)
 }
 
+// StateResolver is the one read ResolveState needs. It is its own interface,
+// narrower than Linear, because the orchestrators resolve statuses through
+// this function while writing through client slices of their own — and a
+// caller should not have to grow its interface to reach the guard.
+type StateResolver interface {
+	TeamStates(ctx context.Context, teamID string) ([]linear.WorkflowState, error)
+}
+
 // ResolveState turns a covenant status key into the team's workflow state
 // UUID, passing the display name through the guard on the way. The guard
 // check is belt over braces — no verb here writes a forbidden status — but
 // it keeps the promise that every wand write path calls the one verdict
-// function, covenant renames included. Exported for the orchestrators,
-// which write statuses of their own and must go through the same gate.
-func ResolveState(ctx context.Context, cl Linear, cov covenant.Covenant, teamID, key string) (string, error) {
+// function, covenant renames included.
+//
+// Exported for the orchestrators, whose own status writes must go through
+// the same gate rather than a second copy of it.
+func ResolveState(ctx context.Context, cl StateResolver, cov covenant.Covenant, teamID, key string) (string, error) {
 	name := cov.StatusName(key)
 	if name == "" {
 		return "", fmt.Errorf("the covenant has no %q status; this is a wand bug", key)
