@@ -1,0 +1,18 @@
+ wand cockpit ·
+
+  Triage  2 to
+› WND-42 …  Low
+  WND-41  gu…
+
+  Needs Input
+  WND-38 …  Hig
+
+  Ready for hum
+  WND-35 …  In
+
+  Lanes  2 to r
+  stuck    W…
+  parked   W…
+
+  judge  t ✦To…
+  ↑/k ↓/j move

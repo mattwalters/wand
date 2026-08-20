@@ -1,0 +1,10 @@
+ wand cockpit · WND                                             6 waiting on you
+
+  Triage  2 to judge
+› WND-42  doctor prints an empty drift section on a clean board              Low
+  WND-41  guard: a raw state UUID is not matched
+
+  … 0 above, 9 below
+
+  judge  t ✦Todo  s ✦Scoping  b Backlog  u unranked  d duplicate  x cancel
+  ↑/k ↓/j move • enter open • r refresh • q quit

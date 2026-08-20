@@ -123,7 +123,7 @@ func (m Model) headerView() string {
 		right = m.theme.Body.Render(fmt.Sprintf("%d waiting on you", waiting))
 	}
 
-	head := spread(left, right, m.width)
+	head := m.splashView() + spread(left, right, m.width)
 	if m.notice != "" {
 		head += "\n" + m.theme.Muted.Render(pad(gutter)+truncate(m.notice, m.width-gutter))
 	}

@@ -71,13 +71,21 @@ const goldenDir = "testdata/screens"
 // screen.ParseScript.
 func Render(tb testing.TB, m tea.Model, script string) screen.Result {
 	tb.Helper()
+	return RenderSize(tb, m, script, screen.DefaultWidth, screen.DefaultHeight)
+}
+
+// RenderSize is Render at an explicit terminal size, for the few screens
+// (the wizard splash among them) whose appearance depends on room rather
+// than being fixed at the default 80x24.
+func RenderSize(tb testing.TB, m tea.Model, script string, width, height int) screen.Result {
+	tb.Helper()
 
 	msgs, err := screen.ParseScript(script)
 	if err != nil {
 		tb.Fatalf("bad key script %q: %v", script, err)
 	}
 
-	result, err := screen.Render(m, msgs, screen.DefaultWidth, screen.DefaultHeight)
+	result, err := screen.Render(m, msgs, width, height)
 	if err != nil {
 		tb.Fatalf("rendering screen: %v", err)
 	}
@@ -91,8 +99,14 @@ func Render(tb testing.TB, m tea.Model, script string) screen.Result {
 // readable directly: it shows what changed on screen, not which bytes moved.
 func AssertScreen(tb testing.TB, name string, m tea.Model, script string) {
 	tb.Helper()
+	AssertScreenSize(tb, name, m, script, screen.DefaultWidth, screen.DefaultHeight)
+}
 
-	got := Render(tb, m, script).String()
+// AssertScreenSize is AssertScreen at an explicit terminal size.
+func AssertScreenSize(tb testing.TB, name string, m tea.Model, script string, width, height int) {
+	tb.Helper()
+
+	got := RenderSize(tb, m, script, width, height).String()
 	path := filepath.Join(goldenDir, name+".txt")
 
 	if updateRequested() {

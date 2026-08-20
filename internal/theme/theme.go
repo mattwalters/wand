@@ -34,6 +34,10 @@ type Theme struct {
 	Good lipgloss.Style
 	// Key styles a keystroke inside a help or prompt line.
 	Key lipgloss.Style
+	// Splash styles the wizard art on the board's header, when there is
+	// room for it. It shares Title's color rather than inventing a new
+	// one: the art and "wand cockpit" are the same kind of chrome.
+	Splash lipgloss.Style
 }
 
 // New returns the default theme.
@@ -65,5 +69,7 @@ func New() Theme {
 		Key: lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("12")),
+		Splash: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("13")),
 	}
 }
