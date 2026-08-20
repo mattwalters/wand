@@ -78,7 +78,7 @@ func Watch(ctx context.Context, w WatchDeps, store *journal.Store) error {
 	}
 	defer lock.Release()
 
-	p := &pending{children: map[string]*exec.Cmd{}}
+	p := &pending{children: map[string]pendingChild{}}
 	var lastState string
 	fmt.Fprintf(w.Out, "dispatch: watching %s (poll every %s, %d lane(s))\n", w.Repo, w.Interval, w.Cov.Caps.Lanes)
 
@@ -99,24 +99,43 @@ func Watch(ctx context.Context, w WatchDeps, store *journal.Store) error {
 	}
 }
 
+// pendingChild is one spawned-but-not-yet-exited child, along with the verb
+// it was dispatched as: count() needs the verb to know whether the child
+// occupies a lane.
+type pendingChild struct {
+	cmd  *exec.Cmd
+	verb Verb
+}
+
 // pending tracks children this watch session has spawned but that have not
 // yet exited, so a poll immediately after a spawn does not re-read the
 // journal, see no run registered yet, and dispatch a second winner into a
 // lane the first has already claimed.
 type pending struct {
 	mu       sync.Mutex
-	children map[string]*exec.Cmd
+	children map[string]pendingChild
 }
 
+// count returns the number of lanes this session's spawned-but-unregistered
+// children occupy. A scope child never counts here — a scope needs no lane,
+// same as [LanesUsed] excludes a registered scope run — otherwise a
+// dispatched Scoping ticket would starve Todo for the length of its own
+// pass, the exact starvation the lane split exists to prevent.
 func (p *pending) count() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	return len(p.children)
+	n := 0
+	for _, c := range p.children {
+		if c.verb == VerbRun {
+			n++
+		}
+	}
+	return n
 }
 
-func (p *pending) add(ticket string, cmd *exec.Cmd) {
+func (p *pending) add(ticket string, verb Verb, cmd *exec.Cmd) {
 	p.mu.Lock()
-	p.children[ticket] = cmd
+	p.children[ticket] = pendingChild{cmd: cmd, verb: verb}
 	p.mu.Unlock()
 	go func() {
 		cmd.Wait()
@@ -162,7 +181,7 @@ func (w WatchDeps) tick(ctx context.Context, store *journal.Store, p *pending, l
 	if err != nil {
 		return "", fmt.Errorf("spawning %s: %w", winner.Issue.Identifier, err)
 	}
-	p.add(winner.Issue.Identifier, cmd)
+	p.add(winner.Issue.Identifier, winner.Verb, cmd)
 	return fmt.Sprintf("dispatch: dispatched %s %s (pid %d, %d/%d lanes now in use)",
 		winner.Verb, winner.Issue.Identifier, cmd.Process.Pid, used+1, w.Cov.Caps.Lanes), nil
 }

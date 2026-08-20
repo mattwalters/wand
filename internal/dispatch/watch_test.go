@@ -36,7 +36,7 @@ func TestWatchSpawnsAndTracksPending(t *testing.T) {
 		Interval: time.Hour, // never fires again inside this test
 	}
 
-	p := &pending{children: map[string]*exec.Cmd{}}
+	p := &pending{children: map[string]pendingChild{}}
 	logDir := t.TempDir()
 
 	summary, err := w.tick(context.Background(), store, p, logDir)
@@ -62,6 +62,61 @@ func TestWatchSpawnsAndTracksPending(t *testing.T) {
 	}
 
 	// Let the spawned process finish and confirm pending drains.
+	waitForPending(t, p, 0)
+}
+
+// TestWatchScopingWinnerDoesNotOccupyALane pins the addendum's invariant
+// down to pending, not just LanesUsed: a Scoping winner spawned this session
+// must not inflate the lane count while its child is still running, or a
+// long-lived scope would starve every Todo ticket behind it for the length
+// of its own pass — exactly backwards from "a scope needs no lane."
+func TestWatchScopingWinnerDoesNotOccupyALane(t *testing.T) {
+	store := journal.New(t.TempDir())
+	board := &fakeBoard{scoping: []linear.Issue{
+		{Identifier: "WND-2", Title: "needs scoping", State: linear.IssueState{Name: "Scoping"}, CreatedAt: time.Now()},
+	}}
+	cov := covenant.Default()
+	cov.Caps.Lanes = 1
+
+	w := WatchDeps{
+		Deps: Deps{
+			Board: board, Cov: cov, Runs: &fakeRuns{reports: map[string]journal.Report{}},
+			Git: unimplementedGit{}, Hub: unimplementedHub{}, Shell: unimplementedShell{},
+			Tree: unimplementedTree{}, Workers: unimplementedWorkers{},
+			TeamKey: "WND", Repo: t.TempDir(),
+		},
+		Bin:      sleeperBinary(t),
+		Interval: time.Hour,
+	}
+
+	p := &pending{children: map[string]pendingChild{}}
+	logDir := t.TempDir()
+
+	summary, err := w.tick(context.Background(), store, p, logDir)
+	if err != nil {
+		t.Fatalf("tick: %v", err)
+	}
+	if !strings.Contains(summary, "WND-2") {
+		t.Errorf("summary = %q, want it to name WND-2", summary)
+	}
+	if got := p.count(); got != 0 {
+		t.Fatalf("pending.count() = %d, want 0: a scope child holds no lane", got)
+	}
+
+	// A Todo ticket now shows up while the scope child is still (per
+	// sleeperBinary, briefly) running. With one lane and zero run winners
+	// pending, it must still be free to dispatch.
+	board.todo = []linear.Issue{
+		{Identifier: "WND-1", Title: "one", State: linear.IssueState{Name: "Todo"}, CreatedAt: time.Now()},
+	}
+	summary2, err := w.tick(context.Background(), store, p, logDir)
+	if err != nil {
+		t.Fatalf("second tick: %v", err)
+	}
+	if !strings.Contains(summary2, "WND-1") {
+		t.Errorf("second tick summary = %q, want it to dispatch WND-1: the in-flight scope must not have starved the lane", summary2)
+	}
+
 	waitForPending(t, p, 0)
 }
 
