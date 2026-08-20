@@ -21,6 +21,18 @@ machinery — its covenant, and the blessing path work travels along.
 brew install mattwalters/wand/wand
 ```
 
+Or with a shell script, on macOS or Linux — this is the one to put on a
+Linux box where the cask doesn't reach:
+
+```bash
+curl -fsSL https://wandcli.com/install.sh | sh
+```
+
+It downloads the release archive matching your OS and arch, verifies it
+against the published checksums, and installs to `/usr/local/bin` (falling
+back to `~/.local/bin` if that isn't writable — override either with
+`WAND_INSTALL_DIR`). Pin a version with `WAND_VERSION=v0.1.0`.
+
 Or with Go:
 
 ```bash
@@ -387,10 +399,15 @@ These gestures cover everything:
 | Back to what ships | `make uninstall` |
 | Pin an old release | `make install-release VERSION=v0.1.0` |
 | What do users actually get? | install the cask, run `/opt/homebrew/bin/wand` |
+| Installed via the curl script | `curl -fsSL https://wandcli.com/install.sh \| sh`, run by absolute path (it prints where it landed) |
 
-That last row is the one worth remembering: because Go's bin directory wins,
-a bare `wand` after `brew install` still runs your dev build. Comparing
-against a release means the absolute path, every time.
+That last-but-one row is the one worth remembering: because Go's bin
+directory wins, a bare `wand` after `brew install` still runs your dev
+build. Comparing against a release means the absolute path, every time. The
+curl script is a fourth copy in the same story — it does not touch the
+cask's `/opt/homebrew/bin/wand` or your Go bin directory, but it warns if
+its own install directory shadows or is shadowed by one of them, rather
+than silently changing which `wand` a bare invocation runs.
 
 Local builds stamp themselves from `git describe`, so `wand version` tells you
 which one you have — `v0.1.0-5-g22923b1-dirty` is five commits past the tag
