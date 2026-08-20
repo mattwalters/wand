@@ -65,7 +65,7 @@ func TestParseFullFile(t *testing.T) {
 		t.Errorf("in_progress = %q, want the stock name kept", byKey["in_progress"])
 	}
 
-	want := Caps{ReviewRounds: 5, CIAttempts: 2, WorkerTimeout: 45 * time.Minute}
+	want := Caps{ReviewRounds: 5, CIAttempts: 2, WorkerTimeout: 45 * time.Minute, Lanes: 1}
 	if cov.Caps != want {
 		t.Errorf("Caps = %+v, want %+v", cov.Caps, want)
 	}

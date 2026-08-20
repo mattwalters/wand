@@ -92,6 +92,7 @@ type FileCaps struct {
 	ReviewRounds         int `toml:"review_rounds"`
 	CIAttempts           int `toml:"ci_attempts"`
 	WorkerTimeoutMinutes int `toml:"worker_timeout_minutes"`
+	Lanes                int `toml:"lanes"`
 }
 
 // FileEstimates carries the estimate scale, in Linear's own vocabulary.
@@ -207,6 +208,7 @@ func validateCaps(md toml.MetaData, c FileCaps) error {
 		"review_rounds":          c.ReviewRounds,
 		"ci_attempts":            c.CIAttempts,
 		"worker_timeout_minutes": c.WorkerTimeoutMinutes,
+		"lanes":                  c.Lanes,
 	} {
 		if md.IsDefined("caps", key) && v < 1 {
 			return fmt.Errorf("caps.%s must be at least 1, got %d — a cap of nothing is a request to loop forever", key, v)
@@ -265,6 +267,9 @@ func (f File) Covenant() Covenant {
 	}
 	if f.Caps.WorkerTimeoutMinutes > 0 {
 		cov.Caps.WorkerTimeout = time.Duration(f.Caps.WorkerTimeoutMinutes) * time.Minute
+	}
+	if f.Caps.Lanes > 0 {
+		cov.Caps.Lanes = f.Caps.Lanes
 	}
 	if f.Toggles.ScopeInterview != nil {
 		cov.Toggles.ScopeInterview = *f.Toggles.ScopeInterview
