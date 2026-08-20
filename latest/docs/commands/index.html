@@ -165,6 +165,12 @@ human act, so it has a human door: it lives in the cockpit,
 <a href="../ui/"><code>wand ui</code></a>. A one-shot CLI verb that promoted a ticket to Todo
 would be a verb an agent could call, which is the whole thing the guard
 exists to prevent.</p>
+<p>Bare <code>wand</code>, with a terminal attached, opens that same cockpit — it is what
+typing the tool&rsquo;s name gets you. <code>wand help</code> is the documented way to get
+help instead; <code>wand --help</code> and <code>-h</code> work everywhere they always did.
+Without a terminal (a pipe, a script, CI), bare <code>wand</code> falls back to the
+same help <code>wand help</code> prints, rather than trying to open a program that
+needs one.</p>
 <h2 id="what-every-command-shares">What every command shares</h2>
 <p><strong><code>LINEAR_API_KEY</code>.</strong> Everything that talks to Linear reads a full-access
 key from the environment, never from a file — a key in a checked-in file is

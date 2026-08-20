@@ -160,8 +160,13 @@
 <h1 class="cmd">wand ui</h1>
 <p><code>ui</code> opens wand&rsquo;s cockpit: one screen answering one question — <em>what is
 waiting on me?</em></p>
+<p>Bare <code>wand</code>, with a terminal attached and no flags, does the same thing:
+<code>wand</code> and <code>wand ui</code> are equivalent. <code>ui</code> is the explicit spelling — the one
+the flags below live on — and the one to reach for outside a terminal, where
+bare <code>wand</code> falls back to printing help instead.</p>
 <h2 id="synopsis">Synopsis</h2>
-<pre tabindex="0"><code>wand ui --team-key WND
+<pre tabindex="0"><code>wand
+wand ui --team-key WND
 wand ui --sample
 wand ui --dump-screen [--script KEYS] [--width N] [--height N]
 </code></pre><h2 id="the-four-queues">The four queues</h2>
