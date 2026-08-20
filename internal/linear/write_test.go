@@ -184,6 +184,80 @@ func TestCreateRelationRefusesSelfLink(t *testing.T) {
 	}
 }
 
+// captureCreateInput runs one CreateIssue against a stub server and returns
+// the raw issueCreate input object as sent on the wire.
+func captureCreateInput(t *testing.T, in IssueCreate) map[string]json.RawMessage {
+	t.Helper()
+	var input map[string]json.RawMessage
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Variables struct {
+				Input map[string]json.RawMessage `json:"input"`
+			} `json:"variables"`
+		}
+		json.NewDecoder(r.Body).Decode(&req) //nolint:errcheck // stub
+		input = req.Variables.Input
+		w.Write([]byte(`{"data":{"issueCreate":{"success":true,"issue":{"id":"i1","identifier":"T-1"}}}}`)) //nolint:errcheck // stub
+	}))
+	defer srv.Close()
+
+	c := &Client{APIKey: "k", Endpoint: srv.URL}
+	if _, err := c.CreateIssue(context.Background(), in); err != nil {
+		t.Fatalf("CreateIssue: %v", err)
+	}
+	return input
+}
+
+// An empty projectId sent to Linear's API either errors or silently
+// associates the issue with an unintended project, so unset must omit the
+// field entirely rather than send "".
+func TestCreateIssueOmitsAnUnsetProjectID(t *testing.T) {
+	input := captureCreateInput(t, IssueCreate{TeamID: "team-1", Title: "t", StateID: "st-1"})
+	if _, present := input["projectId"]; present {
+		t.Error("projectId sent on a create with no ProjectID set")
+	}
+}
+
+func TestCreateIssueSendsProjectIDWhenSet(t *testing.T) {
+	input := captureCreateInput(t, IssueCreate{TeamID: "team-1", Title: "t", StateID: "st-1", ProjectID: "proj-1"})
+	if string(input["projectId"]) != `"proj-1"` {
+		t.Errorf("projectId = %s, want %q", input["projectId"], "proj-1")
+	}
+}
+
+// CreateBlocker's whole purpose is pinning blocks' direction so a call site
+// naming arguments "blocked, blocker" cannot land them backwards on the
+// wire — the same class of bug issue.go's inverseRelations comment records
+// as already having shipped once.
+func TestCreateBlockerDirection(t *testing.T) {
+	var input map[string]json.RawMessage
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Variables struct {
+				Input map[string]json.RawMessage `json:"input"`
+			} `json:"variables"`
+		}
+		json.NewDecoder(r.Body).Decode(&req) //nolint:errcheck // stub
+		input = req.Variables.Input
+		w.Write([]byte(`{"data":{"issueRelationCreate":{"success":true}}}`)) //nolint:errcheck // stub
+	}))
+	defer srv.Close()
+
+	c := &Client{APIKey: "k", Endpoint: srv.URL}
+	if err := c.CreateBlocker(context.Background(), "uuid-blocked", "uuid-blocker"); err != nil {
+		t.Fatalf("CreateBlocker: %v", err)
+	}
+	if got := string(input["issueId"]); got != `"uuid-blocker"` {
+		t.Errorf("issueId = %s, want the blocker", got)
+	}
+	if got := string(input["relatedIssueId"]); got != `"uuid-blocked"` {
+		t.Errorf("relatedIssueId = %s, want the blocked issue", got)
+	}
+	if got := string(input["type"]); got != `"blocks"` {
+		t.Errorf("type = %s", got)
+	}
+}
+
 // Zero is an estimate Linear accepts, so it cannot double as "leave this
 // alone". A plain int field would make an unset estimate indistinguishable
 // from a deliberate zero, and every status-only update would quietly wipe
