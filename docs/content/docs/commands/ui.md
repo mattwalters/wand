@@ -175,7 +175,7 @@ did not land instead of guessing:
     moves, because a rejected plan with no reason on it leaves the next scope of
     this ticket guessing at what was wrong.
 
-    reason       wrong approach
+    reason       wrong
 
   enter move WND-44 → Backlog • esc back
 ```
