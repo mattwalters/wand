@@ -81,6 +81,9 @@ func Read(ctx context.Context, cl Linear, runs Runs, cov covenant.Covenant, team
 // unclear lane carrying the parse error. That is the point of the section
 // — an unreadable run is exactly a thing only a person can resolve, and
 // dropping it would hide the one state the journal itself calls refused.
+//
+// A parked lane whose ticket a later run resolved is dropped by
+// [Reconcile] before this returns — see there for why.
 func ReadLanes(runs Runs, started []linear.Issue) ([]Lane, error) {
 	if runs == nil {
 		return nil, nil
@@ -96,6 +99,7 @@ func ReadLanes(runs Runs, started []linear.Issue) ([]Lane, error) {
 	}
 
 	var lanes []Lane
+	var reports []journal.Report
 	for _, id := range ids {
 		report, err := runs.Inspect(id)
 		if err != nil {
@@ -106,9 +110,10 @@ func ReadLanes(runs Runs, started []linear.Issue) ([]Lane, error) {
 			})
 			continue
 		}
+		reports = append(reports, report)
 		if lane, ok := Classify(report, inStarted); ok {
 			lanes = append(lanes, lane)
 		}
 	}
-	return lanes, nil
+	return Reconcile(lanes, reports), nil
 }

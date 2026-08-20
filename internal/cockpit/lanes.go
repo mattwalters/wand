@@ -116,6 +116,43 @@ func phaseName(s journal.State) string {
 	return s.Phase
 }
 
+// Reconcile drops parked lanes whose ticket a later run already resolved.
+//
+// A park is a permanent record of one run's failure to decide, but it says
+// nothing about whether the ticket stayed unresolved — a later run for the
+// same ticket may have converged or handed back cleanly, and once that
+// happened the park is history, not a live obligation. Only parked lanes
+// are ever superseded this way: a stuck, orphaned, or unclear lane means a
+// process is misbehaving right now, and a later run finishing for the same
+// ticket does not explain that away.
+//
+// reports is every run this walk read, not just the ones that became
+// lanes, because the run that resolves a park is exactly the one Classify
+// drops as needing nobody.
+func Reconcile(lanes []Lane, reports []journal.Report) []Lane {
+	resolved := make(map[string]time.Time)
+	for _, r := range reports {
+		if !r.State.Ended() || r.State.Outcome == journal.Parked {
+			continue
+		}
+		ticket := r.State.Meta.Ticket
+		if t, ok := resolved[ticket]; !ok || r.State.Updated.After(t) {
+			resolved[ticket] = r.State.Updated
+		}
+	}
+
+	kept := make([]Lane, 0, len(lanes))
+	for _, lane := range lanes {
+		if lane.Kind == LaneParked {
+			if t, ok := resolved[lane.Ticket]; ok && t.After(lane.Since) {
+				continue
+			}
+		}
+		kept = append(kept, lane)
+	}
+	return kept
+}
+
 // laneSeverity orders the lane kinds. Stuck first because a dead holder is
 // the only one of the four that is actively lying — the board says the work
 // is under way. Parked last because a park is an orderly stop that already
