@@ -335,6 +335,8 @@ func (l *loop) work(ctx context.Context, phase string, round int, rules []string
 		Timeout:     l.d.Cov.Caps.WorkerTimeout,
 		Model:       l.d.Model,
 		Effort:      l.d.Effort,
+		Out:         l.d.Out,
+		Label:       fmt.Sprintf("%s round %d", phase, round),
 	}
 	res, err := l.d.Workers.Run(ctx, spec)
 	detail := phaseDetail{
