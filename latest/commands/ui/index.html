@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wand ui · wand</title>
+  <link rel="stylesheet" href="../../style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="../../">wand</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/mattwalters/wand">GitHub</a>
+    <span class="version">
+      latest
+      <select id="version-picker" hidden aria-label="Documentation version"></select>
+    </span>
+  </header>
+  <div class="wrap">
+    <nav class="sidenav">
+      
+      
+      <h5>Start</h5>
+      
+      
+      
+      
+      
+      <a href="../../">Overview</a>
+      
+      <h5>Doctrine</h5>
+      
+      
+      
+      
+      
+      <a href="../../covenant/">The covenant</a>
+      
+      <h5>Commands</h5>
+      
+      
+      
+      
+      
+      <a href="../../commands/">All commands</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/init/" class="mono">wand init</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/doctor/" class="mono">wand doctor</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/guard/" class="mono">wand guard</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/queue/" class="mono">wand queue</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/ticket/" class="mono">wand ticket</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/claim/" class="mono">wand claim</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/handback/" class="mono">wand handback</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/abandon/" class="mono">wand abandon</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/file/" class="mono">wand file</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/ui/" class="mono active" aria-current="page">wand ui</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/version/" class="mono">wand version</a>
+      
+    </nav>
+    <main>
+      
+
+<h1 class="cmd">wand ui</h1>
+<p><code>ui</code> opens wand&rsquo;s interactive interface. With <code>--dump-screen</code> it renders
+that interface to plain text and prints it instead, which needs no terminal
+at all.</p>
+<h2 id="synopsis">Synopsis</h2>
+<pre tabindex="0"><code>wand ui
+wand ui --dump-screen [--script KEYS] [--width N] [--height N]
+</code></pre><h2 id="what-it-does">What it does</h2>
+<p>Run bare, it takes over the terminal in the usual way.</p>
+<p><code>--dump-screen</code> is the interesting half. A terminal interface is the one
+kind of program you cannot observe by reading its output, which makes it
+the one kind an agent cannot check its own work on. So the renderer is
+exposed as a command: combined with <code>--script</code>, any screen reachable by
+keystrokes is reachable from a single non-interactive invocation.</p>
+<p><strong>The dump and the test suite share one renderer.</strong> The output of
+<code>--dump-screen</code> is byte-identical to the golden screen files the tests
+compare against. It is not an approximation of the interface — it is the
+interface, replayed through a virtual terminal.</p>
+<h3 id="scripts">Scripts</h3>
+<p><code>--script</code> takes a comma-separated key sequence, applied in order before
+the screen is rendered. Each key is:</p>
+<ul>
+<li>a named key — <code>enter</code>, <code>return</code>, <code>esc</code>, <code>escape</code>, <code>tab</code>, <code>space</code>,
+<code>backspace</code>, <code>delete</code>, <code>up</code>, <code>down</code>, <code>left</code>, <code>right</code>, <code>home</code>, <code>end</code>,
+<code>pgup</code>, <code>pgdown</code>;</li>
+<li>a single character — <code>j</code>, <code>q</code>, <code>/</code>;</li>
+<li>either of those with <code>ctrl+</code>, <code>alt+</code> or <code>shift+</code> prefixes — <code>ctrl+c</code>,
+<code>shift+tab</code>.</li>
+</ul>
+<p>The names are the ones Bubble Tea&rsquo;s own <code>Key.String()</code> produces, so a
+binding declared as <code>key.WithKeys(&quot;esc&quot;)</code> is driven by writing <code>esc</code>. The
+same parser backs the test harness, so a reproduction typed at a shell is
+the same input a test replays.</p>
+<p><code>--script</code> without <code>--dump-screen</code> is an error rather than a silent no-op.</p>
+<h2 id="flags">Flags</h2>
+<table>
+	<thead>
+			<tr>
+					<th>Flag</th>
+					<th>Default</th>
+					<th>Description</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>--dump-screen</code></td>
+					<td>off</td>
+					<td>Render the interface to plain text and print it.</td>
+			</tr>
+			<tr>
+					<td><code>--script KEYS</code></td>
+					<td>—</td>
+					<td>Comma-separated keys to apply before rendering. Requires <code>--dump-screen</code>.</td>
+			</tr>
+			<tr>
+					<td><code>--width N</code></td>
+					<td><code>80</code></td>
+					<td>Terminal width to render at.</td>
+			</tr>
+			<tr>
+					<td><code>--height N</code></td>
+					<td><code>24</code></td>
+					<td>Terminal height to render at.</td>
+			</tr>
+	</tbody>
+</table>
+<p>The size flags are explicit rather than read from the ambient terminal: a
+screen whose width depends on whoever ran it is a screen no two people
+can compare.</p>
+<h2 id="exit-codes">Exit codes</h2>
+<table>
+	<thead>
+			<tr>
+					<th>Code</th>
+					<th>Meaning</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>0</code></td>
+					<td>The interface exited cleanly, or the screen was printed.</td>
+			</tr>
+			<tr>
+					<td><code>1</code></td>
+					<td>An unparseable <code>--script</code>, <code>--script</code> without <code>--dump-screen</code>, or a failure in the program itself.</td>
+			</tr>
+	</tbody>
+</table>
+<h2 id="examples">Examples</h2>
+<p>Run it:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand ui
+</span></span></code></pre></div><p>Look at the opening screen without a terminal:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand ui --dump-screen
+</span></span></code></pre></div><p>Press <code>j</code> then <code>enter</code>, and print what that leaves on screen:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand ui --script <span class="s2">&#34;j,enter&#34;</span> --dump-screen
+</span></span></code></pre></div><p>At a size that is not the default:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand ui --dump-screen --width <span class="m">120</span> --height <span class="m">40</span>
+</span></span></code></pre></div>
+
+    </main>
+    
+    
+    
+    <nav class="toc">
+      <h5>On this page</h5>
+      <nav id="TableOfContents">
+  <ul>
+    <li><a href="#synopsis">Synopsis</a></li>
+    <li><a href="#what-it-does">What it does</a>
+      <ul>
+        <li><a href="#scripts">Scripts</a></li>
+      </ul>
+    </li>
+    <li><a href="#flags">Flags</a></li>
+    <li><a href="#exit-codes">Exit codes</a></li>
+    <li><a href="#examples">Examples</a></li>
+  </ul>
+</nav>
+    </nav>
+    
+  </div>
+  <script>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    (function () {
+      var root = new URL("..", document.querySelector('link[rel="stylesheet"]').href);
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          var picker = document.getElementById("version-picker");
+          ["latest"].concat(versions).forEach(function (v) {
+            var option = document.createElement("option");
+            option.value = v;
+            option.textContent = v;
+            option.selected = v === "latest";
+            picker.appendChild(option);
+          });
+          picker.addEventListener("change", function () {
+            window.location.href = new URL(picker.value + "/", root);
+          });
+          picker.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>

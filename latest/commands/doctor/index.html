@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wand doctor · wand</title>
+  <link rel="stylesheet" href="../../style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="../../">wand</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/mattwalters/wand">GitHub</a>
+    <span class="version">
+      latest
+      <select id="version-picker" hidden aria-label="Documentation version"></select>
+    </span>
+  </header>
+  <div class="wrap">
+    <nav class="sidenav">
+      
+      
+      <h5>Start</h5>
+      
+      
+      
+      
+      
+      <a href="../../">Overview</a>
+      
+      <h5>Doctrine</h5>
+      
+      
+      
+      
+      
+      <a href="../../covenant/">The covenant</a>
+      
+      <h5>Commands</h5>
+      
+      
+      
+      
+      
+      <a href="../../commands/">All commands</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/init/" class="mono">wand init</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/doctor/" class="mono active" aria-current="page">wand doctor</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/guard/" class="mono">wand guard</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/queue/" class="mono">wand queue</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/ticket/" class="mono">wand ticket</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/claim/" class="mono">wand claim</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/handback/" class="mono">wand handback</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/abandon/" class="mono">wand abandon</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/file/" class="mono">wand file</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/ui/" class="mono">wand ui</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/version/" class="mono">wand version</a>
+      
+    </nav>
+    <main>
+      
+
+<h1 class="cmd">wand doctor</h1>
+<p><code>doctor</code> reads the team&rsquo;s statuses, labels, PR automations and settings,
+diffs them against the covenant, and reports the drift. It writes nothing —
+<a href="../init/"><code>wand init</code></a> is the verb that repairs.</p>
+<h2 id="synopsis">Synopsis</h2>
+<pre tabindex="0"><code>wand doctor --team-key KEY
+</code></pre><h2 id="what-it-does">What it does</h2>
+<p>The diff is <a href="../init/"><code>wand init</code></a>&rsquo;s own plan, read rather than applied,
+plus the checks a plan cannot express: team settings like triage and the
+estimate scale, which are properties of the team rather than actions
+against it.</p>
+<p>Findings print one per line, prefixed <code>drift:</code>, followed by a count. A
+clean team prints one line and nothing else.</p>
+<h3 id="what-is-not-drift">What is not drift</h3>
+<p>Extra statuses outside the machine&rsquo;s path, extra labels, and automations on
+events the covenant does not mention are tolerated strangers. The covenant
+says what must be true of a board, not what may not also be true of it — a
+team that added a <code>Waiting on vendor</code> column has not drifted, and a doctor
+that said so would be a doctor teams learn to ignore.</p>
+<h2 id="flags">Flags</h2>
+<table>
+	<thead>
+			<tr>
+					<th>Flag</th>
+					<th>Description</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>--team-key KEY</code></td>
+					<td>The Linear team key, e.g. <code>WAND</code>. <strong>Required.</strong></td>
+			</tr>
+	</tbody>
+</table>
+<h2 id="exit-codes">Exit codes</h2>
+<p>The three codes are the point of this command — it is built to be a CI
+step, and the codes are pinned by a test in <code>e2e/</code> so they cannot drift
+from what is written here.</p>
+<table>
+	<thead>
+			<tr>
+					<th>Code</th>
+					<th>Meaning</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>0</code></td>
+					<td>The team satisfies the covenant.</td>
+			</tr>
+			<tr>
+					<td><code>1</code></td>
+					<td>Drift found. The findings are on stdout.</td>
+			</tr>
+			<tr>
+					<td><code>2</code></td>
+					<td>The check could not run: no <code>LINEAR_API_KEY</code>, no <code>--team-key</code>, no team with that key, a broken <code>wand.toml</code>, or an API failure. The reason is on stderr.</td>
+			</tr>
+	</tbody>
+</table>
+<p><code>1</code> and <code>2</code> are kept apart deliberately. A CI job that cannot tell &ldquo;your
+board drifted&rdquo; from &ldquo;I could not reach Linear&rdquo; turns an outage into a
+false accusation, and then into a job people disable.</p>
+<h2 id="examples">Examples</h2>
+<p>Check a board:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand doctor --team-key WAND
+</span></span></code></pre></div><p>As a CI step that fails on drift but is loud about an outage:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="k">if</span> wand doctor --team-key WAND<span class="p">;</span> <span class="k">then</span>
+</span></span><span class="line"><span class="cl">  <span class="nb">echo</span> <span class="s2">&#34;board is at the covenant&#34;</span>
+</span></span><span class="line"><span class="cl"><span class="k">else</span>
+</span></span><span class="line"><span class="cl">  <span class="k">case</span> <span class="nv">$?</span> in
+</span></span><span class="line"><span class="cl">    1<span class="o">)</span> <span class="nb">echo</span> <span class="s2">&#34;::error::the board has drifted from wand.toml&#34;</span><span class="p">;</span> <span class="nb">exit</span> <span class="m">1</span> <span class="p">;;</span>
+</span></span><span class="line"><span class="cl">    2<span class="o">)</span> <span class="nb">echo</span> <span class="s2">&#34;::error::could not check the board&#34;</span><span class="p">;</span> <span class="nb">exit</span> <span class="m">1</span> <span class="p">;;</span>
+</span></span><span class="line"><span class="cl">  <span class="k">esac</span>
+</span></span><span class="line"><span class="cl"><span class="k">fi</span>
+</span></span></code></pre></div><p>Repair what it found:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand init --team-key WAND --dry-run   <span class="c1"># read the plan first</span>
+</span></span><span class="line"><span class="cl">wand init --team-key WAND
+</span></span></code></pre></div>
+
+    </main>
+    
+    
+    
+    <nav class="toc">
+      <h5>On this page</h5>
+      <nav id="TableOfContents">
+  <ul>
+    <li><a href="#synopsis">Synopsis</a></li>
+    <li><a href="#what-it-does">What it does</a>
+      <ul>
+        <li><a href="#what-is-not-drift">What is not drift</a></li>
+      </ul>
+    </li>
+    <li><a href="#flags">Flags</a></li>
+    <li><a href="#exit-codes">Exit codes</a></li>
+    <li><a href="#examples">Examples</a></li>
+  </ul>
+</nav>
+    </nav>
+    
+  </div>
+  <script>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    (function () {
+      var root = new URL("..", document.querySelector('link[rel="stylesheet"]').href);
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          var picker = document.getElementById("version-picker");
+          ["latest"].concat(versions).forEach(function (v) {
+            var option = document.createElement("option");
+            option.value = v;
+            option.textContent = v;
+            option.selected = v === "latest";
+            picker.appendChild(option);
+          });
+          picker.addEventListener("change", function () {
+            window.location.href = new URL(picker.value + "/", root);
+          });
+          picker.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>

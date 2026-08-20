@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wand init · wand</title>
+  <link rel="stylesheet" href="../../style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="../../">wand</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/mattwalters/wand">GitHub</a>
+    <span class="version">
+      latest
+      <select id="version-picker" hidden aria-label="Documentation version"></select>
+    </span>
+  </header>
+  <div class="wrap">
+    <nav class="sidenav">
+      
+      
+      <h5>Start</h5>
+      
+      
+      
+      
+      
+      <a href="../../">Overview</a>
+      
+      <h5>Doctrine</h5>
+      
+      
+      
+      
+      
+      <a href="../../covenant/">The covenant</a>
+      
+      <h5>Commands</h5>
+      
+      
+      
+      
+      
+      <a href="../../commands/">All commands</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/init/" class="mono active" aria-current="page">wand init</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/doctor/" class="mono">wand doctor</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/guard/" class="mono">wand guard</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/queue/" class="mono">wand queue</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/ticket/" class="mono">wand ticket</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/claim/" class="mono">wand claim</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/handback/" class="mono">wand handback</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/abandon/" class="mono">wand abandon</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/file/" class="mono">wand file</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/ui/" class="mono">wand ui</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/version/" class="mono">wand version</a>
+      
+    </nav>
+    <main>
+      
+
+<h1 class="cmd">wand init</h1>
+<p><code>init</code> brings a repository under wand: it creates or adopts the repo&rsquo;s
+Linear team, brings that team to the covenant, and installs the hook that
+routes the repo&rsquo;s agent sessions through <a href="../guard/"><code>wand guard</code></a>.</p>
+<h2 id="synopsis">Synopsis</h2>
+<pre tabindex="0"><code>wand init --team-key KEY [--team-name NAME] [--dry-run]
+</code></pre><h2 id="what-it-does">What it does</h2>
+<p>Four things, in this order:</p>
+<ol>
+<li><strong>Loads the covenant.</strong> A checked-in <code>wand.toml</code> in the working
+directory parameterizes it; absent one, the stock covenant applies.
+Which one was used is printed, because a run that silently fell back to
+defaults looks exactly like one that read your file.</li>
+<li><strong>Installs the guard hook</strong>, into <code>.claude/settings.json</code>. This comes
+first because it is the only purely local step: from here on, this
+repo&rsquo;s own sessions are under the guard, even if the Linear half fails.
+The entry routes tool calls matching <code>mcp__.*__save_issue</code> to
+<code>wand guard</code>. The matcher is loose in the middle on purpose — the Linear
+MCP server&rsquo;s connector id changes when Linear is reconnected, and a
+matcher pinned to today&rsquo;s id would go dead silently, which for a guard
+means allowing everything with no sign of it. Existing settings are
+merged, not clobbered; every key <code>init</code> does not need to touch survives.</li>
+<li><strong>Creates or adopts the team.</strong> A team with the given key already in the
+workspace is adopted, not duplicated.</li>
+<li><strong>Plans and applies the difference</strong> between the team and the covenant:
+the workflow statuses, the labels, the PR automations, the team
+settings. Every decision is made in the plan, which <code>--dry-run</code> prints
+without writing.</li>
+</ol>
+<p><code>init</code> is idempotent. A team already at the covenant plans no writes and
+says so. Run it again after a covenant change to bring the board along.</p>
+<p>The command assumes <code>wand</code> is on <code>PATH</code> — the hook entry it writes is the
+literal command <code>wand guard</code>, not an absolute path, because
+<code>.claude/settings.json</code> is checked in and shared across machines. <code>make install</code> or <code>go install</code> arranges this.</p>
+<h3 id="it-verifies-rather-than-assumes">It verifies rather than assumes</h3>
+<p>Both write paths read back what they wrote. After installing the hook,
+<code>init</code> re-reads the settings file and re-checks it; after applying the
+plan, it re-reads the team and re-plans, and fails if anything is still
+outstanding. &ldquo;Installed&rdquo; and &ldquo;done&rdquo; mean observed.</p>
+<h2 id="flags">Flags</h2>
+<table>
+	<thead>
+			<tr>
+					<th>Flag</th>
+					<th>Description</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>--team-key KEY</code></td>
+					<td>The Linear team key, e.g. <code>WAND</code>. <strong>Required.</strong></td>
+			</tr>
+			<tr>
+					<td><code>--team-name NAME</code></td>
+					<td>Team name to use when creating. Defaults to the key. Ignored when adopting.</td>
+			</tr>
+			<tr>
+					<td><code>--dry-run</code></td>
+					<td>Print the plan and write nothing — the hook install included.</td>
+			</tr>
+	</tbody>
+</table>
+<h2 id="exit-codes">Exit codes</h2>
+<table>
+	<thead>
+			<tr>
+					<th>Code</th>
+					<th>Meaning</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>0</code></td>
+					<td>The team satisfies the covenant, and the hook is installed.</td>
+			</tr>
+			<tr>
+					<td><code>1</code></td>
+					<td>Anything went wrong: no <code>LINEAR_API_KEY</code>, no <code>--team-key</code>, an API failure, a broken <code>wand.toml</code>, or a post-apply verification that still found work outstanding.</td>
+			</tr>
+	</tbody>
+</table>
+<h2 id="examples">Examples</h2>
+<p>Bootstrap a new team:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="nb">export</span> <span class="nv">LINEAR_API_KEY</span><span class="o">=</span>lin_api_...
+</span></span><span class="line"><span class="cl">wand init --team-key WAND --team-name Wand
+</span></span></code></pre></div><p>See what a run would do to an existing board, without touching it:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand init --team-key WAND --dry-run
+</span></span></code></pre></div><p>Re-run after editing <code>wand.toml</code>, to bring the board to the new
+parameters:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand init --team-key WAND
+</span></span></code></pre></div><h2 id="see-also">See also</h2>
+<p><a href="../doctor/"><code>wand doctor</code></a> reports the same difference without repairing
+it — the read-only half of this command, and the one to put in CI.</p>
+
+
+    </main>
+    
+    
+    
+    <nav class="toc">
+      <h5>On this page</h5>
+      <nav id="TableOfContents">
+  <ul>
+    <li><a href="#synopsis">Synopsis</a></li>
+    <li><a href="#what-it-does">What it does</a>
+      <ul>
+        <li><a href="#it-verifies-rather-than-assumes">It verifies rather than assumes</a></li>
+      </ul>
+    </li>
+    <li><a href="#flags">Flags</a></li>
+    <li><a href="#exit-codes">Exit codes</a></li>
+    <li><a href="#examples">Examples</a></li>
+    <li><a href="#see-also">See also</a></li>
+  </ul>
+</nav>
+    </nav>
+    
+  </div>
+  <script>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    (function () {
+      var root = new URL("..", document.querySelector('link[rel="stylesheet"]').href);
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          var picker = document.getElementById("version-picker");
+          ["latest"].concat(versions).forEach(function (v) {
+            var option = document.createElement("option");
+            option.value = v;
+            option.textContent = v;
+            option.selected = v === "latest";
+            picker.appendChild(option);
+          });
+          picker.addEventListener("change", function () {
+            window.location.href = new URL(picker.value + "/", root);
+          });
+          picker.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>

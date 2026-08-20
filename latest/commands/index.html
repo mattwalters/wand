@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Commands · wand</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="../">wand</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/mattwalters/wand">GitHub</a>
+    <span class="version">
+      latest
+      <select id="version-picker" hidden aria-label="Documentation version"></select>
+    </span>
+  </header>
+  <div class="wrap">
+    <nav class="sidenav">
+      
+      
+      <h5>Start</h5>
+      
+      
+      
+      
+      
+      <a href="../">Overview</a>
+      
+      <h5>Doctrine</h5>
+      
+      
+      
+      
+      
+      <a href="../covenant/">The covenant</a>
+      
+      <h5>Commands</h5>
+      
+      
+      
+      
+      
+      <a href="../commands/" class="active" aria-current="page">All commands</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../commands/init/" class="mono">wand init</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../commands/doctor/" class="mono">wand doctor</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../commands/guard/" class="mono">wand guard</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../commands/queue/" class="mono">wand queue</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../commands/ticket/" class="mono">wand ticket</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../commands/claim/" class="mono">wand claim</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../commands/handback/" class="mono">wand handback</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../commands/abandon/" class="mono">wand abandon</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../commands/file/" class="mono">wand file</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../commands/ui/" class="mono">wand ui</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../commands/version/" class="mono">wand version</a>
+      
+    </nav>
+    <main>
+      
+<h1>Commands</h1>
+<p>Every command wand implements today, one page each. The pages are written
+from the command definitions, not from memory: flags, help text and exit
+codes match what the binary does.</p>
+<p><code>covenant</code> and <code>bless</code> are not here. They are stubs — they parse and print
+and nothing else — and a reference page for a command that does not work
+yet is worse than a missing one. They get pages in the change that makes
+them real.</p>
+<h2 id="what-every-command-shares">What every command shares</h2>
+<p><strong><code>LINEAR_API_KEY</code>.</strong> Everything that talks to Linear reads a full-access
+key from the environment, never from a file — a key in a checked-in file is
+a key in the repo forever. Create one in Linear&rsquo;s security settings.
+<code>wand ui</code> and <code>wand version</code> are the exceptions; they need no key.</p>
+<p><strong>The covenant file.</strong> A checked-in <a href="../covenant/"><code>wand.toml</code></a>
+parameterizes the covenant — status names, caps, commands. Absent one, the
+stock covenant applies. <code>init</code>, <code>doctor</code> and <code>queue</code> read it from the
+working directory; the lifecycle verbs walk up from the working directory
+to find it, so a verb run from a subdirectory sees the same covenant as one
+run at the root. Run the first three from the repo root.</p>
+<p><strong>Exit codes.</strong> Unless a page says otherwise, a command exits <code>0</code> on
+success and <code>1</code> on any failure, with the reason on stderr. Three commands
+say otherwise, and each of their codes is a contract something else depends
+on: <code>guard</code> (the harness hook), <code>doctor</code> (CI), and <code>file</code> (a refusal to
+file a duplicate is a failure, on purpose).</p>
+
+<dl class="cmdlist">
+  
+  <dt><a href="../commands/init/"><code>wand init</code></a></dt>
+  <dd>Bootstrap a Linear team to the covenant and install the guard hook.</dd>
+  
+  <dt><a href="../commands/doctor/"><code>wand doctor</code></a></dt>
+  <dd>Diff the live Linear team against the covenant. Writes nothing.</dd>
+  
+  <dt><a href="../commands/guard/"><code>wand guard</code></a></dt>
+  <dd>The harness hook that blocks the ticket writes an agent may never make.</dd>
+  
+  <dt><a href="../commands/queue/"><code>wand queue</code></a></dt>
+  <dd>Print the ranked, vetted Todo queue — what an agent may start next.</dd>
+  
+  <dt><a href="../commands/ticket/"><code>wand ticket</code></a></dt>
+  <dd>Print one ticket whole, for a reader with no context.</dd>
+  
+  <dt><a href="../commands/claim/"><code>wand claim</code></a></dt>
+  <dd>Take one blessed issue — In Progress and assigned, before any work.</dd>
+  
+  <dt><a href="../commands/handback/"><code>wand handback</code></a></dt>
+  <dd>Park one issue on a human — the question first, Needs Input second.</dd>
+  
+  <dt><a href="../commands/abandon/"><code>wand abandon</code></a></dt>
+  <dd>Hand one issue back to Backlog, with the evidence that undoes it.</dd>
+  
+  <dt><a href="../commands/file/"><code>wand file</code></a></dt>
+  <dd>File a finding into Triage, after searching for duplicates.</dd>
+  
+  <dt><a href="../commands/ui/"><code>wand ui</code></a></dt>
+  <dd>Open the interactive interface — or render it to plain text.</dd>
+  
+  <dt><a href="../commands/version/"><code>wand version</code></a></dt>
+  <dd>Report the build and the covenant schema this binary speaks.</dd>
+  
+</dl>
+
+    </main>
+    
+    
+    
+    <nav class="toc">
+      <h5>On this page</h5>
+      <nav id="TableOfContents">
+  <ul>
+    <li><a href="#what-every-command-shares">What every command shares</a></li>
+  </ul>
+</nav>
+    </nav>
+    
+  </div>
+  <script>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    (function () {
+      var root = new URL("..", document.querySelector('link[rel="stylesheet"]').href);
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          var picker = document.getElementById("version-picker");
+          ["latest"].concat(versions).forEach(function (v) {
+            var option = document.createElement("option");
+            option.value = v;
+            option.textContent = v;
+            option.selected = v === "latest";
+            picker.appendChild(option);
+          });
+          picker.addEventListener("change", function () {
+            window.location.href = new URL(picker.value + "/", root);
+          });
+          picker.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>

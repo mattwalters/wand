@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wand claim · wand</title>
+  <link rel="stylesheet" href="../../style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="../../">wand</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/mattwalters/wand">GitHub</a>
+    <span class="version">
+      latest
+      <select id="version-picker" hidden aria-label="Documentation version"></select>
+    </span>
+  </header>
+  <div class="wrap">
+    <nav class="sidenav">
+      
+      
+      <h5>Start</h5>
+      
+      
+      
+      
+      
+      <a href="../../">Overview</a>
+      
+      <h5>Doctrine</h5>
+      
+      
+      
+      
+      
+      <a href="../../covenant/">The covenant</a>
+      
+      <h5>Commands</h5>
+      
+      
+      
+      
+      
+      <a href="../../commands/">All commands</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/init/" class="mono">wand init</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/doctor/" class="mono">wand doctor</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/guard/" class="mono">wand guard</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/queue/" class="mono">wand queue</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/ticket/" class="mono">wand ticket</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/claim/" class="mono active" aria-current="page">wand claim</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/handback/" class="mono">wand handback</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/abandon/" class="mono">wand abandon</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/file/" class="mono">wand file</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/ui/" class="mono">wand ui</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/version/" class="mono">wand version</a>
+      
+    </nav>
+    <main>
+      
+
+<h1 class="cmd">wand claim</h1>
+<p><code>claim</code> is the first thing a session does and the only thing it does before
+touching the filesystem: it vets one issue, then moves it to In Progress
+and assigns it to the key holder in a single write.</p>
+<h2 id="synopsis">Synopsis</h2>
+<pre tabindex="0"><code>wand claim &lt;identifier&gt;
+</code></pre><h2 id="what-it-does">What it does</h2>
+<p>The vetting is <a href="../queue/"><code>wand queue</code></a>&rsquo;s own — not labeled <code>human-only</code>,
+no unresolved blockers — plus a status gate:</p>
+<p><strong>The issue must be in Todo.</strong> Claim starts blessed work, and blessing is a
+human act. An issue in Backlog, Triage or Scoping is not yours to start,
+however ready it looks, and <code>claim</code> refuses rather than promoting it. (It
+could not promote it anyway: <a href="../guard/"><code>wand guard</code></a> blocks the write.)</p>
+<p>On success it moves the issue to In Progress and assigns it to whoever owns
+the API key, in <strong>one</strong> write. A claim that set the status and then failed
+to assign would leave a ticket that reads as taken and is owned by nobody.</p>
+<h3 id="claim-before-anything-else">Claim before anything else</h3>
+<p>The status move is the cheapest place in the whole run to lose a race. Two
+sessions that each branch, set up a worktree, read the code and <em>then</em>
+claim have both done work one of them must throw away. Two that claim first
+collide before either has anything to lose.</p>
+<h2 id="flags">Flags</h2>
+<p>None. The identifier is a positional argument, and exactly one is
+required.</p>
+<h2 id="exit-codes">Exit codes</h2>
+<table>
+	<thead>
+			<tr>
+					<th>Code</th>
+					<th>Meaning</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>0</code></td>
+					<td>Claimed. The identifier, the new status, the assignee and the ticket&rsquo;s branch name are on stdout.</td>
+			</tr>
+			<tr>
+					<td><code>1</code></td>
+					<td>Not claimed — and nothing was written. The issue is outside Todo, is labeled <code>human-only</code>, has an unresolved blocker, or the call failed. The reason is on stderr.</td>
+			</tr>
+	</tbody>
+</table>
+<p>A non-zero exit here means the work is not yours. Do not proceed.</p>
+<h2 id="examples">Examples</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand claim WND-42
+</span></span></code></pre></div><pre tabindex="0"><code>claimed WND-42: In Progress, assigned to Ada Lovelace
+branch:  ada/wnd-42-adapter-codex
+</code></pre><p>Then branch from the name it printed — Linear&rsquo;s own, so the ticket and the
+branch stay linked:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">git switch -c ada/wnd-42-adapter-codex
+</span></span></code></pre></div><p>A refusal — nothing was written, and the reason names what stands in the
+way:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand claim WND-30
+</span></span></code></pre></div><pre tabindex="0"><code>  ERROR
+
+  WND-30 may not be started: blocked by WND-28 (In Progress).
+</code></pre><h2 id="see-also">See also</h2>
+<p><a href="../handback/"><code>wand handback</code></a> parks a claimed issue on a human;
+<a href="../abandon/"><code>wand abandon</code></a> returns one the evidence undoes.</p>
+
+
+    </main>
+    
+    
+    
+    <nav class="toc">
+      <h5>On this page</h5>
+      <nav id="TableOfContents">
+  <ul>
+    <li><a href="#synopsis">Synopsis</a></li>
+    <li><a href="#what-it-does">What it does</a>
+      <ul>
+        <li><a href="#claim-before-anything-else">Claim before anything else</a></li>
+      </ul>
+    </li>
+    <li><a href="#flags">Flags</a></li>
+    <li><a href="#exit-codes">Exit codes</a></li>
+    <li><a href="#examples">Examples</a></li>
+    <li><a href="#see-also">See also</a></li>
+  </ul>
+</nav>
+    </nav>
+    
+  </div>
+  <script>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    (function () {
+      var root = new URL("..", document.querySelector('link[rel="stylesheet"]').href);
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          var picker = document.getElementById("version-picker");
+          ["latest"].concat(versions).forEach(function (v) {
+            var option = document.createElement("option");
+            option.value = v;
+            option.textContent = v;
+            option.selected = v === "latest";
+            picker.appendChild(option);
+          });
+          picker.addEventListener("change", function () {
+            window.location.href = new URL(picker.value + "/", root);
+          });
+          picker.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>

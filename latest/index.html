@@ -9,20 +9,133 @@
 </head>
 <body>
   <header>
-    <nav>
-      <a class="brand" href="./">wand</a>
-      
-      <a href="./covenant/">The covenant</a>
-      
-      <a href="https://github.com/mattwalters/wand">GitHub</a>
-    </nav>
+    <a class="brand" href="./">wand</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/mattwalters/wand">GitHub</a>
     <span class="version">
       latest
       <select id="version-picker" hidden aria-label="Documentation version"></select>
     </span>
   </header>
-  <main>
-    
+  <div class="wrap">
+    <nav class="sidenav">
+      
+      
+      <h5>Start</h5>
+      
+      
+      
+      
+      
+      <a href="./" class="active" aria-current="page">Overview</a>
+      
+      <h5>Doctrine</h5>
+      
+      
+      
+      
+      
+      <a href="./covenant/">The covenant</a>
+      
+      <h5>Commands</h5>
+      
+      
+      
+      
+      
+      <a href="./commands/">All commands</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="./commands/init/" class="mono">wand init</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="./commands/doctor/" class="mono">wand doctor</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="./commands/guard/" class="mono">wand guard</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="./commands/queue/" class="mono">wand queue</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="./commands/ticket/" class="mono">wand ticket</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="./commands/claim/" class="mono">wand claim</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="./commands/handback/" class="mono">wand handback</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="./commands/abandon/" class="mono">wand abandon</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="./commands/file/" class="mono">wand file</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="./commands/ui/" class="mono">wand ui</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="./commands/version/" class="mono">wand version</a>
+      
+    </nav>
+    <main>
+      
 <h1 id="wand">wand</h1>
 <p>An agent toolkit for repositories: it sets up and maintains a repo&rsquo;s agent
 machinery — its covenant, and the blessing path work travels along.</p>
@@ -46,9 +159,25 @@ its covenant schema — pick the version in the header.</p>
 reasoning behind every state and rule in it. The covenant file (<code>wand.toml</code>)
 carries the parameters; this page carries the <em>why</em>, which deliberately does
 not live in the file.</p>
+<p><a href="commands/">Commands</a> — the reference: every command wand implements, one
+page each, with its flags, its exit codes and what it is for.</p>
 
 
-  </main>
+    </main>
+    
+    
+    
+    <nav class="toc">
+      <h5>On this page</h5>
+      <nav id="TableOfContents">
+  <ul>
+    <li><a href="#install">Install</a></li>
+    <li><a href="#start-here">Start here</a></li>
+  </ul>
+</nav>
+    </nav>
+    
+  </div>
   <script>
     
     

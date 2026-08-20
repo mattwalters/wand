@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wand abandon · wand</title>
+  <link rel="stylesheet" href="../../style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="../../">wand</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/mattwalters/wand">GitHub</a>
+    <span class="version">
+      latest
+      <select id="version-picker" hidden aria-label="Documentation version"></select>
+    </span>
+  </header>
+  <div class="wrap">
+    <nav class="sidenav">
+      
+      
+      <h5>Start</h5>
+      
+      
+      
+      
+      
+      <a href="../../">Overview</a>
+      
+      <h5>Doctrine</h5>
+      
+      
+      
+      
+      
+      <a href="../../covenant/">The covenant</a>
+      
+      <h5>Commands</h5>
+      
+      
+      
+      
+      
+      <a href="../../commands/">All commands</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/init/" class="mono">wand init</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/doctor/" class="mono">wand doctor</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/guard/" class="mono">wand guard</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/queue/" class="mono">wand queue</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/ticket/" class="mono">wand ticket</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/claim/" class="mono">wand claim</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/handback/" class="mono">wand handback</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/abandon/" class="mono active" aria-current="page">wand abandon</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/file/" class="mono">wand file</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/ui/" class="mono">wand ui</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/version/" class="mono">wand version</a>
+      
+    </nav>
+    <main>
+      
+
+<h1 class="cmd">wand abandon</h1>
+<p><code>abandon</code> is for a ticket that turned out to be wrong rather than blocked.
+It posts your evidence as a comment, then — in a single write — corrects
+the description, moves the issue to Backlog and unassigns it.</p>
+<h2 id="synopsis">Synopsis</h2>
+<pre tabindex="0"><code>wand abandon &lt;identifier&gt; [-m MESSAGE] [--replace OLD --with NEW]
+wand abandon &lt;identifier&gt; &lt; evidence.md
+</code></pre><h2 id="what-it-does">What it does</h2>
+<p><strong>Backlog, never Canceled, Done or Duplicate.</strong> Closing is a human&rsquo;s call
+however wrong the ticket turned out to be, and <a href="../guard/"><code>wand guard</code></a> enforces it. Backlog is the one downward move an agent
+may make, and it is safe precisely because it removes authorization rather
+than granting it.</p>
+<p>The order mirrors <a href="../handback/"><code>wand handback</code></a>&rsquo;s, for the same reason:
+evidence first, then the demotion. Everything checkable without writing is
+checked before the comment goes up — the target status is resolved, and the
+correction is composed against the current description — because the
+comment promises the correction lands &ldquo;in the same action&rdquo;, and a comment
+followed by a refusal would record a correction that never happened.</p>
+<p>An empty evidence message is refused: a hand-back with no reasons on it
+reads as a bot giving up. A ticket a human already closed is refused too.</p>
+<h3 id="correcting-the-description">Correcting the description</h3>
+<p><code>--replace</code> takes the exact wording the evidence disproved and <code>--with</code>
+takes what should stand instead. The two travel together; passing one
+without the other is an error. <code>--with &quot;&quot;</code> deletes the wording outright.</p>
+<p>The anchor <strong>must match exactly once</strong>. Zero matches or several, and the
+verb refuses before writing anything, rather than guessing at an edit in
+someone else&rsquo;s prose.</p>
+<p>The old wording is quoted into the evidence comment. That quote is the
+record: Linear surfaces description history poorly, and the comment is
+where a disproven claim survives for whoever later audits why the ticket
+came back.</p>
+<h2 id="flags">Flags</h2>
+<table>
+	<thead>
+			<tr>
+					<th>Flag</th>
+					<th>Description</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>-m</code>, <code>--message MESSAGE</code></td>
+					<td>The evidence: what you found and why it undoes the premise. When absent, read from stdin.</td>
+			</tr>
+			<tr>
+					<td><code>--replace OLD</code></td>
+					<td>Exact description wording the evidence disproved. Requires <code>--with</code>.</td>
+			</tr>
+			<tr>
+					<td><code>--with NEW</code></td>
+					<td>What the description should say instead. Empty deletes the wording. Requires <code>--replace</code>.</td>
+			</tr>
+	</tbody>
+</table>
+<h2 id="exit-codes">Exit codes</h2>
+<table>
+	<thead>
+			<tr>
+					<th>Code</th>
+					<th>Meaning</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>0</code></td>
+					<td>Evidence posted, issue in Backlog, unassigned — and the description corrected, if a correction was given.</td>
+			</tr>
+			<tr>
+					<td><code>1</code></td>
+					<td>Refused or failed: no evidence, <code>--replace</code> without <code>--with</code>, an anchor that did not match exactly once, an already-closed ticket, or an API failure.</td>
+			</tr>
+	</tbody>
+</table>
+<h2 id="examples">Examples</h2>
+<p>Hand a ticket back with the reasoning:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand abandon WND-42 -m <span class="s2">&#34;The codex CLI removed --sandbox in
+</span></span></span><span class="line"><span class="cl"><span class="s2">  1.2, so there is no flag to pass. Meeting the isolation
+</span></span></span><span class="line"><span class="cl"><span class="s2">  suite now needs a wrapper, which is a different ticket.&#34;</span>
+</span></span></code></pre></div><pre tabindex="0"><code>abandoned WND-42: evidence posted, now Backlog, unassigned
+</code></pre><p>Correct the premise in the same act:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand abandon WND-42 <span class="se">\
+</span></span></span><span class="line"><span class="cl">  -m <span class="s2">&#34;Measured it: the call is 12 ms, not 400 ms. The
+</span></span></span><span class="line"><span class="cl"><span class="s2">      regression is in the retry loop above it.&#34;</span> <span class="se">\
+</span></span></span><span class="line"><span class="cl">  --replace <span class="s2">&#34;the adapter&#39;s startup costs ~400 ms&#34;</span> <span class="se">\
+</span></span></span><span class="line"><span class="cl">  --with <span class="s2">&#34;the retry loop above the adapter costs ~400 ms&#34;</span>
+</span></span></code></pre></div><pre tabindex="0"><code>abandoned WND-42: evidence posted, now Backlog, unassigned
+description corrected in the same write
+</code></pre><h2 id="see-also">See also</h2>
+<p><a href="../handback/"><code>wand handback</code></a> when the ticket is right but you need a
+decision. <a href="../file/"><code>wand file</code></a> when what you found is a <em>different</em>
+piece of work.</p>
+
+
+    </main>
+    
+    
+    
+    <nav class="toc">
+      <h5>On this page</h5>
+      <nav id="TableOfContents">
+  <ul>
+    <li><a href="#synopsis">Synopsis</a></li>
+    <li><a href="#what-it-does">What it does</a>
+      <ul>
+        <li><a href="#correcting-the-description">Correcting the description</a></li>
+      </ul>
+    </li>
+    <li><a href="#flags">Flags</a></li>
+    <li><a href="#exit-codes">Exit codes</a></li>
+    <li><a href="#examples">Examples</a></li>
+    <li><a href="#see-also">See also</a></li>
+  </ul>
+</nav>
+    </nav>
+    
+  </div>
+  <script>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    (function () {
+      var root = new URL("..", document.querySelector('link[rel="stylesheet"]').href);
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          var picker = document.getElementById("version-picker");
+          ["latest"].concat(versions).forEach(function (v) {
+            var option = document.createElement("option");
+            option.value = v;
+            option.textContent = v;
+            option.selected = v === "latest";
+            picker.appendChild(option);
+          });
+          picker.addEventListener("change", function () {
+            window.location.href = new URL(picker.value + "/", root);
+          });
+          picker.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>

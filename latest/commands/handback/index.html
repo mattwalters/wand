@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wand handback · wand</title>
+  <link rel="stylesheet" href="../../style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="../../">wand</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/mattwalters/wand">GitHub</a>
+    <span class="version">
+      latest
+      <select id="version-picker" hidden aria-label="Documentation version"></select>
+    </span>
+  </header>
+  <div class="wrap">
+    <nav class="sidenav">
+      
+      
+      <h5>Start</h5>
+      
+      
+      
+      
+      
+      <a href="../../">Overview</a>
+      
+      <h5>Doctrine</h5>
+      
+      
+      
+      
+      
+      <a href="../../covenant/">The covenant</a>
+      
+      <h5>Commands</h5>
+      
+      
+      
+      
+      
+      <a href="../../commands/">All commands</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/init/" class="mono">wand init</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/doctor/" class="mono">wand doctor</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/guard/" class="mono">wand guard</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/queue/" class="mono">wand queue</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/ticket/" class="mono">wand ticket</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/claim/" class="mono">wand claim</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/handback/" class="mono active" aria-current="page">wand handback</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/abandon/" class="mono">wand abandon</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/file/" class="mono">wand file</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/ui/" class="mono">wand ui</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../commands/version/" class="mono">wand version</a>
+      
+    </nav>
+    <main>
+      
+
+<h1 class="cmd">wand handback</h1>
+<p><code>handback</code> is what a session does when it hits a wall only a person can
+clear. It posts your question as a comment, then moves the issue to Needs
+Input.</p>
+<h2 id="synopsis">Synopsis</h2>
+<pre tabindex="0"><code>wand handback &lt;identifier&gt; [-m MESSAGE]
+wand handback &lt;identifier&gt; &lt; question.md
+</code></pre><h2 id="what-it-does">What it does</h2>
+<p>Two writes, and <strong>the order is the contract</strong>:</p>
+<ol>
+<li>the question, as a comment;</li>
+<li>the status, to Needs Input.</li>
+</ol>
+<p>Never the reverse. If the status write fails, the ticket stays In Progress
+carrying its question, and a later pass can finish the move. The reverse
+failure leaves a Needs Input ticket that asks nothing — and a ticket that
+asks nothing parks forever, because the human who opens it has no idea what
+they were supposed to decide.</p>
+<p>Before either write, <code>handback</code> resolves the target status. That is a pure
+read, so a drifted board or a guard refusal stops the verb with nothing
+written; a failure discovered <em>after</em> the comment would make a repaired
+re-run post the question twice.</p>
+<p>An empty question is refused. So is a ticket a human has already closed —
+reopening a close is their call, not the verb&rsquo;s.</p>
+<h3 id="what-makes-a-good-question">What makes a good question</h3>
+<p>The refusal message says it, and it is the whole point of the verb: what
+you need to know, the options you see, and which one you would pick. A
+handback that says only &ldquo;blocked, please advise&rdquo; moves the work to a human
+without moving them any closer to answering.</p>
+<h2 id="flags">Flags</h2>
+<table>
+	<thead>
+			<tr>
+					<th>Flag</th>
+					<th>Description</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>-m</code>, <code>--message MESSAGE</code></td>
+					<td>The question. When absent, the question is read from stdin.</td>
+			</tr>
+	</tbody>
+</table>
+<p>Long markdown reads better from a heredoc than from a quoted flag, which is
+why stdin is a first-class input. An interactive terminal with no <code>-m</code>
+refuses rather than blocking on a read you cannot see. A blank <code>-m</code> is an
+error, not a cue to fall back to stdin.</p>
+<h2 id="exit-codes">Exit codes</h2>
+<table>
+	<thead>
+			<tr>
+					<th>Code</th>
+					<th>Meaning</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>0</code></td>
+					<td>The question is posted and the issue is in Needs Input.</td>
+			</tr>
+			<tr>
+					<td><code>1</code></td>
+					<td>Something refused or failed. If it failed between the two writes, the comment stands and the status does not — re-running is safe only after you check which.</td>
+			</tr>
+	</tbody>
+</table>
+<h2 id="examples">Examples</h2>
+<p>A short question:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand handback WND-42 -m <span class="s2">&#34;The codex CLI dropped --sandbox.
+</span></span></span><span class="line"><span class="cl"><span class="s2">  Options: wrap it, or pin to 0.9 which had it. I would pin.
+</span></span></span><span class="line"><span class="cl"><span class="s2">  Which?&#34;</span>
+</span></span></code></pre></div><pre tabindex="0"><code>handed back WND-42: question posted, now Needs Input
+</code></pre><p>A long one, from a heredoc:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand handback WND-42 <span class="s">&lt;&lt;&#39;MSG&#39;
+</span></span></span><span class="line"><span class="cl"><span class="s">## What I need
+</span></span></span><span class="line"><span class="cl"><span class="s">
+</span></span></span><span class="line"><span class="cl"><span class="s">The isolation suite passes only with `--no-network`, which also disables
+</span></span></span><span class="line"><span class="cl"><span class="s">the adapter&#39;s own telemetry upload.
+</span></span></span><span class="line"><span class="cl"><span class="s">
+</span></span></span><span class="line"><span class="cl"><span class="s">## Options
+</span></span></span><span class="line"><span class="cl"><span class="s">
+</span></span></span><span class="line"><span class="cl"><span class="s">1. Ship with telemetry off. Simple; loses the metric.
+</span></span></span><span class="line"><span class="cl"><span class="s">2. Allowlist the telemetry host. Keeps the metric; widens the sandbox.
+</span></span></span><span class="line"><span class="cl"><span class="s">
+</span></span></span><span class="line"><span class="cl"><span class="s">## What I would do
+</span></span></span><span class="line"><span class="cl"><span class="s">
+</span></span></span><span class="line"><span class="cl"><span class="s">(1). The metric is not worth a hole in the isolation boundary.
+</span></span></span><span class="line"><span class="cl"><span class="s">MSG</span>
+</span></span></code></pre></div><h2 id="see-also">See also</h2>
+<p>Use <a href="../abandon/"><code>wand abandon</code></a> instead when the ticket is <em>wrong</em> rather
+than blocked — when the evidence undoes its premise.</p>
+
+
+    </main>
+    
+    
+    
+    <nav class="toc">
+      <h5>On this page</h5>
+      <nav id="TableOfContents">
+  <ul>
+    <li><a href="#synopsis">Synopsis</a></li>
+    <li><a href="#what-it-does">What it does</a>
+      <ul>
+        <li><a href="#what-makes-a-good-question">What makes a good question</a></li>
+      </ul>
+    </li>
+    <li><a href="#flags">Flags</a></li>
+    <li><a href="#exit-codes">Exit codes</a></li>
+    <li><a href="#examples">Examples</a></li>
+    <li><a href="#see-also">See also</a></li>
+  </ul>
+</nav>
+    </nav>
+    
+  </div>
+  <script>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    (function () {
+      var root = new URL("..", document.querySelector('link[rel="stylesheet"]').href);
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          var picker = document.getElementById("version-picker");
+          ["latest"].concat(versions).forEach(function (v) {
+            var option = document.createElement("option");
+            option.value = v;
+            option.textContent = v;
+            option.selected = v === "latest";
+            picker.appendChild(option);
+          });
+          picker.addEventListener("change", function () {
+            window.location.href = new URL(picker.value + "/", root);
+          });
+          picker.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>
