@@ -10,6 +10,13 @@
 // on you; it is the pool, and browsing a pool is Linear's job, done better
 // there. The cockpit shows what has stopped, not what exists.
 //
+// Alongside the four queues sits one strip that answers a different
+// question — not "what is waiting on a human?" but "what is the machine
+// doing right now?" (see [Active] and [Board.Running]). It is read-only,
+// rendered from the journal and lease store alone, and it counts toward
+// nothing: a run being actively driven is, by definition, not waiting on
+// anyone.
+//
 // # Blessing
 //
 // Promotion to Todo and to Scoping is the transition [guard] refuses
@@ -53,6 +60,10 @@ type Snapshot struct {
 	ReadyForHuman []linear.Issue
 	// Lanes are runs the journal says a person has to resolve.
 	Lanes []Lane
+	// Active are runs a live process is presently driving — WND-41's
+	// answer to "what is the machine doing?" rather than "what is waiting
+	// on a human?". See [Active] and [Board.Running].
+	Active []Active
 }
 
 // Kind names one queue on the board.
@@ -92,10 +103,15 @@ type Section struct {
 	Rows  []Row
 }
 
-// Board is the whole screen: the four sections in a fixed order.
+// Board is the whole screen: the four sections in a fixed order, plus the
+// Active-runs strip.
 type Board struct {
 	Team     string
 	Sections []Section
+	// Running is what a live process is doing right now. Deliberately not
+	// a Section: nothing in it is waiting on a human, so it is excluded
+	// from [Board.Waiting] and from the cursor's row order — see [Active].
+	Running []Active
 }
 
 // Waiting counts every row across every section — the one number that
@@ -123,7 +139,8 @@ func (b Board) Rows() []Row {
 // looking for it, and the day it refills you will not notice.
 func Build(s Snapshot) Board {
 	return Board{
-		Team: s.Team,
+		Team:    s.Team,
+		Running: s.Active,
 		Sections: []Section{
 			{
 				Kind:  KindTriage,

@@ -3,8 +3,10 @@ package cockpit
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/mattwalters/wand/internal/covenant"
+	"github.com/mattwalters/wand/internal/journal"
 	"github.com/mattwalters/wand/internal/linear"
 )
 
@@ -71,5 +73,35 @@ func TestReadFollowsTheCovenantsNames(t *testing.T) {
 	}
 	if snap.Lanes != nil {
 		t.Errorf("lanes = %v, want none without a run store", snap.Lanes)
+	}
+	if snap.Active != nil {
+		t.Errorf("active = %v, want none without a run store", snap.Active)
+	}
+}
+
+// Read's walk of the run store fills both Lanes and Active from the same
+// journal — a live, started run is not a lane (nobody has to resolve it),
+// but it is what the machine is doing right now.
+func TestReadFillsActiveAlongsideLanes(t *testing.T) {
+	at := time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)
+	runs := &fakeRuns{
+		ids: []string{"r"},
+		reports: map[string]journal.Report{
+			"r": activeReport("r", "WND-9", "implement", 1, at, at, journal.Alive),
+		},
+	}
+	cl := &readFake{}
+	snap, err := Read(context.Background(), cl, runs, covenant.Default(), "WND")
+	if err != nil {
+		t.Fatalf("Read: %v", err)
+	}
+	if len(snap.Active) != 1 || snap.Active[0].RunID != "r" {
+		t.Errorf("active = %+v, want the one live run", snap.Active)
+	}
+	// readFake's started read answers WND-9 as started, so the same run is
+	// not also a lane — Classify already covers this; this test is only
+	// about Active being wired into Read at all.
+	if len(snap.Lanes) != 0 {
+		t.Errorf("lanes = %+v, want none: a live run on a started ticket needs nobody", snap.Lanes)
 	}
 }

@@ -104,16 +104,20 @@ func Classify(r journal.Report, started map[string]bool) (Lane, bool) {
 }
 
 // phaseName renders where a run stopped, in a form that reads inside a
-// sentence. A run killed before its first phase has no phase at all, and
-// saying so beats printing an empty pair of quotes.
-func phaseName(s journal.State) string {
-	if s.Phase == "" {
+// sentence.
+func phaseName(s journal.State) string { return phaseLabel(s.Phase, s.Round) }
+
+// phaseLabel renders a phase and round, shared by [Lane]'s prose and
+// [Active]'s own column. A run with no phase at all — killed before its
+// first — reads as "no phase yet" rather than an empty pair of quotes.
+func phaseLabel(phase string, round int) string {
+	if phase == "" {
 		return "no phase yet"
 	}
-	if s.Round > 0 {
-		return fmt.Sprintf("%s (round %d)", s.Phase, s.Round)
+	if round > 0 {
+		return fmt.Sprintf("%s (round %d)", phase, round)
 	}
-	return s.Phase
+	return phase
 }
 
 // Reconcile drops parked lanes whose ticket a later run already resolved.
