@@ -158,6 +158,42 @@ func TestParseDraftAcceptsAWrongPremiseAlone(t *testing.T) {
 	}
 }
 
+// A citation into one file that recurs at several locations is still a
+// citation, not a hedge — the validator must parse the list a scout
+// naturally writes rather than reject it as a bare filename.
+func TestParseDraftAcceptsMultiLocationCitations(t *testing.T) {
+	tests := []string{
+		"internal/run/run.go:218,254,296,496",
+		"internal/cli/team_key_test.go:25-27,109-117",
+		"internal/verbs/verbs.go:122-155,163-191,237-280,305-345",
+		"internal/cli/ui.go:98-99,119",
+		"docs/content/docs/commands/ui.md:24,110",
+	}
+	for _, loc := range tests {
+		t.Run(loc, func(t *testing.T) {
+			d := goodDraft()
+			d["files"] = []any{map[string]any{"location": loc, "note": "n"}}
+			if _, err := scope.ParseDraft(raw(t, d), covenant.Default()); err != nil {
+				t.Errorf("ParseDraft rejected %q: %v", loc, err)
+			}
+		})
+	}
+}
+
+// A bare filename is still refused: a list satisfies "a citation carries a
+// line", but no line at all does not.
+func TestParseDraftStillRefusesABareFilename(t *testing.T) {
+	d := goodDraft()
+	d["files"] = []any{map[string]any{"location": "internal/queue/queue.go", "note": "n"}}
+	_, err := scope.ParseDraft(raw(t, d), covenant.Default())
+	if err == nil {
+		t.Fatal("a bare filename was accepted")
+	}
+	if !strings.Contains(err.Error(), "not path:line") {
+		t.Errorf("error = %v\nwant it to mention %q", err, "not path:line")
+	}
+}
+
 func TestParseDraftFollowsTheCovenantsScale(t *testing.T) {
 	cov := covenant.Default()
 	cov.IssueEstimationType = "exponential"
