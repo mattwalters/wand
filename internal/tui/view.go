@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -162,6 +163,11 @@ func (m Model) boardLines() []line {
 	idx := 0
 	width := m.identifierWidth()
 
+	if len(m.board.Running) > 0 {
+		lines = append(lines, m.runningLines(width)...)
+		lines = append(lines, line{row: -1})
+	}
+
 	for i, section := range m.board.Sections {
 		if i > 0 {
 			lines = append(lines, line{row: -1})
@@ -191,8 +197,8 @@ func (m Model) sectionHeading(s cockpit.Section) string {
 }
 
 // identifierWidth is the width the identifier column is padded to, taken
-// across the whole board rather than per section so the four queues line up
-// as one table.
+// across the whole board — the four queues and the Running strip both —
+// so every ticket on screen lines up as one table.
 func (m Model) identifierWidth() int {
 	w := 0
 	for _, row := range m.rows() {
@@ -202,7 +208,72 @@ func (m Model) identifierWidth() int {
 		}
 		w = max(w, len(row.Issue.Identifier))
 	}
+	for _, a := range m.board.Running {
+		w = max(w, len(a.Ticket))
+	}
 	return w
+}
+
+// --- the Active-runs strip ------------------------------------------------
+
+// runningLines renders the strip of runs a live process is presently
+// driving — the answer to "what is the machine doing right now?", as
+// opposed to the four queues below it, which answer "what is waiting on a
+// human?". None of these lines carry a cursor row: an active run is not a
+// ticket a person disposits, and resolving one, if it ever needs resolving,
+// means going to the machine — the same read-only reasoning [noJudgment]
+// already gives a lane.
+func (m Model) runningLines(idWidth int) []line {
+	heading := m.theme.Heading.Render(pad(gutter) + "Running")
+	heading += m.theme.Muted.Render(fmt.Sprintf("  %d in flight", len(m.board.Running)))
+	lines := []line{{text: heading, row: -1}}
+	for _, a := range m.board.Running {
+		lines = append(lines, line{text: m.runningRowView(a, idWidth), row: -1})
+	}
+	return lines
+}
+
+// runningRowView is one line of the Running strip: ticket, phase, harness,
+// how long it has been going, and how long since its lease last renewed. A
+// run whose own liveness judgment is not [journal.Alive] gets the sentence
+// sweep's dead-lease logic exists to confirm, never a second verdict this
+// package computed from the heartbeat's age itself — and that sentence is
+// kept first among the free-text fields, so a narrow terminal's truncation
+// clips harness or heartbeat before it ever clips the one thing that says a
+// row may not mean what it looks like.
+func (m Model) runningRowView(a cockpit.Active, idWidth int) string {
+	var fields []string
+	if a.Stale() {
+		fields = append(fields, "possibly dead, sweep will confirm")
+	}
+	fields = append(fields, a.PhaseLabel(), a.HarnessLabel(), "up "+ago(m.now, a.Started), "hb "+ago(m.now, a.Heartbeat)+" ago")
+	body := fmt.Sprintf("%-*s  %s", idWidth, a.Ticket, strings.Join(fields, " · "))
+	rendered := truncate(pad(gutter)+body, m.width)
+	if a.Stale() {
+		return m.theme.Warn.Render(rendered)
+	}
+	return m.theme.Body.Render(rendered)
+}
+
+// ago renders how long ago at was, as of now — "8s", "12m", "3h4m" — or an
+// em dash when either clock reading is unset, which happens only for a
+// board built with no [tui.Config.Now] and nothing running to time.
+func ago(now, at time.Time) string {
+	if now.IsZero() || at.IsZero() {
+		return "—"
+	}
+	d := now.Sub(at)
+	if d < 0 {
+		d = 0
+	}
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	default:
+		return fmt.Sprintf("%dh%dm", int(d.Hours()), int(d.Minutes())%60)
+	}
 }
 
 func (m Model) rowView(row cockpit.Row, selected bool, idWidth int) string {
