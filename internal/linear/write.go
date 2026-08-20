@@ -58,6 +58,11 @@ type IssueUpdate struct {
 	AssigneeID  string  // user UUID; "" leaves the assignee alone
 	Unassign    bool    // true sends an explicit null: omitting the field would leave the assignee in place
 	Description *string // nil leaves the description alone
+	// Priority is Linear's 0-4 numbering; nil leaves it alone. A pointer
+	// because 0 is a real value here — "No priority" is a judgment a human
+	// passes deliberately ("worth keeping, not worth ranking"), not the
+	// absence of one, and an int field could not tell the two apart.
+	Priority *int
 }
 
 // UpdateIssue applies one IssueUpdate in a single mutation. Fields that must
@@ -80,6 +85,9 @@ func (c *Client) UpdateIssue(ctx context.Context, issueID string, u IssueUpdate)
 	}
 	if u.Description != nil {
 		input["description"] = *u.Description
+	}
+	if u.Priority != nil {
+		input["priority"] = *u.Priority
 	}
 	if len(input) == 0 {
 		return fmt.Errorf("linear: an issue update with nothing to change")
@@ -182,4 +190,39 @@ func (c *Client) SearchIssues(ctx context.Context, teamKey, term string) ([]Issu
 		issues = append(issues, n.flatten())
 	}
 	return issues, nil
+}
+
+// RelationDuplicate is the relation type marking one issue a duplicate of
+// another. Linear also knows `blocks` and `related`; only this one is
+// written here, by the cockpit, in the same act as setting Duplicate status.
+const RelationDuplicate = "duplicate"
+
+// CreateRelation links two issues. For RelationDuplicate the direction
+// matters and reads as the sentence does: issueID is the duplicate,
+// relatedID is the canonical issue it duplicates.
+func (c *Client) CreateRelation(ctx context.Context, issueID, relatedID, relType string) error {
+	if issueID == relatedID {
+		return fmt.Errorf("linear: an issue cannot be related to itself")
+	}
+	var out struct {
+		IssueRelationCreate struct {
+			Success bool `json:"success"`
+		} `json:"issueRelationCreate"`
+	}
+	err := c.Do(ctx, `
+		mutation($input: IssueRelationCreateInput!) {
+		  issueRelationCreate(input: $input) { success }
+		}`,
+		map[string]any{"input": map[string]any{
+			"issueId":        issueID,
+			"relatedIssueId": relatedID,
+			"type":           relType,
+		}}, &out)
+	if err != nil {
+		return err
+	}
+	if !out.IssueRelationCreate.Success {
+		return fmt.Errorf("linear: refused the %s relation", relType)
+	}
+	return nil
 }

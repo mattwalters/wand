@@ -135,7 +135,10 @@ func TestBinaryRendersAndQuitsCleanly(t *testing.T) {
 	}
 	defer pty.Close() //nolint:errcheck // best effort on teardown
 
-	cmd := exec.Command(bin, "ui")
+	// --sample so the smoke test needs no API key and no team: what it is
+	// proving is that the binary drives a real terminal, not that Linear
+	// answered.
+	cmd := exec.Command(bin, "ui", "--sample")
 	cmd.Env = append(cmd.Environ(), "TERM=xterm-256color")
 	if err := pty.Start(cmd); err != nil {
 		t.Fatalf("starting wand: %v", err)
@@ -156,11 +159,11 @@ func TestBinaryRendersAndQuitsCleanly(t *testing.T) {
 		_, _ = io.Copy(screen, pty)
 	}()
 
-	// The menu should render every command without any input.
-	got := screen.waitForText(t, "covenant")
-	for _, want := range []string{"wand", "init", "covenant", "bless"} {
+	// The cockpit should render all four queues without any input.
+	got := screen.waitForText(t, "Needs Input")
+	for _, want := range []string{"wand cockpit", "Triage", "Needs Input", "Ready for human", "Lanes"} {
 		if !strings.Contains(got, want) {
-			t.Errorf("menu is missing %q; screen was:\n%s", want, got)
+			t.Errorf("cockpit is missing %q; screen was:\n%s", want, got)
 		}
 	}
 

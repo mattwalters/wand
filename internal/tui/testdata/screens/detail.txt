@@ -1,7 +1,12 @@
- wand covenant
+ WND-41  guard: a raw state UUID is not matched
 
-  Read and edit the repository covenant
+  status    Triage
+  priority  No priority
+  labels    agent-filed
 
-  "covenant" is not implemented yet.
+  The guard matches state names and types, not UUIDs. Filed while working WND-
+  40; the known-gap note in guard.go argues it is acceptable, so this may be a
+  duplicate of the note rather than a bug.
 
+  judge  t ✦Todo  s ✦Scoping  b Backlog  u unranked  d duplicate  x cancel
   esc back • q quit

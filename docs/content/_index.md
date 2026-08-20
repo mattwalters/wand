@@ -36,5 +36,8 @@ reasoning behind every state and rule in it. The covenant file (`wand.toml`)
 carries the parameters; this page carries the *why*, which deliberately does
 not live in the file.
 
+[The cockpit](commands/ui/) — `wand ui`: one screen answering one question,
+*what is waiting on me?*, and the one place in wand a human blesses work.
+
 [Commands](commands/) — the reference: every command wand implements, one
 page each, with its flags, its exit codes and what it is for.

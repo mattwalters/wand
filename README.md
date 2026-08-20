@@ -5,9 +5,11 @@ machinery — its covenant, and the blessing path work travels along.
 
 > **Status: early.** `init` bootstraps a Linear team to the covenant and
 > installs the guard hook; `guard` enforces the covenant's authorization
-> rules; `queue` and `ticket` are the read layer; `doctor` reports a
-> team's drift from the covenant. The `covenant` and `bless` verbs are
-> stubs.
+> rules; `queue` and `ticket` are the read layer; the lifecycle verbs
+> (`claim`, `handback`, `abandon`, `file`) are the write layer; `doctor`
+> reports a team's drift from the covenant; `ui` is the cockpit, where a
+> human blesses work. The orchestrators — `scope`, `run`, `dispatch` — are
+> not built yet.
 
 ## Install
 
@@ -30,7 +32,7 @@ always points at the latest `v1.x.y`.
 
 ```bash
 wand                        # help
-wand ui                     # the interactive interface
+wand ui --team-key WND      # the cockpit: everything waiting on a human
 wand queue --team-key WND   # the ranked, vetted Todo queue
 wand ticket WND-3           # one ticket whole, for a cold reader
 wand claim WND-3            # take a blessed issue: In Progress + assignee, first
@@ -40,6 +42,67 @@ wand file "…" --team-key WND  # file a finding into Triage, duplicates searche
 wand doctor --team-key WND  # report the team's drift from the covenant
 wand version                # build info, and the covenant schema this binary speaks
 ```
+
+## The cockpit
+
+`wand ui` is one screen answering one question: **what is waiting on me?**
+
+```
+ wand cockpit · WND                                             6 waiting on you
+
+  Triage  2 to judge
+› WND-42  doctor prints an empty drift section on a clean board              Low
+  WND-41  guard: a raw state UUID is not matched
+
+  Needs Input  1 to answer
+  WND-38  Second harness adapter: which one?                                High
+
+  Ready for human  1 to look at
+  WND-35  Run journal and lease store                                  In Review
+
+  Lanes  2 to resolve
+  stuck    WND-36  held by pid 48213 on studio.local, which is gone; the run …
+  parked   WND-33  the worktree was dirty at handoff; refusing to park noise …
+
+  judge  t ✦Todo  s ✦Scoping  b Backlog  u unranked  d duplicate  x cancel
+  ↑/k ↓/j move • enter open • r refresh • q quit
+```
+
+Four queues, and nothing else. Each is one that nothing drains on its own,
+and each is invisible until something puts it on one screen. Backlog is
+deliberately absent: a Backlog ticket is not waiting on you, it is the pool,
+and browsing a pool is Linear's job.
+
+**Blessing lives here.** Promoting a ticket to Todo or Scoping is the
+transition [the guard](#the-guard) refuses everywhere else, because it hands
+out authorization an agent does not have. The cockpit is the one place a
+person grants it, and it is a deliberate moment rather than a keystroke:
+
+```
+  ✦ Blessing
+
+    WND-41  guard: a raw state UUID is not matched
+    Triage → Todo
+
+    Todo is the gate between written down and a bot may act on this unattended.
+    Blessing it lets an agent claim the ticket, branch, write code and open a
+    pull request without asking you again.
+
+    WND-41 has no priority, and No priority sorts last in the queue. Blessing it
+    authorizes the work without scheduling it.
+
+  enter bless WND-41 → Todo • esc back
+```
+
+Judging a Triage ticket has four other answers — Backlog with a priority,
+Backlog unranked, Duplicate of another issue, or Canceled with a reason.
+The last two write their evidence *before* the status moves, for the same
+reason `handback` posts its question first: the status write is what ends
+the ticket's visibility, so anything a reader will later need has to already
+be on it.
+
+`wand ui --sample` opens the same screen against a built-in board, so you can
+walk the whole interface without an API key or a team.
 
 `wand version` reports the covenant schema version alongside the build:
 a repo's covenant file declares the schema it was written against, and
@@ -206,7 +269,7 @@ release publishes on its own.
 You do not need to install anything to try it:
 
 ```bash
-go run . ui
+go run . ui --sample
 ```
 
 `make run` does the same. To get a binary instead, `make build` writes
@@ -256,25 +319,40 @@ review, because the thing under test is a picture. wand renders screens to
 plain text instead:
 
 ```console
-$ wand ui --script "j,enter" --dump-screen
- wand covenant
+$ wand ui --script "j,t" --dump-screen
+  ✦ Blessing
 
-  Read and edit the repository covenant
+    WND-41  guard: a raw state UUID is not matched
+    Triage → Todo
 
-  "covenant" is not implemented yet.
+    Todo is the gate between written down and a bot may act on this unattended.
+    Blessing it lets an agent claim the ticket, branch, write code and open a
+    pull request without asking you again.
 
-  esc back • q quit
+    WND-41 has no priority, and No priority sorts last in the queue. Blessing it
+    authorizes the work without scheduling it.
+
+  read-only: this is the sample board. Every key here walks the screen; none of
+  them write.
+  esc back
 ```
 
 `--script` applies a key sequence first, so any screen is reachable from one
 command, and no terminal is needed. From a clone that is
-`go run . ui --script "j,enter" --dump-screen`, or `make screen SCRIPT=j,enter`.
+`go run . ui --script "j,t" --dump-screen`, or `make screen SCRIPT=j,t`.
+
+Note the last two lines. `--dump-screen` renders the built-in sample board
+with **no writer behind it**, so an agent can walk to every screen — the
+blessing screen included, which is the one most worth being able to inspect
+— and reach none of the transitions the guard forbids it. The refusal is
+structural, not a check: that code path constructs the model without a
+backend, so there is nothing for the confirm key to call.
 
 The test suite renders through the same code path, so those snapshots are
 stored as golden files that read as pictures of the UI:
 
 ```go
-tuitest.AssertScreen(t, "detail", tui.New(80, 24), "j,enter")
+tuitest.AssertScreen(t, "bless-todo", model, "t")
 ```
 
 When a screen changes, the failure is a unified diff of the screen itself
@@ -294,7 +372,7 @@ details and the rules that keep it deterministic.
 ## Development
 
 ```bash
-go run . ui          # run the TUI from source
+go run . ui --sample # run the cockpit from source, against the sample board
 make test            # fast suite
 make test-e2e        # pty smoke test
 make test-conformance # worker isolation against the real harness (spends a model call)

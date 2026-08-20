@@ -20,6 +20,12 @@ the repo renders screens to plain text on demand:
 go run . ui --script "j,enter" --dump-screen
 ```
 
+`--dump-screen` renders the built-in sample board with no writer behind it, so
+every screen is reachable and none of them can write. That is deliberate: the
+cockpit is the one place in wand that performs the transitions `wand guard`
+forbids, and the command an agent uses to *look* at it must not be a way to
+*use* it.
+
 `--script` is a comma-separated key sequence (`j`, `enter`, `esc`, `ctrl+c`,
 `down`, …) applied before rendering. No terminal is required; the output is
 plain text you can read directly.
@@ -31,8 +37,8 @@ ask the user to look.
 
 `make screen SCRIPT=j,enter` is the same thing.
 
-`go run . ui` needs a real terminal, so it is not something you can drive from
-a tool call — use `--dump-screen` above to see the UI, and leave the
+`go run . ui --sample` needs a real terminal, so it is not something you can
+drive from a tool call — use `--dump-screen` above to see the UI, and leave the
 interactive run to the user.
 
 ## Golden-file changes

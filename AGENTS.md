@@ -7,8 +7,10 @@ and [Bubble Tea v2](https://charm.land/bubbletea/v2). Public, MIT licensed.
 covenant (parameterized by a checked-in `wand.toml` when present) and installs
 the guard's hook shim; `guard` is the status verdict oracle the shim routes
 Linear writes through; `doctor` diffs the live team against the covenant and
-reports drift (exit 0 clean, 1 drift, 2 could not check). `covenant` and
-`bless` are stubs today. [PLAN.md](./PLAN.md) is the build order and the
+reports drift (exit 0 clean, 1 drift, 2 could not check). `ui` is the cockpit:
+the four queues waiting on a human, and the only surface in wand that performs
+the transitions the guard forbids — blessing is a human act, so it has a human
+door. The orchestrators (`scope`, `run`, `dispatch`) are not built yet. [PLAN.md](./PLAN.md) is the build order and the
 reasoning — a deliberately mortal document; the Linear tickets are the
 authoritative version of the work. The TUI's verification layer is described
 below; read that before changing anything under `internal/tui`.
@@ -22,6 +24,8 @@ internal/linear/     the Linear GraphQL client — raw net/http, no GraphQL libr
 internal/covenant/   the process contract: fixed topology, parameterized covenant
 internal/bootstrap/  planner/executor over the covenant; all decisions in the pure Plan
 internal/guard/      the one verdict function: which ticket writes an agent may never make
+internal/cockpit/    what is waiting on a human: the four queues, the six judgments,
+                     and the one write path that deliberately does not call the guard
 internal/doctor/     read-only drift report: bootstrap.Plan as the diff, plus what Plan cannot express
 internal/shim/       generates the PreToolUse hook entry that routes save_issue to wand guard
 internal/worker/     the harness seam: an Adapter turns a Spec into one headless invocation;
@@ -29,7 +33,7 @@ internal/worker/     the harness seam: an Adapter turns a Spec into one headless
 internal/workertest/ the isolation conformance suite every adapter must pass
 internal/journal/    the crash-only run journal, lease and lock: journal before you act,
                      exactly one terminal record, and a dead holder provably dead
-internal/tui/        Bubble Tea models — the app itself
+internal/tui/        Bubble Tea models — the cockpit itself
   testdata/screens/  golden screens (plain text pictures of the UI)
 internal/theme/      every lipgloss style, in one place
 internal/screen/     the renderer: model -> real program -> vt -> text

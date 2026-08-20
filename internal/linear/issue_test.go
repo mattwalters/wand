@@ -194,3 +194,72 @@ func TestPriorityName(t *testing.T) {
 		}
 	}
 }
+
+// The label and state-type reads share the pagination loop with the state
+// read, but sharing is not the property under test — following the cursor
+// is. A read that stopped at one page would return a short board that looks
+// exactly like a quiet one, which is the bug this loop exists to prevent.
+func TestIssueReadsFollowPagination(t *testing.T) {
+	tests := []struct {
+		name string
+		read func(*Client) ([]Issue, error)
+		want string // the filter variable the query must carry
+	}{
+		{
+			name: "by label",
+			read: func(c *Client) ([]Issue, error) {
+				return c.TeamIssuesByLabel(context.Background(), "WND", "ready-for-human")
+			},
+			want: "ready-for-human",
+		},
+		{
+			name: "by state type",
+			read: func(c *Client) ([]Issue, error) {
+				return c.TeamIssuesByStateType(context.Background(), "WND", "started")
+			},
+			want: "started",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var afters []any
+			var sawFilter bool
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				req := decodeRequest(t, r)
+				afters = append(afters, req.Variables["after"])
+				for _, v := range req.Variables {
+					if v == tt.want {
+						sawFilter = true
+					}
+				}
+				node := func(id string) string {
+					return fmt.Sprintf(`{"id":%[1]q,"identifier":%[1]q,"title":"t",
+						"description":"","url":"","priority":0,"createdAt":"2026-08-01T00:00:00.000Z",
+						"state":{"name":"In Review","type":"started"},"assignee":null,
+						"labels":{"nodes":[]},"inverseRelations":{"nodes":[]}}`, id)
+				}
+				if req.Variables["after"] == nil {
+					fmt.Fprint(w, `{"data":{"issues":{"pageInfo":{"hasNextPage":true,"endCursor":"cur1"},"nodes":[`+node("WND-1")+`]}}}`)
+					return
+				}
+				fmt.Fprint(w, `{"data":{"issues":{"pageInfo":{"hasNextPage":false,"endCursor":""},"nodes":[`+node("WND-2")+`]}}}`)
+			}))
+			defer srv.Close()
+
+			issues, err := tt.read(&Client{APIKey: "k", Endpoint: srv.URL})
+			if err != nil {
+				t.Fatalf("read: %v", err)
+			}
+			if len(issues) != 2 || issues[0].ID != "WND-1" || issues[1].ID != "WND-2" {
+				t.Errorf("issues = %+v, want both pages joined in order", issues)
+			}
+			if len(afters) != 2 || afters[0] != nil || afters[1] != "cur1" {
+				t.Errorf("cursors sent = %v, want [nil cur1]", afters)
+			}
+			if !sawFilter {
+				t.Errorf("the query never carried %q; it is filtering on something else", tt.want)
+			}
+		})
+	}
+}

@@ -1,0 +1,12 @@
+  Canceled, with reason
+
+    WND-42  doctor prints an empty drift section on a clean board
+    Triage → Canceled
+
+    Closing is final in practice: nobody re-reads a Canceled ticket. The reason
+    is posted as a comment before the status moves, because a close nobody can
+    explain is one nobody can undo either.
+
+    reason       obsolete
+
+  enter move WND-42 → Canceled • esc back

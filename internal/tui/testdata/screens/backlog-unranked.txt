@@ -1,0 +1,9 @@
+  Backlog, unranked
+
+    WND-42  doctor prints an empty drift section on a clean board
+    Triage → Backlog
+
+    Worth keeping, not worth ranking. It sits in the pool at No priority, which
+    sorts behind everything ranked, and waits for someone to disagree.
+
+  enter move WND-42 → Backlog • esc back

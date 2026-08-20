@@ -165,38 +165,17 @@ type pageInfo struct {
 // would silently rank only the issues Linear happened to send first.
 // Name matching is case-insensitive, mirroring Linear's own semantics.
 func (c *Client) TeamIssuesByState(ctx context.Context, teamKey, stateName string) ([]Issue, error) {
-	var issues []Issue
-	var after *string
-	for {
-		var out struct {
-			Issues struct {
-				PageInfo pageInfo    `json:"pageInfo"`
-				Nodes    []issueNode `json:"nodes"`
-			} `json:"issues"`
-		}
-		err := c.Do(ctx, `
-			query($team: String!, $state: String!, $first: Int!, $after: String) {
-			  issues(
-			    first: $first, after: $after,
-			    filter: {team: {key: {eq: $team}}, state: {name: {eqIgnoreCase: $state}}}
-			  ) {
-			    pageInfo { hasNextPage endCursor }
-			    nodes {`+issueFields+`}
-			  }
-			}`,
-			map[string]any{"team": teamKey, "state": stateName, "first": pageSize, "after": after}, &out)
-		if err != nil {
-			return nil, err
-		}
-		for _, n := range out.Issues.Nodes {
-			issues = append(issues, n.flatten())
-		}
-		if !out.Issues.PageInfo.HasNextPage || out.Issues.PageInfo.EndCursor == "" {
-			return issues, nil
-		}
-		cursor := out.Issues.PageInfo.EndCursor
-		after = &cursor
-	}
+	return c.issuePages(ctx, `
+		query($team: String!, $state: String!, $first: Int!, $after: String) {
+		  issues(
+		    first: $first, after: $after,
+		    filter: {team: {key: {eq: $team}}, state: {name: {eqIgnoreCase: $state}}}
+		  ) {
+		    pageInfo { hasNextPage endCursor }
+		    nodes {`+issueFields+`}
+		  }
+		}`,
+		map[string]any{"team": teamKey, "state": stateName})
 }
 
 // IssueByIdentifier fetches one issue by its human identifier ("WND-3");
@@ -281,6 +260,83 @@ func (c *Client) IssueComments(ctx context.Context, issueID string) ([]Comment, 
 			return comments, nil
 		}
 		cursor := page.EndCursor
+		after = &cursor
+	}
+}
+
+// TeamIssuesByStateType returns every issue on a team whose status is of the
+// given Linear state *type* ("started", "triage", …), following pagination
+// to the end.
+//
+// By type rather than by name because the caller that needs it — the
+// cockpit, asking which tickets are actually being worked — means "any
+// started column", and a covenant may name two of them (In Progress, In
+// Review). Asking by name would need one query per column and would go
+// stale the moment a covenant adds a third.
+func (c *Client) TeamIssuesByStateType(ctx context.Context, teamKey, stateType string) ([]Issue, error) {
+	return c.issuePages(ctx, `
+		query($team: String!, $type: String!, $first: Int!, $after: String) {
+		  issues(
+		    first: $first, after: $after,
+		    filter: {team: {key: {eq: $team}}, state: {type: {eq: $type}}}
+		  ) {
+		    pageInfo { hasNextPage endCursor }
+		    nodes {`+issueFields+`}
+		  }
+		}`,
+		map[string]any{"team": teamKey, "type": stateType})
+}
+
+// TeamIssuesByLabel returns every issue on a team carrying the named label,
+// following pagination to the end. Closed issues are included; a caller that
+// wants only open ones filters on State.Type, because "which of these counts
+// as closed" is the caller's question, not this layer's.
+func (c *Client) TeamIssuesByLabel(ctx context.Context, teamKey, label string) ([]Issue, error) {
+	return c.issuePages(ctx, `
+		query($team: String!, $label: String!, $first: Int!, $after: String) {
+		  issues(
+		    first: $first, after: $after,
+		    filter: {team: {key: {eq: $team}}, labels: {name: {eqIgnoreCase: $label}}}
+		  ) {
+		    pageInfo { hasNextPage endCursor }
+		    nodes {`+issueFields+`}
+		  }
+		}`,
+		map[string]any{"team": teamKey, "label": label})
+}
+
+// issuePages runs a paginated `issues` query to exhaustion. The query must
+// select `issues { pageInfo { hasNextPage endCursor } nodes { … } }` and take
+// $first and $after; vars carries everything else.
+//
+// Shared so that a read added later cannot quietly stop at one page — the
+// bug this loop exists to prevent is invisible in its results, which look
+// exactly like a short board.
+func (c *Client) issuePages(ctx context.Context, query string, vars map[string]any) ([]Issue, error) {
+	var issues []Issue
+	var after *string
+	for {
+		var out struct {
+			Issues struct {
+				PageInfo pageInfo    `json:"pageInfo"`
+				Nodes    []issueNode `json:"nodes"`
+			} `json:"issues"`
+		}
+		args := make(map[string]any, len(vars)+2)
+		for k, v := range vars {
+			args[k] = v
+		}
+		args["first"], args["after"] = pageSize, after
+		if err := c.Do(ctx, query, args, &out); err != nil {
+			return nil, err
+		}
+		for _, n := range out.Issues.Nodes {
+			issues = append(issues, n.flatten())
+		}
+		if !out.Issues.PageInfo.HasNextPage || out.Issues.PageInfo.EndCursor == "" {
+			return issues, nil
+		}
+		cursor := out.Issues.PageInfo.EndCursor
 		after = &cursor
 	}
 }

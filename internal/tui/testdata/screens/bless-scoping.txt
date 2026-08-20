@@ -1,0 +1,10 @@
+  ✦ Blessing
+
+    WND-42  doctor prints an empty drift section on a clean board
+    Triage → Scoping
+
+    Scoping blesses research rather than building: a ticket sitting here is one
+    a dispatcher may spend a scout on unattended. The scout ends at Needs Input,
+    back on this screen, with the decision still yours.
+
+  enter bless WND-42 → Scoping • esc back
