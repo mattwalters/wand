@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -31,12 +32,21 @@ const FileName = "wand.toml"
 // processes, it is covenant and belongs here.
 type File struct {
 	Schema    int               `toml:"schema"`
+	Team      FileTeam          `toml:"team"`
 	Statuses  FileStatuses      `toml:"statuses"`
 	Caps      FileCaps          `toml:"caps"`
 	Estimates FileEstimates     `toml:"estimates"`
 	Toggles   FileToggles       `toml:"toggles"`
 	Commands  FileCommands      `toml:"commands"`
 	Templates map[string]string `toml:"templates"`
+}
+
+// FileTeam binds the repo to one Linear team. It is an identity, not a
+// process parameter — two clones of the same repo cannot legitimately bind
+// to different teams, so it rides its own section rather than living among
+// statuses/caps/toggles.
+type FileTeam struct {
+	Key string `toml:"key"`
 }
 
 // FileStatuses maps display names over the fixed status semantics. The keys
@@ -129,6 +139,9 @@ func Parse(data []byte) (File, error) {
 		return File{}, fmt.Errorf("schema %d is newer than this wand speaks (%d); upgrade wand", f.Schema, SchemaVersion)
 	}
 
+	if err := validateTeam(md, f.Team); err != nil {
+		return File{}, err
+	}
 	if err := validateStatuses(md, f.Statuses); err != nil {
 		return File{}, err
 	}
@@ -147,6 +160,25 @@ func Parse(data []byte) (File, error) {
 		}
 	}
 	return f, nil
+}
+
+// teamKeyPattern is a Linear team key's shape: uppercase letters and digits,
+// starting with a letter. Not the last word on what Linear will accept —
+// just enough to catch a pasted issue identifier or a lowercase typo before
+// it reaches the API as a silent no-such-team.
+var teamKeyPattern = regexp.MustCompile(`^[A-Z][A-Z0-9]{0,9}$`)
+
+func validateTeam(md toml.MetaData, t FileTeam) error {
+	if !md.IsDefined("team", "key") {
+		return nil
+	}
+	if strings.TrimSpace(t.Key) == "" {
+		return fmt.Errorf("team.key is empty; delete the key or set it, e.g. team.key = \"WND\"")
+	}
+	if !teamKeyPattern.MatchString(t.Key) {
+		return fmt.Errorf("team.key %q does not look like a Linear team key (uppercase letters and digits, e.g. \"WND\")", t.Key)
+	}
+	return nil
 }
 
 func validateStatuses(md toml.MetaData, s FileStatuses) error {
@@ -259,20 +291,23 @@ func (f File) Covenant() Covenant {
 }
 
 // Load reads the covenant file at path and returns the covenant it
-// parameterizes. A missing file is not an error — the stock covenant
+// parameterizes, plus the team key it binds the repo to (empty when the file
+// sets none). The team key rides alongside the Covenant rather than inside
+// it: it is an identity, not something doctor should diff against live
+// Linear state. A missing file is not an error — the stock covenant
 // applies, and fromFile reports which happened. Any other failure is loud:
 // a present-but-broken file must never quietly become the defaults.
-func Load(path string) (cov Covenant, fromFile bool, err error) {
+func Load(path string) (cov Covenant, teamKey string, fromFile bool, err error) {
 	data, err := os.ReadFile(path)
 	if errors.Is(err, fs.ErrNotExist) {
-		return Default(), false, nil
+		return Default(), "", false, nil
 	}
 	if err != nil {
-		return Covenant{}, false, err
+		return Covenant{}, "", false, err
 	}
 	f, err := Parse(data)
 	if err != nil {
-		return Covenant{}, false, fmt.Errorf("%s: %w", path, err)
+		return Covenant{}, "", false, fmt.Errorf("%s: %w", path, err)
 	}
-	return f.Covenant(), true, nil
+	return f.Covenant(), f.Team.Key, true, nil
 }

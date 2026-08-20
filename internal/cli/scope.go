@@ -78,7 +78,7 @@ func runScope(cmd *cobra.Command, identifier, harness, model, effort string, int
 	if err != nil {
 		return fail(err)
 	}
-	cov, err := covenantFromCwd()
+	cov, _, _, err := covenantFromCwd()
 	if err != nil {
 		return fail(err)
 	}

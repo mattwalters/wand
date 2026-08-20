@@ -44,14 +44,14 @@ An empty Todo prints `Todo is empty: nothing for you right now.` and exits
 
 | Flag | Description |
 |---|---|
-| `--team-key KEY` | The Linear team key, e.g. `WND`. **Required.** |
+| `--team-key KEY` | The Linear team key, e.g. `WND`. Falls back to `[team] key` in the nearest `wand.toml`; required if neither is set. |
 
 ## Exit codes
 
 | Code | Meaning |
 |---|---|
 | `0` | The queue was read and printed — **including when it is empty**, and when every issue in it was vetted out. |
-| `1` | The queue could not be read: no `LINEAR_API_KEY`, no `--team-key`, a broken `wand.toml`, or an API failure. |
+| `1` | The queue could not be read: no `LINEAR_API_KEY`, no resolvable team key (neither `--team-key` nor `[team] key` in `wand.toml`), a broken `wand.toml`, or an API failure. |
 
 Do not script `wand queue` as if a non-zero exit meant "nothing to do".
 Read the output.

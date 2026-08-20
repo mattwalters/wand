@@ -7,6 +7,9 @@
 
 schema = 1
 
+[team]
+key = "WND"
+
 [commands]
 # The green/red oracle a worker's change is judged by, and the only one:
 # `wand run` reads no remote check. `make check` is CI's own check job —

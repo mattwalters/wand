@@ -8,7 +8,6 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/mattwalters/wand/internal/covenant"
 	"github.com/mattwalters/wand/internal/linear"
 	"github.com/mattwalters/wand/internal/queue"
 )
@@ -43,14 +42,15 @@ func newQueueCmd() *cobra.Command {
 			"order.\n\n" +
 			"Requires LINEAR_API_KEY in the environment.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if teamKey == "" {
-				return fmt.Errorf("--team-key is required (e.g. --team-key WND)")
-			}
-			cl, err := linearFromEnv()
+			cov, fileTeamKey, _, err := covenantFromCwd()
 			if err != nil {
 				return err
 			}
-			cov, _, err := covenant.Load(covenant.FileName)
+			resolvedTeamKey, err := resolveTeamKey(teamKey, fileTeamKey)
+			if err != nil {
+				return err
+			}
+			cl, err := linearFromEnv()
 			if err != nil {
 				return err
 			}
@@ -58,7 +58,7 @@ func newQueueCmd() *cobra.Command {
 			ctx, cancel := context.WithTimeout(cmd.Context(), apiTimeout)
 			defer cancel()
 
-			issues, err := cl.TeamIssuesByState(ctx, teamKey, cov.StatusName("todo"))
+			issues, err := cl.TeamIssuesByState(ctx, resolvedTeamKey, cov.StatusName("todo"))
 			if err != nil {
 				return err
 			}
@@ -68,6 +68,6 @@ func newQueueCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&teamKey, "team-key", "", "Linear team key, e.g. WND")
+	cmd.Flags().StringVar(&teamKey, "team-key", "", "Linear team key, e.g. WND (falls back to [team] key in wand.toml)")
 	return cmd
 }

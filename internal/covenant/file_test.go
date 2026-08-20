@@ -12,6 +12,9 @@ import (
 const full = `
 schema = 1
 
+[team]
+key = "WND"
+
 [statuses]
 todo = "Ready"
 needs_input = "Waiting on Human"
@@ -43,6 +46,10 @@ func TestParseFullFile(t *testing.T) {
 		t.Fatalf("Parse: %v", err)
 	}
 	cov := f.Covenant()
+
+	if f.Team.Key != "WND" {
+		t.Errorf("Team.Key = %q, want %q", f.Team.Key, "WND")
+	}
 
 	byKey := map[string]string{}
 	for _, s := range cov.Statuses {
@@ -142,6 +149,9 @@ func TestParseRefuses(t *testing.T) {
 		{"empty status name", "schema = 1\n[statuses]\ntodo = \"\"\n", "statuses.todo"},
 		{"colliding status names", "schema = 1\n[statuses]\ntodo = \"Backlog\"\n", `share the name "Backlog"`},
 		{"empty command", "schema = 1\n[commands]\nverify = \"\"\n", "commands.verify"},
+		{"empty team key", "schema = 1\n[team]\nkey = \"\"\n", "team.key"},
+		{"lowercase team key", "schema = 1\n[team]\nkey = \"wnd\"\n", "team.key"},
+		{"team key with punctuation", "schema = 1\n[team]\nkey = \"WND-1\"\n", "team.key"},
 		{"empty template", "schema = 1\n[templates]\nfeature = \"\"\n", "templates.feature"},
 		{"wrong type", "schema = \"one\"\n", "schema"},
 	}
@@ -159,12 +169,15 @@ func TestParseRefuses(t *testing.T) {
 }
 
 func TestLoadMissingFileIsStock(t *testing.T) {
-	cov, fromFile, err := Load(filepath.Join(t.TempDir(), FileName))
+	cov, teamKey, fromFile, err := Load(filepath.Join(t.TempDir(), FileName))
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	if fromFile {
 		t.Error("fromFile = true for a missing file")
+	}
+	if teamKey != "" {
+		t.Errorf("teamKey = %q for a missing file, want empty", teamKey)
 	}
 	if cov.Caps != Default().Caps || len(cov.Statuses) != len(Default().Statuses) {
 		t.Error("missing file did not yield the stock covenant")
@@ -176,12 +189,15 @@ func TestLoadFile(t *testing.T) {
 	if err := os.WriteFile(path, []byte(full), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	cov, fromFile, err := Load(path)
+	cov, teamKey, fromFile, err := Load(path)
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
 	if !fromFile {
 		t.Error("fromFile = false for a present file")
+	}
+	if teamKey != "WND" {
+		t.Errorf("teamKey = %q, want %q", teamKey, "WND")
 	}
 	if cov.Caps.ReviewRounds != 5 {
 		t.Errorf("ReviewRounds = %d, want 5", cov.Caps.ReviewRounds)
@@ -195,7 +211,7 @@ func TestLoadBrokenFileIsLoud(t *testing.T) {
 	if err := os.WriteFile(path, []byte("schema = 1\n[caps]\nreveiw_rounds = 3\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, _, err := Load(path)
+	_, _, _, err := Load(path)
 	if err == nil {
 		t.Fatal("Load accepted a misspelled cap")
 	}
@@ -211,7 +227,7 @@ func TestLoadBrokenFileIsLoud(t *testing.T) {
 // configures a verify command — `wand run` will not start without one.
 func TestRepoCovenantFileIsLoadable(t *testing.T) {
 	path := filepath.Join("..", "..", FileName)
-	cov, fromFile, err := Load(path)
+	cov, teamKey, fromFile, err := Load(path)
 	if err != nil {
 		t.Fatalf("Load(%s): %v", path, err)
 	}
@@ -220,5 +236,8 @@ func TestRepoCovenantFileIsLoadable(t *testing.T) {
 	}
 	if cov.Commands.Verify == "" {
 		t.Error("this repo's covenant configures no verify command")
+	}
+	if teamKey != "WND" {
+		t.Errorf("teamKey = %q, want %q", teamKey, "WND")
 	}
 }

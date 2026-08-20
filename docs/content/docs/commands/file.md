@@ -40,7 +40,7 @@ promotes what it filed. That is not just convention here —
 
 | Flag | Description |
 |---|---|
-| `--team-key KEY` | The Linear team key, e.g. `WND`. **Required.** |
+| `--team-key KEY` | The Linear team key, e.g. `WND`. Falls back to `[team] key` in the nearest `wand.toml`; required if neither is set. |
 | `-d`, `--description TEXT` | The finding: what you saw, where, and why it matters. |
 | `--force` | File even though the search found candidates. |
 
@@ -51,7 +51,7 @@ The title is a positional argument, and exactly one is required.
 | Code | Meaning |
 |---|---|
 | `0` | Filed. The identifier and URL are on stdout. |
-| `1` | Not filed. **This includes the duplicate refusal**, which is the expected outcome often enough to be worth scripting for — the candidates are on stdout, the refusal on stderr. Also covers a missing `--team-key`, an empty title, no team with that key, and API failures. |
+| `1` | Not filed. **This includes the duplicate refusal**, which is the expected outcome often enough to be worth scripting for — the candidates are on stdout, the refusal on stderr. Also covers no resolvable team key (neither `--team-key` nor `[team] key` in `wand.toml`), an empty title, no team with that key, and API failures. |
 
 ## Examples
 

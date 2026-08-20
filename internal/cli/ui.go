@@ -46,7 +46,8 @@ func newUICmd() *cobra.Command {
 			"anything through it.\n\n" +
 			"--sample opens the same read-only board interactively, so the interface\n" +
 			"can be walked through without an API key or a team.\n\n" +
-			"Running it against a real board requires LINEAR_API_KEY and --team-key.",
+			"Running it against a real board requires LINEAR_API_KEY, and a team key —\n" +
+			"either --team-key, or [team] key in the nearest wand.toml.",
 		Args: cobra.NoArgs,
 		Example: "  wand ui --team-key WND\n" +
 			"  wand ui --sample\n" +
@@ -55,8 +56,11 @@ func newUICmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// A --team-key that would be silently ignored is worse than a
 			// refusal: it reads as "this is my board" on a screen that is
-			// nobody's board.
-			if teamKey != "" && (dumpScreen || sample) {
+			// nobody's board. Tested on the flag actually being passed, not
+			// on the resolved value: a wand.toml-derived key must never flow
+			// into this check, or every --dump-screen run inside a repo with
+			// a keyed wand.toml would start erroring.
+			if cmd.Flags().Changed("team-key") && (dumpScreen || sample) {
 				return fmt.Errorf("the --team-key flag does not apply with --dump-screen or --sample; both render the built-in sample board and read no team")
 			}
 			// Same rule, other direction. An interactive program is sized
@@ -87,7 +91,7 @@ func newUICmd() *cobra.Command {
 	}
 
 	f := cmd.Flags()
-	f.StringVar(&teamKey, "team-key", "", "Linear team key, e.g. WND")
+	f.StringVar(&teamKey, "team-key", "", "Linear team key, e.g. WND (falls back to [team] key in wand.toml)")
 	f.StringVar(&script, "script", "", "comma-separated keys to apply before rendering, e.g. \"j,enter\"")
 	f.BoolVar(&dumpScreen, "dump-screen", false, "render the sample board to plain text and print it")
 	f.BoolVar(&sample, "sample", false, "open the built-in sample board instead of reading Linear")
@@ -140,14 +144,15 @@ func sampleModel(width, height int) tui.Model {
 // message trapped inside a full-screen app the user has to quit out of to
 // read.
 func runCockpit(cmd *cobra.Command, teamKey string, width, height int) error {
-	if teamKey == "" {
-		return fmt.Errorf("--team-key is required (e.g. --team-key WND)")
-	}
-	cl, err := linearFromEnv()
+	cov, fileTeamKey, _, err := covenantFromCwd()
 	if err != nil {
 		return err
 	}
-	cov, _, err := covenant.Load(covenant.FileName)
+	resolvedTeamKey, err := resolveTeamKey(teamKey, fileTeamKey)
+	if err != nil {
+		return err
+	}
+	cl, err := linearFromEnv()
 	if err != nil {
 		return err
 	}
@@ -156,7 +161,7 @@ func runCockpit(cmd *cobra.Command, teamKey string, width, height int) error {
 		return err
 	}
 
-	back := &cockpitBackend{cl: cl, runs: runs, cov: cov, teamKey: teamKey}
+	back := &cockpitBackend{cl: cl, runs: runs, cov: cov, teamKey: resolvedTeamKey}
 	ctx, cancel := context.WithTimeout(cmd.Context(), apiTimeout)
 	snap, err := back.Read(ctx)
 	cancel()

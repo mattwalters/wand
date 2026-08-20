@@ -16,45 +16,62 @@ import (
 )
 
 // verbSetup is the preamble every lifecycle verb shares: a client from the
-// environment, the covenant from the repo, a bounded context.
-func verbSetup(cmd *cobra.Command) (*linear.Client, covenant.Covenant, context.Context, context.CancelFunc, error) {
+// environment, the covenant from the repo, a bounded context. The team key
+// is the one the nearest wand.toml carries (empty if none) — resolveTeamKey
+// combines it with any explicit --team-key.
+func verbSetup(cmd *cobra.Command) (*linear.Client, covenant.Covenant, string, context.Context, context.CancelFunc, error) {
+	cov, teamKey, _, err := covenantFromCwd()
+	if err != nil {
+		return nil, covenant.Covenant{}, "", nil, nil, err
+	}
 	cl, err := linearFromEnv()
 	if err != nil {
-		return nil, covenant.Covenant{}, nil, nil, err
-	}
-	cov, err := covenantFromCwd()
-	if err != nil {
-		return nil, covenant.Covenant{}, nil, nil, err
+		return nil, covenant.Covenant{}, "", nil, nil, err
 	}
 	ctx, cancel := context.WithTimeout(cmd.Context(), apiTimeout)
-	return cl, cov, ctx, cancel, nil
+	return cl, cov, teamKey, ctx, cancel, nil
 }
 
 // covenantFromCwd finds the nearest wand.toml walking up from the working
 // directory — the file lives at the repo root, and a verb run from a
-// subdirectory must see the same covenant as one run at the root. A
-// cwd-only lookup would silently vet a claim against the stock covenant on
-// a board whose columns the file renames. No file anywhere up means the
-// stock covenant, same as covenant.Load.
-func covenantFromCwd() (covenant.Covenant, error) {
+// subdirectory must see the same covenant (and the same team key) as one
+// run at the root. A cwd-only lookup would silently vet a claim against the
+// stock covenant on a board whose columns the file renames. No file
+// anywhere up means the stock covenant and no team key, same as
+// covenant.Load on a missing file.
+func covenantFromCwd() (cov covenant.Covenant, teamKey string, fromFile bool, err error) {
 	dir, err := os.Getwd()
 	if err != nil {
-		return covenant.Covenant{}, err
+		return covenant.Covenant{}, "", false, err
 	}
 	for {
-		cov, fromFile, err := covenant.Load(filepath.Join(dir, covenant.FileName))
+		cov, teamKey, fromFile, err := covenant.Load(filepath.Join(dir, covenant.FileName))
 		if err != nil {
-			return covenant.Covenant{}, err
+			return covenant.Covenant{}, "", false, err
 		}
 		if fromFile {
-			return cov, nil
+			return cov, teamKey, true, nil
 		}
 		parent := filepath.Dir(dir)
 		if parent == dir {
-			return covenant.Default(), nil
+			return covenant.Default(), "", false, nil
 		}
 		dir = parent
 	}
+}
+
+// resolveTeamKey is the one resolution order every team-scoped command
+// shares: an explicit --team-key wins (running against another team, or
+// from outside any repo, has to keep working); otherwise the key the
+// nearest wand.toml carries; otherwise a loud error naming both fixes.
+func resolveTeamKey(explicit, fromFile string) (string, error) {
+	if explicit != "" {
+		return explicit, nil
+	}
+	if fromFile != "" {
+		return fromFile, nil
+	}
+	return "", fmt.Errorf("no team key: pass --team-key, or add [team] key to %s", covenant.FileName)
 }
 
 // messageOrStdin resolves a comment body: the -m flag when given, stdin
@@ -92,7 +109,7 @@ func newClaimCmd() *cobra.Command {
 			"Requires LINEAR_API_KEY in the environment.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cl, cov, ctx, cancel, err := verbSetup(cmd)
+			cl, cov, _, ctx, cancel, err := verbSetup(cmd)
 			if err != nil {
 				return err
 			}
@@ -132,7 +149,7 @@ func newHandbackCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			cl, cov, ctx, cancel, err := verbSetup(cmd)
+			cl, cov, _, ctx, cancel, err := verbSetup(cmd)
 			if err != nil {
 				return err
 			}
@@ -185,7 +202,7 @@ func newAbandonCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			cl, cov, ctx, cancel, err := verbSetup(cmd)
+			cl, cov, _, ctx, cancel, err := verbSetup(cmd)
 			if err != nil {
 				return err
 			}
@@ -227,17 +244,23 @@ func newFileCmd() *cobra.Command {
 			"Requires LINEAR_API_KEY in the environment.",
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if teamKey == "" {
-				return fmt.Errorf("--team-key is required (e.g. --team-key WND)")
-			}
-			cl, cov, ctx, cancel, err := verbSetup(cmd)
+			cov, fileTeamKey, _, err := covenantFromCwd()
 			if err != nil {
 				return err
 			}
+			resolvedTeamKey, err := resolveTeamKey(teamKey, fileTeamKey)
+			if err != nil {
+				return err
+			}
+			cl, err := linearFromEnv()
+			if err != nil {
+				return err
+			}
+			ctx, cancel := context.WithTimeout(cmd.Context(), apiTimeout)
 			defer cancel()
 
 			res, err := verbs.File(ctx, cl, cov, verbs.FileRequest{
-				TeamKey:     teamKey,
+				TeamKey:     resolvedTeamKey,
 				Title:       args[0],
 				Description: description,
 				Force:       force,
@@ -266,7 +289,7 @@ func newFileCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&teamKey, "team-key", "", "Linear team key, e.g. WND")
+	cmd.Flags().StringVar(&teamKey, "team-key", "", "Linear team key, e.g. WND (falls back to [team] key in wand.toml)")
 	cmd.Flags().StringVarP(&description, "description", "d", "", "the finding: what you saw, where, and why it matters")
 	cmd.Flags().BoolVar(&force, "force", false, "file even though the search found candidates")
 	return cmd
