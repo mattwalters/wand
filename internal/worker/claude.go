@@ -1,5 +1,10 @@
 package worker
 
+import (
+	"encoding/json"
+	"strings"
+)
+
 // ClaudeCode spawns workers through the Claude Code CLI (`claude -p`).
 //
 // The harness-specific isolation work happens here, because every harness
@@ -44,7 +49,7 @@ func (c ClaudeCode) Invocation(spec Spec, prompt string, environ []string) (Invo
 	}
 	argv := []string{
 		bin, "-p",
-		"--output-format", "text",
+		"--output-format", "json",
 		"--setting-sources", "",
 		"--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`,
 		"--no-session-persistence",
@@ -61,4 +66,46 @@ func (c ClaudeCode) Invocation(spec Spec, prompt string, environ []string) (Invo
 	}
 
 	return Invocation{Argv: argv, Env: environ, Dir: spec.Dir, Stdin: prompt}, nil
+}
+
+// claudeUsage is the shape of the "usage" object in claude -p's
+// --output-format json result. Field names and presence are the CLI's own,
+// recorded from a live probe rather than guessed: run `claude -p
+// --output-format json` against a trivial prompt to see it.
+type claudeUsage struct {
+	InputTokens              int64 `json:"input_tokens"`
+	OutputTokens             int64 `json:"output_tokens"`
+	CacheCreationInputTokens int64 `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int64 `json:"cache_read_input_tokens"`
+}
+
+// ParseUsage reads the CLI's own usage object out of the JSON result
+// --output-format json prints to stdout. Anthropic's accounting counts
+// freshly-processed, cache-written and cache-read input tokens separately;
+// InputTokens is their sum, so it reads as "total input tokens processed"
+// the same way Codex's already-total input_tokens does.
+//
+// The result is one compact JSON object, but stderr shares the captured
+// Tail and could in principle land on the same or an adjacent line, so
+// this scans line by line for one that parses and carries a usage object,
+// rather than parsing the whole tail as one document. A tail with no such
+// line — a parse miss, a harness upgrade that changed the shape, a run
+// that never got that far — yields nil: absent, never estimated.
+func (c ClaudeCode) ParseUsage(output string) *Usage {
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || line[0] != '{' {
+			continue
+		}
+		var res struct {
+			Usage *claudeUsage `json:"usage"`
+		}
+		if err := json.Unmarshal([]byte(line), &res); err != nil || res.Usage == nil {
+			continue
+		}
+		in := res.Usage.InputTokens + res.Usage.CacheCreationInputTokens + res.Usage.CacheReadInputTokens
+		out := res.Usage.OutputTokens
+		return &Usage{InputTokens: &in, OutputTokens: &out}
+	}
+	return nil
 }

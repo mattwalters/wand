@@ -108,6 +108,36 @@ func TestCommitsAheadSurvivesAmbiguousRefWarning(t *testing.T) {
 	}
 }
 
+// DiffStat reads git's own --shortstat against base, empty when the
+// branch has not diverged from it yet and populated once a commit lands —
+// the two states a phase can actually be in when the loop asks for one.
+func TestDiffStat(t *testing.T) {
+	repo := testRepo(t)
+	mustGit(t, repo, "checkout", "-q", "-b", "feature")
+
+	stat, err := ExecGit{}.DiffStat(context.Background(), repo, "trunk")
+	if err != nil {
+		t.Fatalf("DiffStat before any change: %v", err)
+	}
+	if stat != "" {
+		t.Errorf("stat = %q, want empty before any commit diverges from base", stat)
+	}
+
+	if err := os.WriteFile(filepath.Join(repo, "new.txt"), []byte("a line\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mustGit(t, repo, "add", "new.txt")
+	mustGit(t, repo, "commit", "-q", "-m", "add a file")
+
+	stat, err = ExecGit{}.DiffStat(context.Background(), repo, "trunk")
+	if err != nil {
+		t.Fatalf("DiffStat after a commit: %v", err)
+	}
+	if !strings.Contains(stat, "1 file changed") || !strings.Contains(stat, "insertion") {
+		t.Errorf("stat = %q, want a shortstat naming the changed file", stat)
+	}
+}
+
 // DefaultBranch must not guess: with origin/HEAD unset it may fall back
 // only to a conventional branch that exists on the remote, and must surface
 // an error — not "main" — when none does. A wrong guess here opens the PR
