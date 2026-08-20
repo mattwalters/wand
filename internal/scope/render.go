@@ -46,16 +46,19 @@ func PlanMarkdown(d Draft) string {
 // ticket to be asking, every approach with its trade-off, the
 // recommendation, the estimate, what the plan rests on, and what is still
 // unanswered — then the explicit request for a blessing an agent may not
-// grant itself.
-func OptionsComment(d Draft, scale string, prov Provenance) string {
+// grant itself. statusName is the covenant's display name for the terminal
+// status the scope is about to move the ticket to (its "scoped" key), so
+// the comment names whatever a covenant file calls it rather than a
+// hardcoded default.
+func OptionsComment(d Draft, scale, statusName string, prov Provenance) string {
 	var b strings.Builder
 	b.WriteString("## Scope\n\n")
 	b.WriteString(Argument(d, scale))
 	b.WriteString("\n### Over to you\n\n")
-	b.WriteString("The plan is in this ticket's description, in the region `wand scope` owns. " +
-		"This ticket is now in Needs Input: promoting it to Todo is what blesses building it, " +
-		"and that is a human's act — an agent does not bless its own plan. " +
-		"If the recommendation is wrong, say so here and scope it again.\n")
+	fmt.Fprintf(&b, "The plan is in this ticket's description, in the region `wand scope` owns. "+
+		"This ticket is now in %s: promoting it to Todo is what blesses building it, "+
+		"and that is a human's act — an agent does not bless its own plan. "+
+		"If the recommendation is wrong, say so here and scope it again.\n", statusName)
 	b.WriteString("\n")
 	b.WriteString(prov.line())
 	return b.String()

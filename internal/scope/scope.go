@@ -22,7 +22,7 @@
 //
 //   - **The deliverables land before the transition that advertises
 //     them.** Plan into the description's fenced region, then the options
-//     comment, then the estimate, and Needs Input last. Each write is
+//     comment, then the estimate, and Scoped last. Each write is
 //     something the next one refers to; the status move says "there is a
 //     scope here to read", and it is made only once there is.
 //
@@ -406,10 +406,15 @@ func (s *scoping) revise(ctx context.Context, draft Draft, round int, objections
 func (s *scoping) write(ctx context.Context, draft Draft) Outcome {
 	// Resolve the status first. It is a pure read, and it is the one thing
 	// that can refuse for reasons nothing here can fix — a drifted board,
-	// or the guard — so it happens while nothing has been written.
-	stateID, err := verbs.ResolveState(ctx, s.d.Board, s.d.Cov, s.issue.TeamID, "needs_input")
+	// or the guard — so it happens while nothing has been written. Scoped,
+	// never Needs Input: that status is the scout's other ending, reserved
+	// for a blocking question ([wrongPremise], through verbs.Handback). A
+	// finished plan is a different kind of "ask a human" — judge, not
+	// answer — and Scoped is what tells the cockpit which queue it belongs
+	// in.
+	stateID, err := verbs.ResolveState(ctx, s.d.Board, s.d.Cov, s.issue.TeamID, "scoped")
 	if err != nil {
-		return *s.parkCtx(ctx, fmt.Sprintf("could not resolve the %s status: %v", s.d.Cov.StatusName("needs_input"), err))
+		return *s.parkCtx(ctx, fmt.Sprintf("could not resolve the %s status: %v", s.d.Cov.StatusName("scoped"), err))
 	}
 
 	if _, _, err := s.d.Board.UpsertSection(ctx, s.issue.ID, s.issue.Description, PlanSectionID, PlanMarkdown(draft)); err != nil {
@@ -417,7 +422,7 @@ func (s *scoping) write(ctx context.Context, draft Draft) Outcome {
 	}
 	fmt.Fprintln(s.d.Out, "wrote the plan into the ticket's description")
 
-	comment := OptionsComment(draft, s.d.Cov.IssueEstimationType, s.prov)
+	comment := OptionsComment(draft, s.d.Cov.IssueEstimationType, s.d.Cov.StatusName("scoped"), s.prov)
 	if err := s.d.Board.CreateComment(ctx, s.issue.ID, comment); err != nil {
 		return *s.parkCtx(ctx, fmt.Sprintf("the plan is in the description, but the options comment failed: %v — the ticket is still in %s, carrying a plan nothing argues for", err, s.issue.State.Name))
 	}
@@ -431,11 +436,11 @@ func (s *scoping) write(ctx context.Context, draft Draft) Outcome {
 	}
 
 	if err := s.d.Board.UpdateIssue(ctx, s.issue.ID, linear.IssueUpdate{StateID: stateID}); err != nil {
-		return *s.parkCtx(ctx, fmt.Sprintf("every deliverable is on the ticket, but the move to %s failed: %v — the scope is readable, it just is not on anyone's desk", s.d.Cov.StatusName("needs_input"), err))
+		return *s.parkCtx(ctx, fmt.Sprintf("every deliverable is on the ticket, but the move to %s failed: %v — the scope is readable, it just is not on anyone's desk", s.d.Cov.StatusName("scoped"), err))
 	}
 
-	reason := fmt.Sprintf("scoped: %s recommended, plan and options on the ticket, %s for a human",
-		strings.TrimSpace(draft.Recommendation.Approach), s.d.Cov.StatusName("needs_input"))
+	reason := fmt.Sprintf("scoped: %s recommended, plan and options on the ticket, %s for a human to judge",
+		strings.TrimSpace(draft.Recommendation.Approach), s.d.Cov.StatusName("scoped"))
 	if err := s.r.Converged(reason); err != nil {
 		fmt.Fprintf(s.d.Out, "journal: %v\n", err)
 	}

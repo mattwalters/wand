@@ -22,7 +22,7 @@
 // Neither command promotes anything. Every ticket pm creates lands in
 // Triage, the same place `wand file` lands an agent's own finding: blessing
 // a proposal onward to Todo stays a human's act, exactly as promoting a
-// scope's Needs Input to Todo is.
+// scope's Scoped to Todo is.
 package pm
 
 import (

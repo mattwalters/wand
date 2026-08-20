@@ -21,12 +21,12 @@ func newScopeCmd() *cobra.Command {
 		Long: "scope sends a cold, read-only scout over this repository to research one\n" +
 			"ticket, validates what it hands back, and writes the result: the plan into\n" +
 			"the ticket's description, the approaches and their trade-offs as a comment,\n" +
-			"the estimate, and Needs Input last — so every deliverable has landed before\n" +
+			"the estimate, and Scoped last — so every deliverable has landed before\n" +
 			"the status that advertises it. Nothing is written unless the whole handoff\n" +
 			"passes validation.\n\n" +
 			"The ticket must be in Scoping. Blessing research is a human act, the same\n" +
 			"way blessing building is, and scope will not take a ticket nobody blessed.\n" +
-			"It ends in Needs Input: promoting the plan to Todo is yours.\n\n" +
+			"It ends in Scoped: promoting the plan to Todo is yours.\n\n" +
 			"There is no worktree, no branch and no CI: the scout reads the checkout you\n" +
 			"run this from and may not change it. If it does, the run parks and leaves\n" +
 			"the change for you to look at.\n\n" +
