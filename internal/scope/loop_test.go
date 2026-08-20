@@ -119,6 +119,7 @@ type workers struct {
 type workerResult struct {
 	handoff any // marshaled to the handoff; a string is passed through raw
 	err     error
+	usage   *worker.Usage
 }
 
 func (w *workers) Run(ctx context.Context, spec worker.Spec) (worker.Result, error) {
@@ -143,7 +144,7 @@ func (w *workers) Run(ctx context.Context, spec worker.Spec) (worker.Result, err
 		}
 		raw = b
 	}
-	return worker.Result{Handoff: raw}, nil
+	return worker.Result{Handoff: raw, Usage: next.usage}, nil
 }
 
 // tree reports the repository's uncommitted state. changeAfter makes a
@@ -260,6 +261,66 @@ func TestScopeWritesInTheFixedOrder(t *testing.T) {
 	}
 	if state.Meta.Verb != "scope" {
 		t.Errorf("journal verb = %q", state.Meta.Verb)
+	}
+}
+
+// scopePhaseDetail is the subset of the scope package's own (unexported)
+// phaseDetail this test needs — the journal's Detail field is opaque by
+// design (internal/journal), so an external test reads it back the same
+// way any other consumer (wand stats, the UI usage panel) would.
+type scopePhaseDetail struct {
+	Harness   string `json:"harness"`
+	Model     string `json:"model"`
+	WallClock string `json:"wall_clock"`
+	TokensIn  *int64 `json:"tokens_in"`
+	TokensOut *int64 `json:"tokens_out"`
+}
+
+// The journal's phase.ended records carry the operational metrics ledger —
+// harness, model, wall-clock, tokens — sourced from Deps and the worker's
+// own report, with tokens left absent (never faked) when the worker
+// reports none.
+func TestPhaseDetailCarriesOperationalMetrics(t *testing.T) {
+	in, out := int64(200), int64(50)
+	h := newHarness(t, workerResult{handoff: draftHandoff(), usage: &worker.Usage{InputTokens: &in, OutputTokens: &out}})
+
+	scopeOut, err := h.run(t)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if scopeOut.Kind != journal.Converged {
+		t.Fatalf("outcome = %s (%s), want converged", scopeOut.Kind, scopeOut.Reason)
+	}
+
+	records, err := h.store.Records(scopeOut.RunID)
+	if err != nil {
+		t.Fatalf("Records: %v", err)
+	}
+	var found bool
+	for _, r := range records {
+		if r.Kind != journal.KindPhaseEnded {
+			continue
+		}
+		var d scopePhaseDetail
+		if err := json.Unmarshal(r.Detail, &d); err != nil {
+			t.Fatalf("unmarshaling phase.ended detail: %v", err)
+		}
+		found = true
+		if d.Harness != "claude-code" {
+			t.Errorf("Harness = %q, want claude-code", d.Harness)
+		}
+		if d.WallClock == "" {
+			t.Error("WallClock is empty")
+		}
+		if d.TokensIn == nil || *d.TokensIn != 200 {
+			t.Errorf("TokensIn = %v, want 200", d.TokensIn)
+		}
+		if d.TokensOut == nil || *d.TokensOut != 50 {
+			t.Errorf("TokensOut = %v, want 50", d.TokensOut)
+		}
+	}
+	if !found {
+		t.Fatal("no phase.ended record found")
 	}
 }
 

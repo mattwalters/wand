@@ -58,6 +58,10 @@ type Git interface {
 	CommitsAhead(ctx context.Context, dir, base string) (int, error)
 	// Push pushes the branch to origin, setting upstream.
 	Push(ctx context.Context, dir, branch string) error
+	// DiffStat summarizes lines changed between base and HEAD, in git's own
+	// --shortstat form. Journaled at the end of every phase, alongside
+	// harness, model, tokens and wall-clock.
+	DiffStat(ctx context.Context, dir, base string) (string, error)
 }
 
 // PR is one open pull request, as much of it as the loop reads.

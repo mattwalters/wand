@@ -193,6 +193,16 @@ func (ExecGit) Push(ctx context.Context, dir, branch string) error {
 	return err
 }
 
+// DiffStat summarizes the lines changed between base and HEAD in git's own
+// --shortstat form ("2 files changed, 34 insertions(+), 5 deletions(-)") —
+// human-readable, the same shape a PR page shows, so a journal reader does
+// not need a second format to recognize it. Empty when there is no diff yet
+// (a phase that ran before the first commit landed), never an error for
+// that case.
+func (ExecGit) DiffStat(ctx context.Context, dir, base string) (string, error) {
+	return git(ctx, dir, "diff", "--shortstat", base+"...HEAD")
+}
+
 // ExecHub is Hub over the gh CLI, which carries the operator's GitHub
 // credentials — the ones every worker environment strips.
 type ExecHub struct{}

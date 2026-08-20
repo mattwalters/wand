@@ -55,6 +55,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"github.com/mattwalters/wand/internal/journal"
 	"github.com/mattwalters/wand/internal/linear"
@@ -193,13 +194,28 @@ type scoping struct {
 }
 
 // phaseDetail is what EndPhase journals about a worker, bounded so the
-// journal stays readable. Cross-harness comparison data lives here for free.
+// journal stays readable. Cross-harness comparison data lives here for
+// free — this struct, journaled once per phase, is the scope-verb half of
+// the stable ledger schema described in the package doc of
+// internal/journal. It carries the same operational fields as run's own
+// phaseDetail (internal/run/run.go) except DiffStat: a scope has no
+// worktree, so there is nothing for git diff to summarize.
+//
+// A metric a harness or this phase cannot report is omitted, never
+// estimated — TokensIn/TokensOut are pointers so a reported zero and "the
+// harness didn't say" stay distinguishable.
 type phaseDetail struct {
 	ExitCode   int    `json:"exit_code"`
 	TimedOut   bool   `json:"timed_out,omitempty"`
 	Handoff    bool   `json:"handoff"`
 	Error      string `json:"error,omitempty"`
 	OutputTail string `json:"output_tail,omitempty"`
+
+	Harness   string `json:"harness,omitempty"`
+	Model     string `json:"model,omitempty"`
+	TokensIn  *int64 `json:"tokens_in,omitempty"`
+	TokensOut *int64 `json:"tokens_out,omitempty"`
+	WallClock string `json:"wall_clock,omitempty"`
 }
 
 // journalTail bounds the output tail a journal record keeps.
@@ -448,11 +464,20 @@ func (s *scoping) work(ctx context.Context, phase string, round int, rules []str
 		Out:         s.d.Out,
 		Label:       fmt.Sprintf("%s round %d", phase, round),
 	}
+	start := time.Now()
 	res, err := s.d.Workers.Run(ctx, spec)
+	elapsed := time.Since(start)
 	detail := phaseDetail{
-		ExitCode: res.ExitCode,
-		TimedOut: res.TimedOut,
-		Handoff:  res.Handoff != nil,
+		ExitCode:  res.ExitCode,
+		TimedOut:  res.TimedOut,
+		Handoff:   res.Handoff != nil,
+		Harness:   s.d.Harness,
+		Model:     s.d.Model,
+		WallClock: elapsed.String(),
+	}
+	if res.Usage != nil {
+		detail.TokensIn = res.Usage.InputTokens
+		detail.TokensOut = res.Usage.OutputTokens
 	}
 	if err != nil {
 		detail.Error = err.Error()

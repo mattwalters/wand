@@ -123,6 +123,11 @@ type fakeGit struct {
 	// remote-tracking ref, never the bare branch name.
 	worktreeBase string
 	aheadBase    string
+
+	// diffStat is what DiffStat returns every call; diffStatCalls counts
+	// how many times the loop asked for one.
+	diffStat      string
+	diffStatCalls int
 }
 
 func (g *fakeGit) DefaultBranch(context.Context, string) (Base, error) {
@@ -151,6 +156,10 @@ func (g *fakeGit) CommitsAhead(_ context.Context, _, base string) (int, error) {
 func (g *fakeGit) Push(context.Context, string, string) error {
 	g.pushes++
 	return nil
+}
+func (g *fakeGit) DiffStat(context.Context, string, string) (string, error) {
+	g.diffStatCalls++
+	return g.diffStat, nil
 }
 
 type fakeHub struct {
@@ -185,6 +194,7 @@ func (h *fakeHub) UnresolvedThreads(context.Context, string, int) (int, error) {
 type workerStep struct {
 	handoff string
 	err     error
+	usage   *worker.Usage
 }
 
 type fakeWorkers struct {
@@ -203,7 +213,7 @@ func (w *fakeWorkers) Run(_ context.Context, spec worker.Spec) (worker.Result, e
 	if step.err != nil {
 		return worker.Result{ExitCode: 1, Output: "worker noise"}, step.err
 	}
-	return worker.Result{Handoff: json.RawMessage(step.handoff), ExitCode: 0}, nil
+	return worker.Result{Handoff: json.RawMessage(step.handoff), ExitCode: 0, Usage: step.usage}, nil
 }
 
 // modes lists the phases that actually spawned, in order.
@@ -895,6 +905,79 @@ func TestCorrectionsUseTheFreshDescriptionAndRefreshThePrompt(t *testing.T) {
 	if !strings.Contains(review.Prompt, "the cache starts cold") ||
 		strings.Contains(review.Prompt, "the cache is warm") {
 		t.Errorf("the review prompt was not re-rendered after the correction:\n%s", review.Prompt)
+	}
+}
+
+// phaseDetails replays the run's journal and returns the phaseDetail
+// carried on every phase.ended record, in order.
+func phaseDetails(t *testing.T, f *fixture, runID string) []phaseDetail {
+	t.Helper()
+	records, err := f.store.Records(runID)
+	if err != nil {
+		t.Fatalf("reading records: %v", err)
+	}
+	var details []phaseDetail
+	for _, r := range records {
+		if r.Kind != journal.KindPhaseEnded {
+			continue
+		}
+		var d phaseDetail
+		if err := json.Unmarshal(r.Detail, &d); err != nil {
+			t.Fatalf("unmarshaling phase.ended detail: %v", err)
+		}
+		details = append(details, d)
+	}
+	return details
+}
+
+// A phase's journaled detail carries the operational metrics ledger this
+// ticket exists to stop losing — harness, model, wall-clock, tokens, diff
+// stat — sourced from Deps and the worker's own report, never estimated.
+func TestPhaseDetailCarriesOperationalMetrics(t *testing.T) {
+	f := newFixture(t)
+	in, out := int64(123), int64(45)
+	f.workers.steps = []workerStep{
+		{handoff: doneHandoff, usage: &worker.Usage{InputTokens: &in, OutputTokens: &out}},
+		{handoff: approveHandoff}, // the reviewer's adapter reports no usage
+	}
+	f.shell.steps = []shellStep{{ok: true}}
+	f.git.diffStat = "1 file changed, 2 insertions(+)"
+
+	out2 := f.execute(t)
+	if out2.Kind != journal.Converged {
+		t.Fatalf("outcome %+v", out2)
+	}
+
+	details := phaseDetails(t, f, out2.RunID)
+	if len(details) != 2 {
+		t.Fatalf("got %d phase.ended records, want 2", len(details))
+	}
+
+	implement := details[0]
+	if implement.Harness != "claude-code" {
+		t.Errorf("Harness = %q, want claude-code", implement.Harness)
+	}
+	if implement.WallClock == "" {
+		t.Error("WallClock is empty")
+	}
+	if implement.DiffStat != "1 file changed, 2 insertions(+)" {
+		t.Errorf("DiffStat = %q", implement.DiffStat)
+	}
+	if implement.TokensIn == nil || *implement.TokensIn != 123 {
+		t.Errorf("TokensIn = %v, want 123", implement.TokensIn)
+	}
+	if implement.TokensOut == nil || *implement.TokensOut != 45 {
+		t.Errorf("TokensOut = %v, want 45", implement.TokensOut)
+	}
+
+	// The reviewer's worker reported no usage: absent, never faked as zero.
+	review := details[1]
+	if review.TokensIn != nil || review.TokensOut != nil {
+		t.Errorf("review phase TokensIn/TokensOut = %v/%v, want both nil (no usage reported)",
+			review.TokensIn, review.TokensOut)
+	}
+	if review.Harness != "claude-code" {
+		t.Errorf("Harness = %q, want claude-code", review.Harness)
 	}
 }
 

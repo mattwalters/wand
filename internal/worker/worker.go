@@ -205,6 +205,30 @@ type Result struct {
 	// The handoff file is the worker's result; this is only what it said
 	// on the way.
 	Output string
+	// Usage is the harness's own token accounting, parsed from Output by
+	// an adapter that implements UsageAdapter. Nil when the harness does
+	// not report usage, or a parse failed — absent, never estimated.
+	Usage *Usage
+}
+
+// Usage is the token accounting a harness reported for one invocation.
+// Fields are pointers so a reported zero is distinguishable from absent: a
+// harness that cannot report tokens, or output a parser could not read,
+// leaves the field nil rather than a faked value.
+type Usage struct {
+	InputTokens  *int64
+	OutputTokens *int64
+}
+
+// UsageAdapter optionally parses a harness's own token accounting out of
+// its captured combined stdout/stderr. Not every harness reports usage,
+// and neither CLI's output shape is a versioned, guaranteed-stable API — a
+// harness upgrade can silently change or drop it — so a parse miss must
+// fail soft: an adapter that does not implement this interface, or whose
+// ParseUsage finds nothing it recognizes, simply leaves Result.Usage nil.
+type UsageAdapter interface {
+	Adapter
+	ParseUsage(output string) *Usage
 }
 
 // Compose renders the contract the orchestrator hands down, followed by the
@@ -343,6 +367,9 @@ func Run(ctx context.Context, a Adapter, spec Spec) (Result, error) {
 	res := Result{ExitCode: -1, Output: out.String()}
 	if cmd.ProcessState != nil {
 		res.ExitCode = cmd.ProcessState.ExitCode()
+	}
+	if ua, ok := a.(UsageAdapter); ok {
+		res.Usage = ua.ParseUsage(res.Output)
 	}
 	// Attribute the deadline honestly: Spec.Timeout fired only if the run
 	// actually failed while the caller's own context was still live. A

@@ -1,5 +1,10 @@
 package worker
 
+import (
+	"encoding/json"
+	"strings"
+)
+
 // Codex spawns workers through the Codex CLI ("codex exec").
 //
 // Codex normally reads MCP servers from $CODEX_HOME/config.toml. That is a
@@ -51,6 +56,7 @@ func (c Codex) Invocation(spec Spec, prompt string, environ []string) (Invocatio
 		"--disable", "hooks",
 		"--ephemeral",
 		"--skip-git-repo-check",
+		"--json",
 		"--cd", spec.Dir,
 		"--add-dir", spec.ScratchDir,
 	}
@@ -65,4 +71,51 @@ func (c Codex) Invocation(spec Spec, prompt string, environ []string) (Invocatio
 	}
 
 	return Invocation{Argv: argv, Env: environ, Dir: spec.Dir, Stdin: prompt}, nil
+}
+
+// codexUsage is the shape of the "usage" object on a codex exec --json
+// turn.completed event. Field names recorded from a live probe rather than
+// guessed: run `codex exec --json` against a trivial prompt to see it.
+// input_tokens and output_tokens are already the totals for the turn — the
+// cached/reasoning breakdowns are subsets of them, not additional tokens —
+// matching the convention Claude's own usage object uses once its own
+// cache fields are summed in (see ClaudeCode.ParseUsage).
+type codexUsage struct {
+	InputTokens  int64 `json:"input_tokens"`
+	OutputTokens int64 `json:"output_tokens"`
+}
+
+// ParseUsage sums the usage carried on every turn.completed event in the
+// --json event stream codex exec writes to stdout, one JSON object per
+// line. A plain-text banner line ("Reading prompt from stdin...") and any
+// stderr sharing the captured Tail are skipped by construction: only lines
+// that parse as a turn.completed event with a usage object count. No such
+// line — a parse miss, a harness upgrade that changed the shape, a run
+// that never got that far — yields nil: absent, never estimated.
+func (c Codex) ParseUsage(output string) *Usage {
+	var in, out int64
+	var found bool
+	for _, line := range strings.Split(output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || line[0] != '{' {
+			continue
+		}
+		var ev struct {
+			Type  string      `json:"type"`
+			Usage *codexUsage `json:"usage"`
+		}
+		if err := json.Unmarshal([]byte(line), &ev); err != nil {
+			continue
+		}
+		if ev.Type != "turn.completed" || ev.Usage == nil {
+			continue
+		}
+		in += ev.Usage.InputTokens
+		out += ev.Usage.OutputTokens
+		found = true
+	}
+	if !found {
+		return nil
+	}
+	return &Usage{InputTokens: &in, OutputTokens: &out}
 }

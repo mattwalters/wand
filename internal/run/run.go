@@ -52,6 +52,7 @@ import (
 	"io"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/mattwalters/wand/internal/journal"
 	"github.com/mattwalters/wand/internal/linear"
@@ -164,13 +165,45 @@ type loop struct {
 }
 
 // phaseDetail is what EndPhase journals about a worker, bounded so the
-// journal stays readable. Cross-harness comparison data lives here for free.
+// journal stays readable. Cross-harness comparison data lives here for
+// free — this struct, journaled once per phase, is the run-verb half of
+// the stable ledger schema described in the package doc of
+// internal/journal.
+//
+// The operational fields (Harness through DiffStat) follow one rule: a
+// metric a harness or this phase cannot report is omitted, never
+// estimated. TokensIn/TokensOut are pointers for the same reason worker.
+// Usage's are — a reported zero and "the harness didn't say" must stay
+// distinguishable — so a nil pointer here means the harness carries no
+// usage adapter, or its output didn't parse, not that zero tokens were
+// spent.
 type phaseDetail struct {
 	ExitCode   int    `json:"exit_code"`
 	TimedOut   bool   `json:"timed_out,omitempty"`
 	Handoff    bool   `json:"handoff"`
 	Error      string `json:"error,omitempty"`
 	OutputTail string `json:"output_tail,omitempty"`
+
+	// Harness and Model are what Deps chose for every phase; journaled per
+	// phase rather than only once on the run, since the ledger's readers
+	// (wand stats, the UI usage panel, wand analyze) read the journal a
+	// phase at a time.
+	Harness string `json:"harness,omitempty"`
+	Model   string `json:"model,omitempty"`
+	// TokensIn and TokensOut come from worker.Result.Usage, when the
+	// adapter reported one. Nil when it did not.
+	TokensIn  *int64 `json:"tokens_in,omitempty"`
+	TokensOut *int64 `json:"tokens_out,omitempty"`
+	// WallClock is how long Workers.Run took, as a Go duration string
+	// ("1m2.5s") — the journal's own convention (see internal/journal's
+	// package doc) is that a human reading the file is the reader it is
+	// for, and a duration string reads directly where a millisecond count
+	// would need converting.
+	WallClock string `json:"wall_clock,omitempty"`
+	// DiffStat is git's own --shortstat of the worktree against the run's
+	// base, taken at the end of every phase — the run verb only, since
+	// scope has no worktree.
+	DiffStat string `json:"diff_stat,omitempty"`
 }
 
 // journalTail bounds the output tail a journal record keeps.
@@ -338,11 +371,26 @@ func (l *loop) work(ctx context.Context, phase string, round int, rules []string
 		Out:         l.d.Out,
 		Label:       fmt.Sprintf("%s round %d", phase, round),
 	}
+	start := time.Now()
 	res, err := l.d.Workers.Run(ctx, spec)
+	elapsed := time.Since(start)
 	detail := phaseDetail{
-		ExitCode: res.ExitCode,
-		TimedOut: res.TimedOut,
-		Handoff:  res.Handoff != nil,
+		ExitCode:  res.ExitCode,
+		TimedOut:  res.TimedOut,
+		Handoff:   res.Handoff != nil,
+		Harness:   l.d.Harness,
+		Model:     l.d.Model,
+		WallClock: elapsed.String(),
+	}
+	if res.Usage != nil {
+		detail.TokensIn = res.Usage.InputTokens
+		detail.TokensOut = res.Usage.OutputTokens
+	}
+	// Best-effort, like workState: a metrics call that cannot run (no
+	// commits yet, a transient git failure) must not park a run over a
+	// diff stat, so a failure here just leaves the field absent.
+	if stat, derr := l.d.Git.DiffStat(ctx, l.tree, l.base.Ref); derr == nil {
+		detail.DiffStat = stat
 	}
 	if err != nil {
 		detail.Error = err.Error()
