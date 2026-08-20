@@ -115,11 +115,19 @@ drives it through implement → CI → review → revise. Neither ever blesses
 its own work.</p>
 <h2 id="install">Install</h2>
 <div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">brew install mattwalters/wand/wand
-</span></span></code></pre></div><p>Or with Go:</p>
+</span></span></code></pre></div><p>Or with a shell script, on macOS or Linux — this is the one to put on a
+Linux box where the cask doesn&rsquo;t reach:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">curl -fsSL https://wandcli.com/install.sh <span class="p">|</span> sh
+</span></span></code></pre></div><p>It downloads the release archive matching your OS and arch, verifies it
+against the published checksums, and installs to <code>/usr/local/bin</code> (falling
+back to <code>~/.local/bin</code> if that isn&rsquo;t writable — override either with
+<code>WAND_INSTALL_DIR</code>). Pin a version with <code>WAND_VERSION=v0.1.0</code>.</p>
+<p>Or with Go:</p>
 <div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">go install github.com/mattwalters/wand@latest
 </span></span></code></pre></div><p>That puts <code>wand</code> in <code>$(go env GOPATH)/bin</code>, which needs to be on your
-<code>PATH</code>. Prebuilt binaries for macOS, Linux and Windows are on the
-<a href="https://github.com/mattwalters/wand/releases">releases page</a>.</p>
+<code>PATH</code>. Prebuilt binaries for macOS, Linux and Windows (amd64 and arm64)
+are on the <a href="https://github.com/mattwalters/wand/releases">releases page</a>;
+the <code>v1</code> tag always points at the latest <code>v1.x.y</code>.</p>
 <h2 id="start-here">Start here</h2>
 <p><a href="docs/">The documentation</a> — the doctrine and the reference, versioned with
 the tool. It is also the Docs link in the header, on every page.</p>
