@@ -129,6 +129,15 @@ be on it.
 `wand ui --sample` opens the same screen against a built-in board, so you can
 walk the whole interface without an API key or a team.
 
+Press `e` to **engage**: the cockpit then polls Todo and Scoping on an
+interval, spawning a winner as a detached process — `wand dispatch --watch`'s
+own mechanics, run from inside the cockpit instead of a standalone process.
+It is always a deliberate key press, never a default: bare `wand` opens the
+cockpit, never pre-engaged, because opening a dashboard must not start
+spending money. See the engage mode section of [the `ui` command
+docs](https://wandcli.com/docs/commands/ui/) for the safety story across
+multiple engaged cockpits.
+
 `wand version` reports the covenant schema version alongside the build:
 a repo's covenant file declares the schema it was written against, and
 comparing the two is how you learn whether a given binary can read it.
