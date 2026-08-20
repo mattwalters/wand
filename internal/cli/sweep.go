@@ -28,17 +28,19 @@ func newSweepCmd() *cobra.Command {
 			"behind them at all — not even a dead one. There is nothing there to\n" +
 			"act on, only something that looks stuck for a person to judge.\n\n" +
 			"Requires LINEAR_API_KEY and an authenticated gh. Run it from inside\n" +
-			"the repository.",
+			"the repository, which is also where the team key comes from: [team]\n" +
+			"key in the nearest wand.toml, unless --team-key names another team.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if teamKey == "" {
-				return fmt.Errorf("--team-key is required (e.g. --team-key WND)")
-			}
-			cl, err := linearFromEnv()
+			cov, fileTeamKey, _, err := covenantFromCwd()
 			if err != nil {
 				return err
 			}
-			cov, _, _, err := covenantFromCwd()
+			resolvedTeamKey, err := resolveTeamKey(teamKey, fileTeamKey)
+			if err != nil {
+				return err
+			}
+			cl, err := linearFromEnv()
 			if err != nil {
 				return err
 			}
@@ -59,7 +61,7 @@ func newSweepCmd() *cobra.Command {
 				Hub:     run.ExecHub{},
 				Runs:    store,
 				Cov:     cov,
-				TeamKey: teamKey,
+				TeamKey: resolvedTeamKey,
 				Repo:    repo,
 				Out:     cmd.OutOrStdout(),
 			}, store)
@@ -84,6 +86,6 @@ func newSweepCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&teamKey, "team-key", "", "Linear team key, e.g. WND")
+	cmd.Flags().StringVar(&teamKey, "team-key", "", "Linear team key, e.g. WND (falls back to [team] key in wand.toml)")
 	return cmd
 }

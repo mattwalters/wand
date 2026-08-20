@@ -12,9 +12,11 @@ import (
 )
 
 // TestDispatchExitContract pins the parts of dispatch's exit-code contract
-// reachable without a live board: 1 for a missing --team-key or API key,
-// both refusals that must happen before dispatch ever takes its lock or
-// contacts Linear. The outcome codes (0/2/4/5) and the locked code (3) need
+// reachable without a live board: 1 for a team key resolvable from neither
+// --team-key nor a wand.toml, and 1 for a missing API key — both refusals
+// that must happen before dispatch ever takes its lock or contacts Linear.
+// The temp directory each case runs in is what makes the first one bite:
+// no wand.toml anywhere up the tree, so the flag is the only source left. The outcome codes (0/2/4/5) and the locked code (3) need
 // a live board or a held lock and are covered in-process against fakes in
 // internal/dispatch.
 //
@@ -49,14 +51,14 @@ func TestDispatchExitContract(t *testing.T) {
 		}
 	}
 
-	t.Run("no team key exits 1", func(t *testing.T) {
+	t.Run("no team key resolvable exits 1", func(t *testing.T) {
 		env := append(baseEnv, "LINEAR_API_KEY=lin_api_placeholder")
 		code, stderr := execDispatch(t, t.TempDir(), env)
 		if code != 1 {
 			t.Fatalf("exit code = %d, want 1; stderr:\n%s", code, stderr)
 		}
-		if !strings.Contains(stderr, "--team-key") {
-			t.Errorf("stderr does not name the missing flag:\n%s", stderr)
+		if !strings.Contains(stderr, "--team-key") || !strings.Contains(stderr, "wand.toml") {
+			t.Errorf("stderr does not name both fixes:\n%s", stderr)
 		}
 	})
 

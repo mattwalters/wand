@@ -41,7 +41,9 @@ func newDispatchCmd() *cobra.Command {
 			"here), 4 nothing to do, 5 Linear unreachable. --watch runs until\n" +
 			"interrupted and does not use this contract itself.\n\n" +
 			"Requires LINEAR_API_KEY, an authenticated gh, and commands.verify in\n" +
-			"wand.toml. Run it from inside the repository.",
+			"wand.toml. Run it from inside the repository, which is also where the\n" +
+			"team key comes from: [team] key in the nearest wand.toml, unless\n" +
+			"--team-key names another team.",
 		Args: cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			if watch {
@@ -57,7 +59,7 @@ func newDispatchCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&teamKey, "team-key", "", "Linear team key, e.g. WND")
+	cmd.Flags().StringVar(&teamKey, "team-key", "", "Linear team key, e.g. WND (falls back to [team] key in wand.toml)")
 	cmd.Flags().StringVar(&harness, "harness", "claude-code", "worker harness: claude-code or codex")
 	cmd.Flags().StringVar(&model, "model", "", "model for every worker (default: the harness's default)")
 	cmd.Flags().StringVar(&effort, "effort", "", "reasoning effort for every worker (default: the harness's default)")
@@ -72,14 +74,15 @@ func newDispatchCmd() *cobra.Command {
 // rather than reimplementing either.
 func dispatchDeps(cmd *cobra.Command, teamKey, harness, model, effort string) (dispatch.Deps, *journal.Store, error) {
 	var zero dispatch.Deps
-	if teamKey == "" {
-		return zero, nil, fmt.Errorf("--team-key is required (e.g. --team-key WND)")
-	}
-	cl, err := linearFromEnv()
+	cov, fileTeamKey, _, err := covenantFromCwd()
 	if err != nil {
 		return zero, nil, err
 	}
-	cov, _, _, err := covenantFromCwd()
+	resolvedTeamKey, err := resolveTeamKey(teamKey, fileTeamKey)
+	if err != nil {
+		return zero, nil, err
+	}
+	cl, err := linearFromEnv()
 	if err != nil {
 		return zero, nil, err
 	}
@@ -105,7 +108,7 @@ func dispatchDeps(cmd *cobra.Command, teamKey, harness, model, effort string) (d
 		Shell:   run.ExecShell{},
 		Tree:    scope.ExecTree{},
 		Workers: run.AdapterWorkers{Adapter: adapter},
-		TeamKey: teamKey,
+		TeamKey: resolvedTeamKey,
 		Repo:    repo,
 		Harness: adapter.Name(),
 		Model:   model,
