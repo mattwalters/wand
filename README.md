@@ -60,7 +60,7 @@ wand claim WND-3            # take a blessed issue: In Progress + assignee, firs
 wand handback WND-3 -m "…"  # park it on a human: question first, Needs Input second
 wand abandon WND-3 -m "…"   # return it to Backlog with the evidence that undid it
 wand file "…" --team-key WND  # file a finding into Triage, duplicates searched first
-wand scope WND-3            # research one Scoping ticket into a plan, ending at Needs Input
+wand scope WND-3            # research one Scoping ticket into a plan, ending at Scoped
 wand run WND-3              # own one blessed ticket: implement → CI → review → revise
 wand dispatch --team-key WND  # pick the one ticket to run next, and run it
 wand sweep --team-key WND   # act on one thing left over after a run ended
@@ -188,7 +188,7 @@ different processes, it is covenant.
 `wand scope WND-3` sends a cold, read-only scout over the repository to
 research one ticket, validates what it hands back, and writes the result:
 the plan into a marker-fenced region of the description, the approaches and
-their trade-offs as a comment, the estimate, then Needs Input. Promoting the
+their trade-offs as a comment, the estimate, then Scoped. Promoting the
 result to Todo is yours — an agent does not bless its own plan.
 
 Two rules carry most of the weight. **A handoff that fails validation
@@ -197,9 +197,12 @@ recommendation naming one of them, files cited as `path:line`, an estimate
 on the covenant's scale, and a plan with ordered steps and a test story.
 Half a scope reads like a whole one, and a human blesses it on the strength
 of the argument beside it. And **each deliverable lands before the
-transition that advertises it** — Needs Input says "there is a scope here to
-read", so it is written last, and anything that fails before it leaves the
-ticket in Scoping rather than claiming to be finished.
+transition that advertises it** — Scoped says "there is a finished plan
+here to judge", so it is written last, and anything that fails before it
+leaves the ticket in Scoping rather than claiming to be finished. A scout
+that finds the ticket's premise wrong takes the other ending instead: no
+plan, its account on the ticket, and Needs Input — reserved for exactly
+that, a blocking question, never a plan awaiting review.
 
 There is no worktree: the scout reads your checkout and may not change it,
 and a run whose worker touched the tree parks with the change left in front
@@ -239,7 +242,7 @@ promoting to **Todo** blesses building, promoting to **Scoping** blesses
 research, and **Done**, **Canceled** and **Duplicate** close a ticket. Those
 are a human's call, so `wand guard` refuses them — by status name or by
 Linear state type — while leaving every legitimate agent move alone
-(In Progress, In Review, Needs Input, Backlog, Triage).
+(In Progress, In Review, Needs Input, Scoped, Backlog, Triage).
 
 It speaks the Claude Code and Codex PreToolUse hook protocol: the pending tool
 call arrives as JSON on stdin, and exit code 2 blocks it with the reason on

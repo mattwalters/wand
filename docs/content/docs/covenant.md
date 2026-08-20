@@ -56,6 +56,25 @@ One schema exists so far: **1**, which includes every state below —
 until wand is distributed: an increment is a promise to other people's
 covenant files, and there are no other people yet.
 
+## Two doors out of Backlog
+
+Every ticket leaves Backlog through one of two doors, and a human opens
+both. The cheap door is `Backlog → Todo`: a ticket small enough that
+writing a plan and reviewing it would cost more than just building it, so
+a person blesses it straight into Todo. The deliberate door is
+`Backlog → Scoping → Scoped → Todo`: a person blesses the *research*
+first, an agent researches it and writes a plan, and a person blesses that
+plan onward. Both doors end at the same gate — a human choosing Todo — the
+deliberate one just puts a plan in front of that choice instead of asking
+for it blind.
+
+Scoped is what makes the deliberate door's last step first-class. A ticket
+sitting there is exactly a PR sitting in In Review: finished, argued, and
+waiting on nothing but a human's judgment. Reviewing a plan is not lesser
+work than reviewing the code that follows from it, and giving it its own
+state — rather than folding it into Needs Input, which means something
+else entirely — is how the board says so.
+
 ## The states, and why each exists
 
 The board is a map of *authorization*, not just progress. Reading the
@@ -115,12 +134,15 @@ identically. Neither may an agent move a ticket *out* of Scoped: that
 destination is Todo (blessing) or one of the three close statuses, all
 five already forbidden regardless of where the ticket is moving from.
 
-Scoped is the newest state, and wand's own verbs move onto it one release
-at a time. Until they do, `wand scope` still ends at Needs Input, and a
-team bootstrapped before Scoped existed will see the missing state reported
-by [`wand doctor`](../commands/doctor/) and created by `wand init`. (It
-ships inside schema 1: wand is undistributed, so topology changes do not
-yet spend schema increments.)
+`wand scope`'s happy path ends there: the plan, the argued options and the
+estimate land on the ticket, then the move to Scoped is the last write,
+advertising that all three are there to read. Needs Input is the scout's
+other ending, and only that one now — a blocking question, nothing else,
+with the question as the comment. A team bootstrapped before Scoped
+existed will see the missing state reported by
+[`wand doctor`](../commands/doctor/) and created by `wand init`. (It ships
+inside schema 1: wand is undistributed, so topology changes do not yet
+spend schema increments.)
 
 **Todo** is the gate between "written down" and "a bot may act on this
 unattended". It is the single most consequential state on the board, and
@@ -144,7 +166,10 @@ Input makes being blocked *visible and cheap* — the ticket says what it is
 waiting for, and surfacing that queue is one quarter of the whole job of
 [the cockpit](../commands/ui/).
 It is deliberately an `unstarted` state: answering the question re-blesses
-the work, it does not resume it automatically.
+the work, it does not resume it automatically. It means exactly one thing —
+answer me — never "review this," which is Scoped's job and In Review's;
+a queue that means two things is a queue a person has to open before they
+know what it is asking of them.
 
 **In Progress** and **In Review** track claimed and reviewed work, and
 Linear's PR automations mirror them: opening a PR (draft included) targets

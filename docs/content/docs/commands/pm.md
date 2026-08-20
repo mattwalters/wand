@@ -43,7 +43,7 @@ wand pm bless <proposal-file> [--team-key KEY]
    relation last, once every ticket in the batch exists.
 
 Nothing here promotes anything. Every ticket lands in Triage; blessing it
-onward to Todo, the same as blessing a scope's Needs Input, stays a human's
+onward to Todo, the same as blessing a scope's Scoped plan, stays a human's
 act. That is also why `wand pm bless` is a CLI command at all, unlike the
 promotion a human makes in [`wand ui`](../ui/): filing into Triage is a
 status an agent may already set on its own (`wand file` does exactly this

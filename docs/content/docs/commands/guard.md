@@ -44,17 +44,19 @@ written. So the rule is a program instead.
 Matching is on the trimmed, whitespace-collapsed, lowercased value, and
 covers Linear's state *types* as well as its names: `completed` and
 `canceled` block, and `unstarted` blocks with a message asking the caller
-to name the status instead, since it covers Todo, Needs Input and Scoping
-alike.
+to name the status instead, since it covers Todo, Needs Input, Scoping and
+Scoped alike.
 
 Every status an agent legitimately sets passes: **In Progress**, **In
-Review**, **Needs Input**, **Backlog**, **Triage**. So does every write
-that is not a status move — assigning, relabelling, editing a description.
-A guard that blocked ordinary work would be routed around within a day.
+Review**, **Needs Input**, **Scoped**, **Backlog**, **Triage**. So does
+every write that is not a status move — assigning, relabelling, editing a
+description. A guard that blocked ordinary work would be routed around
+within a day.
 
 Note the direction. Moving a ticket *into* Scoping is a promotion and is
-refused; moving one *out* of Scoping to Needs Input is what every scope
-ends with, and it is allowed. The guard sees only the destination.
+refused; moving one *out* of Scoping is what every scope ends with, either
+way it ends — to Needs Input, a blocking question, or to Scoped, a
+finished plan — and both are allowed. The guard sees only the destination.
 
 ### The block message is most of the value
 

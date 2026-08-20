@@ -50,8 +50,10 @@ invisible until something puts it on one screen:
 * **Triage** — what agents filed, waiting to be judged. Ranked in the same
   order [`wand queue`](../queue/) ranks work, so the ticket you bless first
   is the one an agent starts first.
-* **Needs Input** — runs parked on a question. This is where a scope ends
-  and where a run hands back.
+* **Needs Input** — runs parked on a question: a scope that judged the
+  ticket's premise wrong, or a run that hands back. It means one thing —
+  answer me — never "a plan is ready to bless," which is
+  [Scoped's](../../covenant/#the-states-and-why-each-exists) job.
 * **Ready for human** — every open issue carrying the `ready-for-human`
   label: a pull request to review, a merge to press. Closed issues are
   dropped, because the label outlives the merge that answered it.
