@@ -41,6 +41,73 @@ func freshTeam() Current {
 	}
 }
 
+// existingSchema1Team is what a team bootstrapped under WND-32's original
+// covenant — before Scoped existed — looks like today: every status the
+// pre-Scoped covenant created, Scoped absent. This is the team WND-48 is
+// about: an existing team converging onto a topology addition, not a fresh
+// one being created.
+func existingSchema1Team() Current {
+	states := []linear.WorkflowState{}
+	for _, s := range []struct {
+		name, typ string
+		pos       float64
+	}{
+		{"Triage", "triage", 0}, {"Backlog", "backlog", 0},
+		{"Scoping", "unstarted", -50}, {"Todo", "unstarted", 1},
+		{"Needs Input", "unstarted", 50}, {"In Progress", "started", 2},
+		{"In Review", "started", 3}, {"Done", "completed", 4},
+		{"Canceled", "canceled", 5}, {"Duplicate", "duplicate", 6},
+	} {
+		states = append(states, linear.WorkflowState{ID: "st-" + s.name, Name: s.name, Type: s.typ, Position: s.pos})
+	}
+	return Current{
+		States: states,
+		Labels: []linear.Label{
+			{ID: "l1", Name: "human-only"}, {ID: "l2", Name: "agent-filed"},
+			{ID: "l3", Name: "ready-for-human"}, {ID: "l4", Name: "re-review"},
+		},
+		Automations: []linear.GitAutomation{
+			{ID: "ga-draft", Event: "draft", State: &struct {
+				Name string `json:"name"`
+			}{Name: "In Progress"}},
+			{ID: "ga-start", Event: "start", State: &struct {
+				Name string `json:"name"`
+			}{Name: "In Progress"}},
+			{ID: "ga-review", Event: "review", State: &struct {
+				Name string `json:"name"`
+			}{Name: "In Review"}},
+			{ID: "ga-merge", Event: "merge", State: &struct {
+				Name string `json:"name"`
+			}{Name: "Done"}},
+		},
+	}
+}
+
+func TestPlanAddsScopedToExistingSchema1Team(t *testing.T) {
+	actions := Plan(covenant.Default(), existingSchema1Team())
+
+	if len(actions) != 1 {
+		t.Fatalf("plan for existing schema-1 team: got %d actions (%s), want 1", len(actions), ops(actions))
+	}
+	a := actions[0]
+	if a.Op != CreateStatus || a.Status.Name != "Scoped" {
+		t.Errorf("plan for existing schema-1 team: got %s, want create status \"Scoped\"", a)
+	}
+	if a.Status.Position != -25 {
+		t.Errorf("Scoped planned at position %v, want -25 (between Scoping's -50 and Todo's 1)", a.Status.Position)
+	}
+}
+
+func TestPlanIsIdempotentOnceScopedExists(t *testing.T) {
+	current := existingSchema1Team()
+	current.States = append(current.States,
+		linear.WorkflowState{ID: "st-Scoped", Name: "Scoped", Type: "unstarted", Position: -25})
+
+	if actions := Plan(covenant.Default(), current); len(actions) != 0 {
+		t.Errorf("team already carrying Scoped should plan nothing, planned: %s", ops(actions))
+	}
+}
+
 func ops(actions []Action) string {
 	var parts []string
 	for _, a := range actions {
