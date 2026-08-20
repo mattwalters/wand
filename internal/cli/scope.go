@@ -1,0 +1,151 @@
+package cli
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"strings"
+
+	"github.com/spf13/cobra"
+
+	"github.com/mattwalters/wand/internal/journal"
+	"github.com/mattwalters/wand/internal/scope"
+	"github.com/mattwalters/wand/internal/worker"
+)
+
+func newScopeCmd() *cobra.Command {
+	var harness, model, effort string
+	var interactive bool
+
+	cmd := &cobra.Command{
+		Use:   "scope <identifier>",
+		Short: "Research one Scoping ticket into a plan a human can bless",
+		Long: "scope sends a cold, read-only scout over this repository to research one\n" +
+			"ticket, validates what it hands back, and writes the result: the plan into\n" +
+			"the ticket's description, the approaches and their trade-offs as a comment,\n" +
+			"the estimate, and Needs Input last — so every deliverable has landed before\n" +
+			"the status that advertises it. Nothing is written unless the whole handoff\n" +
+			"passes validation.\n\n" +
+			"The ticket must be in Scoping. Blessing research is a human act, the same\n" +
+			"way blessing building is, and scope will not take a ticket nobody blessed.\n" +
+			"It ends in Needs Input: promoting the plan to Todo is yours.\n\n" +
+			"There is no worktree, no branch and no CI: the scout reads the checkout you\n" +
+			"run this from and may not change it. If it does, the run parks and leaves\n" +
+			"the change for you to look at.\n\n" +
+			"--interactive grills you over the draft before anything is written —\n" +
+			"questions worst-consequence first, each quoting the draft — and hands your\n" +
+			"answers to a second, fresh session to revise, because a session that has\n" +
+			"just argued for an approach defends it. It needs a terminal; an unattended\n" +
+			"caller must not pass it.\n\n" +
+			"Exit codes are a contract a scheduler can read: 0 scoped, 2 handed back\n" +
+			"(the scout judged the ticket's premise wrong), 3 parked, 1 the run never\n" +
+			"started.\n\n" +
+			"Requires LINEAR_API_KEY, and the harness on PATH. Run it inside the repo.",
+		Args: cobra.ExactArgs(1),
+		// Run, not RunE: the exit code is the contract, and fang exits 1 on
+		// any RunE error, which would collapse handed-back and parked into
+		// generic failure. The command exits itself instead.
+		Run: func(cmd *cobra.Command, args []string) {
+			if code := runScope(cmd, args[0], harness, model, effort, interactive); code != scope.ExitScoped {
+				os.Exit(code)
+			}
+		},
+	}
+
+	cmd.Flags().StringVar(&harness, "harness", "claude-code", "worker harness: claude-code or codex")
+	cmd.Flags().StringVar(&model, "model", "", "model for every worker (default: the harness's default)")
+	cmd.Flags().StringVar(&effort, "effort", "", "reasoning effort for every worker (default: the harness's default)")
+	cmd.Flags().BoolVar(&interactive, "interactive", false, "interview you over the draft before writing anything (needs a terminal)")
+	return cmd
+}
+
+func runScope(cmd *cobra.Command, identifier, harness, model, effort string, interactive bool) int {
+	out, errOut := cmd.OutOrStdout(), cmd.ErrOrStderr()
+	fail := func(err error) int {
+		fmt.Fprintln(errOut, err)
+		return 1
+	}
+
+	if interactive {
+		// Refuse before anything happens rather than block forever on a
+		// read nobody is there to answer. An unattended caller that passes
+		// the flag gets a refusal it can see in its logs, which is the
+		// failure it can act on; a scope hung on a pipe is not.
+		if err := requireTTY(cmd); err != nil {
+			return fail(err)
+		}
+	}
+
+	cl, err := linearFromEnv()
+	if err != nil {
+		return fail(err)
+	}
+	cov, err := covenantFromCwd()
+	if err != nil {
+		return fail(err)
+	}
+	adapter, err := worker.AdapterFor(harness)
+	if err != nil {
+		return fail(err)
+	}
+	repo, err := repoRoot()
+	if err != nil {
+		return fail(err)
+	}
+	store, err := journal.Default()
+	if err != nil {
+		return fail(err)
+	}
+
+	// The whole run is interruptible, and an interrupt is a reason: the run
+	// parks quoting the signal, not an anonymous "context canceled".
+	ctx, stop := journal.Interruptible(cmd.Context())
+	defer stop()
+
+	outcome, err := scope.Execute(ctx, scope.Deps{
+		Board:       cl,
+		Cov:         cov,
+		Workers:     scope.AdapterWorkers{Adapter: adapter},
+		Tree:        scope.ExecTree{},
+		Repo:        repo,
+		Harness:     adapter.Name(),
+		Model:       model,
+		Effort:      effort,
+		Interactive: interactive,
+		In:          cmd.InOrStdin(),
+		Out:         out,
+	}, store, identifier)
+	if err != nil {
+		return fail(err)
+	}
+	return outcome.ExitCode()
+}
+
+// requireTTY refuses an interview with nobody on the other end. The
+// interview is the one place wand blocks on a human, so it is the one place
+// that has to prove there is one.
+func requireTTY(cmd *cobra.Command) error {
+	f, ok := cmd.InOrStdin().(*os.File)
+	if !ok {
+		return fmt.Errorf("--interactive needs a terminal to read your answers from")
+	}
+	fi, err := f.Stat()
+	if err != nil {
+		return fmt.Errorf("--interactive needs a terminal to read your answers from: %w", err)
+	}
+	if fi.Mode()&os.ModeCharDevice == 0 {
+		return fmt.Errorf("--interactive needs a terminal: stdin is a pipe or a file here, and an interview nobody can answer would hang the run. Drop the flag for an unattended scope")
+	}
+	return nil
+}
+
+// repoRoot resolves the repository an orchestrator acts on from the working
+// directory — the scout's working directory and the journal's Meta.Repo
+// both hang off it.
+func repoRoot() (string, error) {
+	out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
+	if err != nil {
+		return "", fmt.Errorf("not inside a git repository: wand scope reads the repo it is run from")
+	}
+	return strings.TrimSpace(string(out)), nil
+}

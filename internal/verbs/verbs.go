@@ -59,12 +59,23 @@ type Linear interface {
 	SearchIssues(ctx context.Context, teamKey, term string) ([]linear.Issue, error)
 }
 
-// resolveState turns a covenant status key into the team's workflow state
+// StateResolver is the one read ResolveState needs. It is its own interface,
+// narrower than Linear, because the orchestrators resolve statuses through
+// this function while writing through client slices of their own — and a
+// caller should not have to grow its interface to reach the guard.
+type StateResolver interface {
+	TeamStates(ctx context.Context, teamID string) ([]linear.WorkflowState, error)
+}
+
+// ResolveState turns a covenant status key into the team's workflow state
 // UUID, passing the display name through the guard on the way. The guard
 // check is belt over braces — no verb here writes a forbidden status — but
 // it keeps the promise that every wand write path calls the one verdict
 // function, covenant renames included.
-func resolveState(ctx context.Context, cl Linear, cov covenant.Covenant, teamID, key string) (string, error) {
+//
+// Exported for the orchestrators, whose own status writes must go through
+// the same gate rather than a second copy of it.
+func ResolveState(ctx context.Context, cl StateResolver, cov covenant.Covenant, teamID, key string) (string, error) {
 	name := cov.StatusName(key)
 	if name == "" {
 		return "", fmt.Errorf("the covenant has no %q status; this is a wand bug", key)
@@ -127,7 +138,7 @@ func Claim(ctx context.Context, cl Linear, cov covenant.Covenant, identifier str
 	if err != nil {
 		return Claimed{}, err
 	}
-	stateID, err := resolveState(ctx, cl, cov, issue.TeamID, "in_progress")
+	stateID, err := ResolveState(ctx, cl, cov, issue.TeamID, "in_progress")
 	if err != nil {
 		return Claimed{}, err
 	}
@@ -162,11 +173,11 @@ func Handback(ctx context.Context, cl Linear, cov covenant.Covenant, identifier,
 	if err := refuseIfClosed(issue, "handback"); err != nil {
 		return linear.Issue{}, err
 	}
-	// Resolve the target before the comment: resolveState is a pure read, so
+	// Resolve the target before the comment: ResolveState is a pure read, so
 	// running it first means a drifted board or a guard refusal stops the
 	// verb with nothing written — a failure after the comment would make a
 	// repaired re-run post the question twice.
-	stateID, err := resolveState(ctx, cl, cov, issue.TeamID, "needs_input")
+	stateID, err := ResolveState(ctx, cl, cov, issue.TeamID, "needs_input")
 	if err != nil {
 		return linear.Issue{}, err
 	}
@@ -254,7 +265,7 @@ func Abandon(ctx context.Context, cl Linear, cov covenant.Covenant, identifier, 
 	// correction lands "in the same action", so every failure that can be
 	// checked without writing must come first — a comment followed by a
 	// refusal would record a correction that never happened.
-	stateID, err := resolveState(ctx, cl, cov, issue.TeamID, "backlog")
+	stateID, err := ResolveState(ctx, cl, cov, issue.TeamID, "backlog")
 	if err != nil {
 		return linear.Issue{}, err
 	}
@@ -316,7 +327,7 @@ func File(ctx context.Context, cl Linear, cov covenant.Covenant, req FileRequest
 	if err != nil {
 		return FileResult{}, err
 	}
-	stateID, err := resolveState(ctx, cl, cov, team.ID, "triage")
+	stateID, err := ResolveState(ctx, cl, cov, team.ID, "triage")
 	if err != nil {
 		return FileResult{}, err
 	}

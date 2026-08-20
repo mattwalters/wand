@@ -78,3 +78,25 @@ func TestUpdateIssueRefusesAnEmptyUpdate(t *testing.T) {
 		t.Fatal("an update with nothing to change must refuse before the network")
 	}
 }
+
+// Zero is an estimate Linear accepts, so it cannot double as "leave this
+// alone". A plain int field would make an unset estimate indistinguishable
+// from a deliberate zero, and every status-only update would quietly wipe
+// the ticket's size.
+func TestUpdateIssueEstimateIsOptionalAndCanBeZero(t *testing.T) {
+	if _, present := captureInput(t, IssueUpdate{StateID: "st-1"})["estimate"]; present {
+		t.Error("estimate sent on a status-only update; that would wipe the ticket's size")
+	}
+
+	zero := 0
+	input := captureInput(t, IssueUpdate{Estimate: &zero})
+	if string(input["estimate"]) != "0" {
+		t.Errorf("estimate = %s, want 0 sent explicitly", input["estimate"])
+	}
+
+	three := 3
+	input = captureInput(t, IssueUpdate{Estimate: &three})
+	if string(input["estimate"]) != "3" {
+		t.Errorf("estimate = %s, want 3", input["estimate"])
+	}
+}

@@ -26,6 +26,7 @@ scale = "linear"
 
 [toggles]
 scope_interview = false
+scope_critic = true
 
 [commands]
 verify = "make check"
@@ -66,6 +67,9 @@ func TestParseFullFile(t *testing.T) {
 	}
 	if cov.Toggles.ScopeInterview {
 		t.Error("ScopeInterview = true, want the file's false to override the default true")
+	}
+	if !cov.Toggles.ScopeCritic {
+		t.Error("ScopeCritic = false, want the file's true to override the default false")
 	}
 	if cov.Commands.Verify != "make check" || cov.Commands.Provision != "make worktree" || cov.Commands.RunAgent != "claude -p" {
 		t.Errorf("Commands = %+v", cov.Commands)
