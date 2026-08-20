@@ -188,11 +188,10 @@ opposite directions, so it is worth saying exactly:</p>
 <ul>
 <li>It gates <strong>reading</strong>. A file declaring a schema newer than the binary
 speaks is refused outright — wand cannot know what those keys mean. An
-older one is read unchanged: every schema so far has only added optional
-keys, so a file that sets none of them says the same thing under either
-number.</li>
-<li>It does <strong>not</strong> gate topology. The state graph ships centrally, so a file
-still declaring <code>schema = 1</code> gets the current states anyway. That is the
+older one is read unchanged: schema bumps only add optional keys, so a
+file that sets none of them says the same thing under either number.</li>
+<li>It does <strong>not</strong> gate topology. The state graph ships centrally, so every
+file gets the current states, whatever number it declares. That is the
 point rather than a leak: it is what makes a team bootstrapped before a
 new state show up as drift under <a href="../commands/doctor/"><code>wand doctor</code></a>
 instead of quietly keeping the old board.</li>
@@ -200,8 +199,10 @@ instead of quietly keeping the old board.</li>
 <p>So the number in a file describes the file, not a pin on the lifecycle.
 Raising it is a migration — it asserts that the states exist on your board
 — and like every other blessing, a human&rsquo;s act.</p>
-<p>The schemas so far: <strong>1</strong> is the original topology; <strong>2</strong> adds
-<a href="#the-states-and-why-each-exists">Scoped</a>.</p>
+<p>One schema exists so far: <strong>1</strong>, which includes every state below —
+<a href="#the-states-and-why-each-exists">Scoped</a> included. The number holds at 1
+until wand is distributed: an increment is a promise to other people&rsquo;s
+covenant files, and there are no other people yet.</p>
 <h2 id="the-states-and-why-each-exists">The states, and why each exists</h2>
 <p>The board is a map of <em>authorization</em>, not just progress. Reading the
 states as &ldquo;how done is this?&rdquo; misses their point; read them as &ldquo;who has
@@ -281,10 +282,12 @@ cannot do that while one queue holds both. Building already had the pair, In
 Progress and In Review; research now has it too. Like Needs Input it is
 <code>unstarted</code>: blessing a plan promotes it to Todo, which re-authorizes the
 work rather than resuming it.</p>
-<p>Scoped is new in covenant schema 2, and wand&rsquo;s own verbs move onto it one
-release at a time. Until they do, <code>wand scope</code> still ends at Needs Input,
-and a team bootstrapped before schema 2 will see the missing state reported
-by <a href="../commands/doctor/"><code>wand doctor</code></a> and created by <code>wand init</code>.</p>
+<p>Scoped is the newest state, and wand&rsquo;s own verbs move onto it one release
+at a time. Until they do, <code>wand scope</code> still ends at Needs Input, and a
+team bootstrapped before Scoped existed will see the missing state reported
+by <a href="../commands/doctor/"><code>wand doctor</code></a> and created by <code>wand init</code>. (It
+ships inside schema 1: wand is undistributed, so topology changes do not
+yet spend schema increments.)</p>
 <p><strong>Todo</strong> is the gate between &ldquo;written down&rdquo; and &ldquo;a bot may act on this
 unattended&rdquo;. It is the single most consequential state on the board, and
 promotion into it is a human act — the blessing. The failure it guards
