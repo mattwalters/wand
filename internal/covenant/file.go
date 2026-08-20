@@ -139,11 +139,11 @@ func Parse(data []byte) (File, error) {
 		return File{}, fmt.Errorf("schema %d is not a covenant schema; the first is 1", f.Schema)
 	}
 	// An older schema is read as-is rather than refused or upgraded in
-	// place: every schema so far has only added optional keys, so a file
-	// written against schema 1 means exactly what it says under schema 2.
-	// It still gets schema 2's *topology* — that is central, not the file's
-	// (see SchemaVersion) — which is what surfaces an unmigrated team as
-	// drift instead of hiding it behind a version number.
+	// place: schema bumps only add optional keys, so an older file means
+	// exactly what it says under the current number. It still gets the
+	// current *topology* — that is central, not the file's (see
+	// SchemaVersion) — which is what surfaces an unmigrated team as drift
+	// instead of hiding it behind a version number.
 	if f.Schema > SchemaVersion {
 		return File{}, fmt.Errorf("schema %d is newer than this wand speaks (%d); upgrade wand", f.Schema, SchemaVersion)
 	}

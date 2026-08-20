@@ -90,23 +90,33 @@ func TestScopedSitsBetweenScopingAndTodo(t *testing.T) {
 }
 
 // The lesson the schema field encodes, pinned: its number gates whether wand
-// can *read* a file, not which topology the file gets. A repo still declaring
-// schema 1 gets schema 2's states, which is exactly what makes an unmigrated
-// team show up as drift instead of silently keeping the old board.
-func TestOlderSchemaStillGetsTheCurrentTopology(t *testing.T) {
+// can *read* a file, not which topology the file gets. A file that mentions
+// no statuses at all still gets every current state, which is exactly what
+// makes an unmigrated team show up as drift instead of silently keeping the
+// old board.
+func TestMinimalFileGetsTheCurrentTopology(t *testing.T) {
 	f, err := Parse([]byte("schema = 1\n"))
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
 	if got := f.Covenant().StatusName("scoped"); got != "Scoped" {
-		t.Errorf(`schema-1 file StatusName("scoped") = %q, want "Scoped"`, got)
+		t.Errorf(`minimal file StatusName("scoped") = %q, want "Scoped"`, got)
+	}
+}
+
+// The other half of the same lesson: a file from a future wand is refused,
+// not guessed at — wand cannot know what its keys mean.
+func TestNewerSchemaIsRefused(t *testing.T) {
+	_, err := Parse([]byte("schema = 2\n"))
+	if err == nil {
+		t.Fatal("schema = 2 parsed; want refusal — this wand speaks schema 1")
 	}
 }
 
 // Scoped is a status like any other: the file may rename it, and code that
 // reads it by key follows the rename.
 func TestScopedIsRenameable(t *testing.T) {
-	f, err := Parse([]byte("schema = 2\n[statuses]\nscoped = \"Planned\"\n"))
+	f, err := Parse([]byte("schema = 1\n[statuses]\nscoped = \"Planned\"\n"))
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}

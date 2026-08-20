@@ -145,7 +145,7 @@ releases. TOML, so the rationale for a value survives as a comment next to
 the value it justifies:
 
 ```toml
-schema = 2
+schema = 1
 
 [statuses]
 # Our board predates wand and the team reads "Ready" as blessed-to-build.

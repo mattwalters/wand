@@ -57,7 +57,7 @@ wand version
 wand v0.2.0
   commit:          8a63311
   built:           2026-08-19T20:11:04Z
-  covenant schema: 2
+  covenant schema: 1
 ```
 
 A build from a clone:
@@ -66,5 +66,5 @@ A build from a clone:
 wand dev
   commit:          none
   built:           unknown
-  covenant schema: 2
+  covenant schema: 1
 ```
