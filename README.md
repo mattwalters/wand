@@ -144,6 +144,11 @@ covenant when absent. Validation refuses unknown keys loudly — a misspelled ca
 defaulting is the failure mode — and an invalid file is an error, never
 quietly the defaults.
 
+wand ships one of its own: [`wand.toml`](./wand.toml) at the root of this
+repo sets `commands.verify` and nothing else. That is the shape to copy —
+what a repo leaves unset stays the stock covenant, and a key restating a
+default is a key that will one day disagree with it.
+
 The file must never contain a secret, a machine path, or a harness name:
 those are machine config, not covenant. The test for the split: if two
 clones could legitimately differ, it is config; if a difference means two

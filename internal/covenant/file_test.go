@@ -203,3 +203,22 @@ func TestLoadBrokenFileIsLoud(t *testing.T) {
 		t.Errorf("error %q does not name the file", err)
 	}
 }
+
+// wand runs the lifecycle it ships, so its own wand.toml is part of the
+// suite: nothing else in `make check` reads that file, and a misspelled key
+// in it would otherwise surface as `wand run` refusing, in a session that
+// had already claimed a ticket. The assertion is that the file parses and
+// configures a verify command — `wand run` will not start without one.
+func TestRepoCovenantFileIsLoadable(t *testing.T) {
+	path := filepath.Join("..", "..", FileName)
+	cov, fromFile, err := Load(path)
+	if err != nil {
+		t.Fatalf("Load(%s): %v", path, err)
+	}
+	if !fromFile {
+		t.Fatalf("%s is missing; wand run cannot start in this repo without it", path)
+	}
+	if cov.Commands.Verify == "" {
+		t.Error("this repo's covenant configures no verify command")
+	}
+}

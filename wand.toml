@@ -1,0 +1,23 @@
+# wand's covenant file: wand running the lifecycle it ships.
+#
+# Minimal on purpose. Everything not set here — status names, caps, the
+# estimate scale, toggles, templates — is the stock covenant this team was
+# bootstrapped to, and a key restating a default is a key that will one day
+# disagree with it.
+
+schema = 1
+
+[commands]
+# The green/red oracle a worker's change is judged by, and the only one:
+# `wand run` reads no remote check. `make check` is CI's own check job —
+# gofmt, vet (including the e2e- and conformance-tagged files), and the
+# fast suite.
+#
+# Deliberately not `make check && make test-e2e`. CI keeps the pty suite in
+# a separate job because it is slower and more environment-sensitive, and a
+# worker whose sandbox cannot open a pty would fail verify on every ticket
+# — every run parked, none of them about the change. The trade is real: a
+# regression only the pty suite catches reaches a red PR instead of a
+# revise round. That is the cheaper failure, and it lands on a human who is
+# already reading the PR.
+verify = "make check"
