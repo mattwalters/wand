@@ -51,8 +51,9 @@ repo, or to run against a team other than the one the repo is bound to. A
 repo with `[team] key = "WND"` in its `wand.toml` needs it on none of these:
 
 ```bash
-wand                        # help
-wand ui --team-key WND      # the cockpit: everything waiting on a human
+wand                        # the cockpit: everything waiting on a human
+wand help                   # help
+wand ui --team-key WND      # the cockpit, spelled explicitly
 wand queue --team-key WND   # the ranked, vetted Todo queue
 wand ticket WND-3           # one ticket whole, for a cold reader
 wand claim WND-3            # take a blessed issue: In Progress + assignee, first

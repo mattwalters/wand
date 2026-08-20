@@ -126,6 +126,77 @@ func waitExit(t *testing.T, cmd *exec.Cmd) {
 	}
 }
 
+// waitExitError waits for cmd, failing the test if it outlives the timeout
+// or if it exits cleanly — the caller expects a failure.
+func waitExitError(t *testing.T, cmd *exec.Cmd) {
+	t.Helper()
+
+	done := make(chan error, 1)
+	go func() { done <- xpty.WaitProcess(context.Background(), cmd) }()
+
+	select {
+	case err := <-done:
+		if err == nil {
+			t.Fatal("wand exited cleanly, want an error (no team key)")
+		}
+	case <-time.After(timeout):
+		_ = cmd.Process.Kill()
+		<-done
+		t.Fatal("wand did not exit")
+	}
+}
+
+// Bare `wand` over a real pty must take the same path `wand ui` does: it is
+// a TTY, so it must attempt the cockpit rather than falling back to help.
+// It cannot render a full board without live Linear, so what this proves is
+// narrower but just as load-bearing: given a real terminal, root's RunE
+// reaches runCockpit's team-key resolution rather than either hanging or
+// silently printing help — the two ways an inverted TTY check would fail
+// silently. Run in an empty directory with no wand.toml, so the failure is
+// hermetic: no network, no team, no API key required.
+func TestBareWandOverAPTYEntersTheCockpitPath(t *testing.T) {
+	bin := buildWand(t)
+
+	pty, err := xpty.NewPty(termWidth, termHeight)
+	if err != nil {
+		t.Fatalf("creating pty: %v", err)
+	}
+	defer pty.Close() //nolint:errcheck // best effort on teardown
+
+	cmd := exec.Command(bin)
+	cmd.Dir = t.TempDir()
+	cmd.Env = append(cmd.Environ(), "TERM=xterm-256color")
+	if err := pty.Start(cmd); err != nil {
+		t.Fatalf("starting wand: %v", err)
+	}
+
+	screen := newLiveScreen()
+	defer screen.Close() //nolint:errcheck // best effort on teardown
+
+	go func() { _, _ = io.Copy(pty, screen.replies()) }()
+
+	drained := make(chan struct{})
+	go func() {
+		defer close(drained)
+		_, _ = io.Copy(screen, pty)
+	}()
+
+	got := screen.waitForText(t, "team key")
+	if !strings.Contains(got, "pass --team-key, or add [team] key to wand.toml") {
+		t.Errorf("unexpected refusal text; screen was:\n%s", got)
+	}
+
+	waitExitError(t, cmd)
+
+	_ = pty.Close()
+
+	select {
+	case <-drained:
+	case <-time.After(5 * time.Second):
+		t.Error("pty reader did not finish after the pty was closed")
+	}
+}
+
 func TestBinaryRendersAndQuitsCleanly(t *testing.T) {
 	bin := buildWand(t)
 

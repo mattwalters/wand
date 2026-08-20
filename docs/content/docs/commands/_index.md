@@ -19,6 +19,13 @@ human act, so it has a human door: it lives in the cockpit,
 would be a verb an agent could call, which is the whole thing the guard
 exists to prevent.
 
+Bare `wand`, with a terminal attached, opens that same cockpit — it is what
+typing the tool's name gets you. `wand help` is the documented way to get
+help instead; `wand --help` and `-h` work everywhere they always did.
+Without a terminal (a pipe, a script, CI), bare `wand` falls back to the
+same help `wand help` prints, rather than trying to open a program that
+needs one.
+
 ## What every command shares
 
 **`LINEAR_API_KEY`.** Everything that talks to Linear reads a full-access

@@ -7,9 +7,15 @@ summary: The cockpit — everything waiting on a human, and the one place blessi
 `ui` opens wand's cockpit: one screen answering one question — *what is
 waiting on me?*
 
+Bare `wand`, with a terminal attached and no flags, does the same thing:
+`wand` and `wand ui` are equivalent. `ui` is the explicit spelling — the one
+the flags below live on — and the one to reach for outside a terminal, where
+bare `wand` falls back to printing help instead.
+
 ## Synopsis
 
 ```
+wand
 wand ui --team-key WND
 wand ui --sample
 wand ui --dump-screen [--script KEYS] [--width N] [--height N]
