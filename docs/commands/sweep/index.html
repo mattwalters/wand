@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wand sweep · wand</title>
+  <link rel="stylesheet" href="../../../style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="../../../">wand</a>
+    
+    <a class="nav here" href="../../../docs/">Docs</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/mattwalters/wand">GitHub</a>
+    <span class="version">
+      latest
+      <select id="version-picker" hidden aria-label="Documentation version"></select>
+    </span>
+  </header>
+  
+  <div class="wrap">
+    
+    <nav class="sidenav">
+      
+      
+      <h5>Start</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/">Overview</a>
+      
+      <h5>Doctrine</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/covenant/">The covenant</a>
+      
+      <h5>Commands</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/">All commands</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/init/" class="mono">wand init</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/doctor/" class="mono">wand doctor</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/guard/" class="mono">wand guard</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/queue/" class="mono">wand queue</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/ticket/" class="mono">wand ticket</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/claim/" class="mono">wand claim</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/handback/" class="mono">wand handback</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/abandon/" class="mono">wand abandon</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/file/" class="mono">wand file</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/scope/" class="mono">wand scope</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/run/" class="mono">wand run</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/ui/" class="mono">wand ui</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/version/" class="mono">wand version</a>
+      
+    </nav>
+    
+    <main>
+      
+
+<h1 class="cmd">wand sweep</h1>
+<p><code>sweep</code> is everything that happens after <a href="../run/"><code>wand run</code></a> or
+<a href="../scope/"><code>wand scope</code></a> exits. Each orchestrator ends in exactly one
+terminal state, and each terminal state is where its own responsibility
+stops; three things can still become true of a ticket afterward, and
+nothing else in wand watches for them.</p>
+<h2 id="synopsis">Synopsis</h2>
+<pre tabindex="0"><code>wand sweep --team-key &lt;key&gt;
+</code></pre><h2 id="what-it-acts-on">What it acts on</h2>
+<p>One pass ranks every candidate it finds and writes against at most one —
+the highest-ranked whose preflight does not refuse it:</p>
+<ol>
+<li><strong>A lease whose owner is provably dead.</strong> The journal says a run is
+still going and its lease&rsquo;s holder is gone — the zombie, a ticket
+In Progress with nothing behind it. Sweep reopens the run, parks its
+journal with the lease&rsquo;s own account, and hands the ticket back to a
+human, in that order, so the journal is never left saying &ldquo;still going&rdquo;
+after a person has already been told otherwise.</li>
+<li><strong>A re-review label.</strong> A human labeled a converged ticket
+<code>re-review</code> — another cycle, asked for explicitly. Sweep hands it back
+to a human with a comment naming the label.</li>
+<li><strong>An unresolved thread on a ready-for-human PR.</strong> Necessarily left
+<em>after</em> convergence: <code>wand run</code>&rsquo;s own check for this runs only at the
+moment of converging, so a human review posted afterward is exactly
+what nothing else catches. Sweep hands the ticket back, quoting the
+thread count and the PR.</li>
+</ol>
+<p>Ranked by severity, then oldest first: a dead lease before a re-review
+before an unresolved thread, because a zombie is the one state actively
+lying about itself on the board. A candidate whose preflight refuses it —
+resolved in the interim, or the ticket closed — is skipped in the same
+pass, never retried within it, so one unstartable candidate cannot starve
+every other one behind it forever. The next pass re-evaluates everything
+fresh.</p>
+<h2 id="what-it-reports-and-never-acts-on">What it reports, and never acts on</h2>
+<p>Every pass also reports tickets sitting In Progress with <strong>no journal run
+behind them at all</strong> — not even a dead one. There is nothing there to
+reap: no lease to prove dead, no run to reopen. &ldquo;Looks stuck&rdquo; and &ldquo;is
+stuck&rdquo; are different claims, and only a person can tell which this is, so
+sweep prints it and moves on.</p>
+<h2 id="exit-codes">Exit codes</h2>
+<p><code>sweep</code> exits <code>0</code> on a completed pass — whether or not it found anything
+to act on — and <code>1</code> on a failure that stopped the pass before it could
+finish reading or acting, with the reason on stderr.</p>
+<h2 id="requirements">Requirements</h2>
+<p><code>LINEAR_API_KEY</code> and an authenticated <code>gh</code> (sweep reads a converged
+ticket&rsquo;s PR the same way <code>wand run</code>&rsquo;s own convergence check does — the
+checkout it is run from, since a converged run already removed its own
+worktree). Run it from inside the repository.</p>
+<h2 id="see-also">See also</h2>
+<p><a href="../dispatch/"><code>wand dispatch</code></a> is the selector that runs a ticket in the
+first place; <a href="../run/"><code>wand run</code></a> is where the re-review and
+unresolved-thread conditions originate; the <code>re-review</code> label is covenant
+topology, created by <a href="../init/"><code>wand init</code></a> like <code>ready-for-human</code> and
+<code>human-only</code>.</p>
+
+
+    </main>
+    
+    
+    
+    <nav class="toc">
+      <h5>On this page</h5>
+      <nav id="TableOfContents">
+  <ul>
+    <li><a href="#synopsis">Synopsis</a></li>
+    <li><a href="#what-it-acts-on">What it acts on</a></li>
+    <li><a href="#what-it-reports-and-never-acts-on">What it reports, and never acts on</a></li>
+    <li><a href="#exit-codes">Exit codes</a></li>
+    <li><a href="#requirements">Requirements</a></li>
+    <li><a href="#see-also">See also</a></li>
+  </ul>
+</nav>
+    </nav>
+    
+  </div>
+  <script>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    (function () {
+      var root = new URL("..", document.querySelector('link[rel="stylesheet"]').href);
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          var picker = document.getElementById("version-picker");
+          ["latest"].concat(versions).forEach(function (v) {
+            var option = document.createElement("option");
+            option.value = v;
+            option.textContent = v;
+            option.selected = v === "latest";
+            picker.appendChild(option);
+          });
+          picker.addEventListener("change", function () {
+            window.location.href = new URL(picker.value + "/", root);
+          });
+          picker.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>

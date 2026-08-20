@@ -178,13 +178,15 @@ working directory; the lifecycle verbs walk up from the working directory
 to find it, so a verb run from a subdirectory sees the same covenant as one
 run at the root. Run the first three from the repo root.</p>
 <p><strong>Exit codes.</strong> Unless a page says otherwise, a command exits <code>0</code> on
-success and <code>1</code> on any failure, with the reason on stderr. Five commands
+success and <code>1</code> on any failure, with the reason on stderr. Six commands
 say otherwise, and each of their codes is a contract something else depends
 on: <code>guard</code> (the harness hook), <code>doctor</code> (CI), <code>file</code> (a refusal to file a
-duplicate is a failure, on purpose), and the two orchestrators, <code>scope</code> and
+duplicate is a failure, on purpose), the two orchestrators <code>scope</code> and
 <code>run</code>, whose <code>0</code>/<code>2</code>/<code>3</code> tell a scheduler how a run ended — scoped or
 converged, handed back, or parked — leaving <code>1</code> for a run that never
-started.</p>
+started, and <a href="../dispatch/"><code>dispatch</code></a>, the selector over them, whose
+<code>0</code>–<code>5</code> add locked, nothing-to-do and Linear-unreachable to that same
+vocabulary — a scheduler&rsquo;s whole view of a pass is a status and a log.</p>
 
 
 <dl class="cmdlist">
@@ -219,8 +221,14 @@ started.</p>
   <dt><a href="../../docs/commands/scope/"><code>wand scope</code></a></dt>
   <dd>Research one Scoping ticket into a plan a human can bless.</dd>
   
+  <dt><a href="../../docs/commands/dispatch/"><code>wand dispatch</code></a></dt>
+  <dd>Pick the one ticket to run next, and run it — the selector over the loop.</dd>
+  
   <dt><a href="../../docs/commands/run/"><code>wand run</code></a></dt>
   <dd>Own one ticket from claim to a terminal state — implement, CI, review, revise.</dd>
+  
+  <dt><a href="../../docs/commands/sweep/"><code>wand sweep</code></a></dt>
+  <dd>Act on one thing left over after a run ended — everything dispatch&#39;s loop does not see.</dd>
   
   <dt><a href="../../docs/commands/ui/"><code>wand ui</code></a></dt>
   <dd>The cockpit — everything waiting on a human, and the one place blessing happens.</dd>

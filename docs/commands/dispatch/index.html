@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wand dispatch · wand</title>
+  <link rel="stylesheet" href="../../../style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="../../../">wand</a>
+    
+    <a class="nav here" href="../../../docs/">Docs</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/mattwalters/wand">GitHub</a>
+    <span class="version">
+      latest
+      <select id="version-picker" hidden aria-label="Documentation version"></select>
+    </span>
+  </header>
+  
+  <div class="wrap">
+    
+    <nav class="sidenav">
+      
+      
+      <h5>Start</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/">Overview</a>
+      
+      <h5>Doctrine</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/covenant/">The covenant</a>
+      
+      <h5>Commands</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/">All commands</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/init/" class="mono">wand init</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/doctor/" class="mono">wand doctor</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/guard/" class="mono">wand guard</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/queue/" class="mono">wand queue</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/ticket/" class="mono">wand ticket</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/claim/" class="mono">wand claim</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/handback/" class="mono">wand handback</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/abandon/" class="mono">wand abandon</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/file/" class="mono">wand file</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/scope/" class="mono">wand scope</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/run/" class="mono">wand run</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/ui/" class="mono">wand ui</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/version/" class="mono">wand version</a>
+      
+    </nav>
+    
+    <main>
+      
+
+<h1 class="cmd">wand dispatch</h1>
+<p><code>dispatch</code> is a thin selector over <a href="../run/"><code>wand run</code></a> and
+<a href="../scope/"><code>wand scope</code></a>: a read-mostly pass that picks the one ticket a
+repository works next and runs it through whichever of those two
+orchestrators the ticket belongs to.</p>
+<h2 id="synopsis">Synopsis</h2>
+<pre tabindex="0"><code>wand dispatch --team-key &lt;key&gt; [--harness &lt;name&gt;] [--model &lt;m&gt;] [--effort &lt;e&gt;]
+wand dispatch --team-key &lt;key&gt; --watch [--interval &lt;duration&gt;] [...]
+</code></pre><h2 id="what-it-does">What it does</h2>
+<p>The Todo gate lives here, deliberately, and not in <code>run</code> or <code>scope</code>
+themselves: a human typing <code>wand run WND-9</code> has already made the decision
+that WND-9 is the ticket to work. An unattended selector has not, so
+<code>dispatch</code> makes it the same way <a href="../queue/"><code>wand queue</code></a> prints it —
+ranked, then vetted, nothing dropped silently.</p>
+<p>One pass is:</p>
+<ol>
+<li><strong>Lock.</strong> Take this repository&rsquo;s own dispatch lock — a directory and a
+pid, not a file lock: only one dispatch process may select for a given
+repo at a time, and a directory holding a small pid file is inspectable
+and reclaimable by hand the way the <code>flock(1)</code> idiom a cron job might
+otherwise reach for is, on a platform that ships it. A holder still
+running refuses; a holder provably dead on this host is reclaimed and
+retried once; a holder on another host is never assumed dead.</li>
+<li><strong>Gc dead leases.</strong> Every run this repository has in flight occupies a
+lane, up to <code>caps.lanes</code>. Read-only: a run whose lease says its holder
+is provably dead does not hold a lane, whatever phase its journal last
+opened — the same [journal.Report.Zombie] proof <code>wand sweep</code> acts on.</li>
+<li><strong>Read and rank.</strong> Todo and Scoping, each ranked and vetted the way
+<code>wand queue</code> ranks Todo.</li>
+<li><strong>Pick the winner.</strong> The highest-ranked, vetted Todo issue when a lane
+is free, through <code>wand run</code>; otherwise the highest-ranked, vetted
+Scoping issue, through <code>wand scope</code>. A scope needs no lane, so an
+eligible Scoping ticket dispatches even at full lane occupancy —
+research is never starved by full lane occupancy — and it is also what
+a pass falls back to when Todo simply has nothing startable.</li>
+<li><strong>Run it.</strong> One ticket per pass, to one of <code>run</code>&rsquo;s or <code>scope</code>&rsquo;s own
+terminal states.</li>
+</ol>
+<h2 id="--watch"><code>--watch</code></h2>
+<p><code>--watch</code> polls instead of running one pass and exiting. Each tick counts
+lanes (including winners this session has already spawned but that may not
+have registered a journal run yet), and when a winner exists and a lane is
+free — or it needs none — spawns it as a <strong>detached child process</strong>: its
+own session, so neither this process&rsquo;s own context being canceled nor a
+signal to its controlling terminal reaches the child. That child survives
+the watcher, which is what lets several lanes run at once from one <code>--watch</code>
+session. Logging is state-change-only: a tick that changes nothing prints
+nothing, so a long watch does not drown its own signal in a poll interval&rsquo;s
+worth of repeated silence.</p>
+<p>The dispatch lock is held once, for the watch loop&rsquo;s whole lifetime.
+Concurrency across lanes comes from the children it spawns, never from a
+second <code>wand dispatch</code> process racing the first&rsquo;s selection — that second
+process refuses, locked, exactly as a single-shot pass would.</p>
+<p>Each spawned child&rsquo;s own narration (the same lines <code>wand run</code> or
+<code>wand scope</code> prints when you run them yourself) goes to a log file under
+the run journal&rsquo;s state directory, one file per child, since the journal
+itself only carries the structured half of that account.</p>
+<h2 id="exit-codes">Exit codes</h2>
+<p>A scheduler&rsquo;s whole view of a pass is a status and a log, so every ending a
+single-shot pass can reach gets its own code:</p>
+<table>
+	<thead>
+			<tr>
+					<th>Code</th>
+					<th>Meaning</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>0</code></td>
+					<td>Converged.</td>
+			</tr>
+			<tr>
+					<td><code>1</code></td>
+					<td>Refused: nothing started (bad flags, missing configuration), or the winner was chosen but its claim raced and lost.</td>
+			</tr>
+			<tr>
+					<td><code>2</code></td>
+					<td>Handed back or parked — the run/scope journal has the detail.</td>
+			</tr>
+			<tr>
+					<td><code>3</code></td>
+					<td>Locked: another dispatch process already holds this repo&rsquo;s selector lock.</td>
+			</tr>
+			<tr>
+					<td><code>4</code></td>
+					<td>Nothing to do: Todo and Scoping are both empty or fully vetted out.</td>
+			</tr>
+			<tr>
+					<td><code>5</code></td>
+					<td>Linear could not be reached (a transport-level failure — DNS, connection refused, a timeout — as opposed to a reachable API answering with an error).</td>
+			</tr>
+	</tbody>
+</table>
+<p><code>--watch</code> runs until interrupted and does not use this contract itself —
+each pass it dispatches is a detached child, not this process&rsquo;s own exit.</p>
+<h2 id="flags">Flags</h2>
+<table>
+	<thead>
+			<tr>
+					<th>Flag</th>
+					<th>Meaning</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>--team-key</code></td>
+					<td>Linear team key, e.g. <code>WND</code>. Required.</td>
+			</tr>
+			<tr>
+					<td><code>--harness</code></td>
+					<td>Worker harness: <code>claude-code</code> (default) or <code>codex</code>.</td>
+			</tr>
+			<tr>
+					<td><code>--model</code></td>
+					<td>Model for every worker. Default: the harness&rsquo;s default.</td>
+			</tr>
+			<tr>
+					<td><code>--effort</code></td>
+					<td>Reasoning effort for every worker. Default: the harness&rsquo;s default.</td>
+			</tr>
+			<tr>
+					<td><code>--watch</code></td>
+					<td>Poll and dispatch continuously, spawning detached children.</td>
+			</tr>
+			<tr>
+					<td><code>--interval</code></td>
+					<td>How often <code>--watch</code> polls. Default <code>1m</code>.</td>
+			</tr>
+	</tbody>
+</table>
+<h2 id="requirements">Requirements</h2>
+<p>Same as <code>wand run</code> and <code>wand scope</code>: <code>LINEAR_API_KEY</code>, an authenticated
+<code>gh</code>, <code>commands.verify</code> in <a href="../../covenant/"><code>wand.toml</code></a>, run from inside
+the repository.</p>
+<p><code>caps.lanes</code> in the covenant sets how many <code>wand run</code> loops this repository
+runs at once (default <code>1</code>); a Scoping ticket never counts against it.</p>
+<h2 id="see-also">See also</h2>
+<p><a href="../run/"><code>wand run</code></a> and <a href="../scope/"><code>wand scope</code></a> are the two
+orchestrators a winner runs through; <a href="../sweep/"><code>wand sweep</code></a> is
+everything that happens after one of them exits; <a href="../queue/"><code>wand queue</code></a>
+is the same read layer this selector&rsquo;s ranking reuses.</p>
+
+
+    </main>
+    
+    
+    
+    <nav class="toc">
+      <h5>On this page</h5>
+      <nav id="TableOfContents">
+  <ul>
+    <li><a href="#synopsis">Synopsis</a></li>
+    <li><a href="#what-it-does">What it does</a></li>
+    <li><a href="#--watch"><code>--watch</code></a></li>
+    <li><a href="#exit-codes">Exit codes</a></li>
+    <li><a href="#flags">Flags</a></li>
+    <li><a href="#requirements">Requirements</a></li>
+    <li><a href="#see-also">See also</a></li>
+  </ul>
+</nav>
+    </nav>
+    
+  </div>
+  <script>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    (function () {
+      var root = new URL("..", document.querySelector('link[rel="stylesheet"]').href);
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          var picker = document.getElementById("version-picker");
+          ["latest"].concat(versions).forEach(function (v) {
+            var option = document.createElement("option");
+            option.value = v;
+            option.textContent = v;
+            option.selected = v === "latest";
+            picker.appendChild(option);
+          });
+          picker.addEventListener("change", function () {
+            window.location.href = new URL(picker.value + "/", root);
+          });
+          picker.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>
