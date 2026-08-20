@@ -14,7 +14,23 @@ import "time"
 // `wand version` reports this constant — that pairing is how you learn
 // whether a given binary can read a given covenant. Topology upgrades ship
 // by incrementing it.
-const SchemaVersion = 1
+//
+// Schema 2 added Scoped to the topology. What the bump does and does not
+// mean is worth stating exactly, because the two halves pull in opposite
+// directions:
+//
+//   - It gates reading. A file declaring a schema newer than this constant
+//     is refused, because wand cannot know what its keys mean. An older one
+//     is read unchanged: every schema so far has only added keys, and a
+//     file that sets none of them says the same thing under either number.
+//   - It does not gate topology. The state graph is wand's opinion, shipped
+//     centrally, so a schema-1 file gets schema 2's states. That is the
+//     point: it is what makes a team bootstrapped before Scoped report as
+//     drift under `wand doctor` and get repaired by `wand init`.
+//
+// So the number in a file describes the file, not a pin on the lifecycle.
+// Raising it is a migration, and a human's act — see `wand init`.
+const SchemaVersion = 2
 
 // Status is one workflow state the covenant requires on the team.
 //
@@ -106,8 +122,14 @@ func (c Covenant) StatusName(key string) string {
 // Default is the stock covenant: the lifecycle proven in Prosewell.
 //
 // Triage is the inbox agents file into; Backlog is the undifferentiated pool;
-// Scoping blesses research; Todo blesses building; Needs Input parks a
-// question on a human. The automations mirror Prosewell's observed
+// Scoping blesses research; Scoped is the plan that research produced, done
+// and awaiting judgment; Todo blesses building; Needs Input parks a question
+// on a human. Scoped is to Scoping what In Review is to In Progress — the
+// finished-work end of a phase, held apart from the question-parking state
+// because "read this plan and decide" and "answer this question" are
+// different jobs for the human doing them.
+//
+// The automations mirror Prosewell's observed
 // configuration: open and draft target In Progress (a claimed ticket is
 // already there, so the write changes nothing), review targets In Review,
 // and merge closes the ticket.
@@ -122,6 +144,14 @@ func Default() Covenant {
 			{Key: "triage", Name: "Triage", Type: "triage", Position: 0, Color: "#8A6FDF"},
 			{Key: "backlog", Name: "Backlog", Type: "backlog", Position: 0, Color: "#8A6FDF"},
 			{Key: "scoping", Name: "Scoping", Type: "unstarted", Position: -50, Color: "#8A6FDF"},
+			// Scoped sits midway between Scoping (-50) and Todo (1) rather
+			// than adjacent to either, so a later state on the research side
+			// has somewhere to go without renumbering the ones around it.
+			// Green is the ready-for-human green: Scoped is a finished plan
+			// waiting on a person, the same signal the label carries, and
+			// deliberately not Needs Input's orange — orange is an agent
+			// stuck on you, green is work ready for you.
+			{Key: "scoped", Name: "Scoped", Type: "unstarted", Position: -25, Color: "#4CB782"},
 			{Key: "todo", Name: "Todo", Type: "unstarted", Position: 1, Color: "#8A6FDF"},
 			{Key: "needs_input", Name: "Needs Input", Type: "unstarted", Position: 50, Color: "#F2994A"},
 			{Key: "in_progress", Name: "In Progress", Type: "started", Position: 2, Color: "#8A6FDF"},

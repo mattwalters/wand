@@ -57,3 +57,60 @@ func TestEstimateValuesFollowTheScale(t *testing.T) {
 		}
 	}
 }
+
+// Scoped is the research-side analog of In Review: the plan is written and a
+// human has to judge it. It is `unstarted` — blessing it re-authorizes the
+// work rather than resuming it — and it sits between Scoping and Todo with
+// room on both sides, because a board that orders it anywhere else stops
+// reading as a pipeline.
+func TestScopedSitsBetweenScopingAndTodo(t *testing.T) {
+	var scoping, scoped, todo Status
+	for _, s := range Default().Statuses {
+		switch s.Key {
+		case "scoping":
+			scoping = s
+		case "scoped":
+			scoped = s
+		case "todo":
+			todo = s
+		}
+	}
+	if scoped.Key == "" {
+		t.Fatal("the covenant has no scoped status")
+	}
+	if scoped.Name != "Scoped" {
+		t.Errorf("scoped name = %q, want %q", scoped.Name, "Scoped")
+	}
+	if scoped.Type != "unstarted" {
+		t.Errorf("scoped type = %q, want unstarted: blessing a plan re-authorizes the work, it does not resume it", scoped.Type)
+	}
+	if !(scoping.Position < scoped.Position && scoped.Position < todo.Position) {
+		t.Errorf("positions scoping=%v scoped=%v todo=%v, want Scoped strictly between", scoping.Position, scoped.Position, todo.Position)
+	}
+}
+
+// The lesson the schema field encodes, pinned: its number gates whether wand
+// can *read* a file, not which topology the file gets. A repo still declaring
+// schema 1 gets schema 2's states, which is exactly what makes an unmigrated
+// team show up as drift instead of silently keeping the old board.
+func TestOlderSchemaStillGetsTheCurrentTopology(t *testing.T) {
+	f, err := Parse([]byte("schema = 1\n"))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if got := f.Covenant().StatusName("scoped"); got != "Scoped" {
+		t.Errorf(`schema-1 file StatusName("scoped") = %q, want "Scoped"`, got)
+	}
+}
+
+// Scoped is a status like any other: the file may rename it, and code that
+// reads it by key follows the rename.
+func TestScopedIsRenameable(t *testing.T) {
+	f, err := Parse([]byte("schema = 2\n[statuses]\nscoped = \"Planned\"\n"))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if got := f.Covenant().StatusName("scoped"); got != "Planned" {
+		t.Errorf(`renamed StatusName("scoped") = %q, want "Planned"`, got)
+	}
+}

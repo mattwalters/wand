@@ -134,7 +134,7 @@ comparing the two is how you learn whether a given binary can read it.
 
 ## The covenant file
 
-The state graph — Triage → Backlog → Scoping → Todo → Needs Input →
+The state graph — Triage → Backlog → Scoping → Scoped → Todo → Needs Input →
 In Progress → In Review → Done — is wand's opinion, gofmt-style. What a repo
 customizes are the parameters of the machine, never its shape: a checked-in
 `wand.toml` at the repo root carries status *names* over the fixed semantics,
@@ -145,7 +145,7 @@ releases. TOML, so the rationale for a value survives as a comment next to
 the value it justifies:
 
 ```toml
-schema = 1
+schema = 2
 
 [statuses]
 # Our board predates wand and the team reads "Ready" as blessed-to-build.

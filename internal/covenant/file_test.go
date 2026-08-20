@@ -142,7 +142,7 @@ func TestParseRefuses(t *testing.T) {
 		{"unknown section", "schema = 1\n[machine]\npath = \"x\"\n", `"machine.path"`},
 		{"missing schema", "[caps]\nci_attempts = 1\n", "schema is required"},
 		{"schema zero", "schema = 0\n", "not a covenant schema"},
-		{"schema from the future", "schema = 2\n", "upgrade wand"},
+		{"schema from the future", "schema = 3\n", "upgrade wand"},
 		{"unknown estimate scale", "schema = 1\n[estimates]\nscale = \"points\"\n", "estimates.scale"},
 		{"cap of zero", "schema = 1\n[caps]\nreview_rounds = 0\n", "caps.review_rounds"},
 		{"negative cap", "schema = 1\n[caps]\nworker_timeout_minutes = -5\n", "caps.worker_timeout_minutes"},

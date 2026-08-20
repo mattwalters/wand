@@ -55,6 +55,7 @@ type FileStatuses struct {
 	Triage     string `toml:"triage"`
 	Backlog    string `toml:"backlog"`
 	Scoping    string `toml:"scoping"`
+	Scoped     string `toml:"scoped"`
 	Todo       string `toml:"todo"`
 	NeedsInput string `toml:"needs_input"`
 	InProgress string `toml:"in_progress"`
@@ -70,6 +71,7 @@ func (s FileStatuses) overrides() map[string]string {
 		"triage":      s.Triage,
 		"backlog":     s.Backlog,
 		"scoping":     s.Scoping,
+		"scoped":      s.Scoped,
 		"todo":        s.Todo,
 		"needs_input": s.NeedsInput,
 		"in_progress": s.InProgress,
@@ -136,6 +138,12 @@ func Parse(data []byte) (File, error) {
 	if f.Schema < 1 {
 		return File{}, fmt.Errorf("schema %d is not a covenant schema; the first is 1", f.Schema)
 	}
+	// An older schema is read as-is rather than refused or upgraded in
+	// place: every schema so far has only added optional keys, so a file
+	// written against schema 1 means exactly what it says under schema 2.
+	// It still gets schema 2's *topology* — that is central, not the file's
+	// (see SchemaVersion) — which is what surfaces an unmigrated team as
+	// drift instead of hiding it behind a version number.
 	if f.Schema > SchemaVersion {
 		return File{}, fmt.Errorf("schema %d is newer than this wand speaks (%d); upgrade wand", f.Schema, SchemaVersion)
 	}
@@ -185,7 +193,7 @@ func validateTeam(md toml.MetaData, t FileTeam) error {
 func validateStatuses(md toml.MetaData, s FileStatuses) error {
 	// An explicitly empty name is refused rather than treated as unset:
 	// whatever the author meant, it was not "quietly keep the default".
-	for _, key := range []string{"triage", "backlog", "scoping", "todo", "needs_input", "in_progress", "in_review", "done", "canceled", "duplicate"} {
+	for _, key := range []string{"triage", "backlog", "scoping", "scoped", "todo", "needs_input", "in_progress", "in_review", "done", "canceled", "duplicate"} {
 		if md.IsDefined("statuses", key) && strings.TrimSpace(s.overrides()[key]) == "" {
 			return fmt.Errorf("statuses.%s is empty; delete the key to keep the stock name", key)
 		}
