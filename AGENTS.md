@@ -3,18 +3,20 @@
 A Go CLI and TUI, built on Cobra + [fang](https://github.com/charmbracelet/fang)
 and [Bubble Tea v2](https://charm.land/bubbletea/v2). Public, MIT licensed.
 
-`init`, `guard`, `doctor`, `scope` and `ui` are real: `init` bootstraps a
+`init`, `guard`, `doctor`, `scope`, `run` and `ui` are real: `init` bootstraps a
 Linear team to the covenant (parameterized by a checked-in `wand.toml` when
 present) and installs the guard's hook shim; `guard` is the status verdict
 oracle the shim routes Linear writes through; `doctor` diffs the live team
 against the covenant and reports drift (exit 0 clean, 1 drift, 2 could not
 check); `scope` is the first orchestrator — a cold read-only scout over one
-Scoping ticket, whose hard-validated handoff becomes a plan in the ticket body
-and argued options in a comment, ending at Needs Input; and `ui` is the
-cockpit: the four queues waiting on a human, and the only surface in wand that
-performs the transitions the guard forbids — blessing is a human act, so it
-has a human door. The remaining orchestrators (`run`, `dispatch`) are not
-built yet. [PLAN.md](./PLAN.md) is the build order and the
+Scoping ticket, whose hard-validated handoff becomes a plan in the ticket
+body and argued options in a comment, ending at Needs Input; `run` is the
+core orchestrator — implement → CI → review → revise over cold workers,
+exit 0 converged, 2 handed back, 3 parked, 1 never started; and `ui` is the
+cockpit: the four queues waiting on a human, and the only surface in wand
+that performs the transitions the guard forbids — blessing is a human act,
+so it has a human door. `dispatch`, the last orchestrator, is not built
+yet. [PLAN.md](./PLAN.md) is the build order and the
 reasoning — a deliberately mortal document; the Linear tickets are the
 authoritative version of the work. The TUI's verification layer is described
 below; read that before changing anything under `internal/tui`.
@@ -39,6 +41,9 @@ internal/journal/    the crash-only run journal, lease and lock: journal before 
                      exactly one terminal record, and a dead holder provably dead
 internal/scope/      the research orchestrator: cold scout -> hard handoff validation ->
                      optional critic and interview -> four writes in a fixed order
+internal/run/        the core orchestrator behind `wand run`: implement → CI → review →
+                     revise, a cold worker per phase, every external write the
+                     orchestrator's, exactly one journaled terminal state per run
 internal/tui/        Bubble Tea models — the cockpit itself
   testdata/screens/  golden screens (plain text pictures of the UI)
 internal/theme/      every lipgloss style, in one place
@@ -59,7 +64,7 @@ the goldens identical.
 | 0 | `internal/tui/*_test.go` | `Update` transitions. Pure, instant. **Most tests belong here.** |
 | 1 | `tuitest.FinalModel` | Wiring: keys reach the right branch, commands fire |
 | 2 | `tuitest.AssertScreen` | What the user actually sees, as a golden screen |
-| 3 | `e2e/` | TTY detection, alt-screen, signals, exit codes. One pty smoke test — keep it that way — plus the exit-code contracts of the guard hook, doctor and scope (plain exec, no pty). |
+| 3 | `e2e/` | TTY detection, alt-screen, signals, exit codes. One pty smoke test — keep it that way — plus the exit-code contracts of the guard hook, doctor, scope and run (plain exec, no pty). |
 
 Off to the side of the tiers sits the **isolation conformance suite**
 (`internal/workertest`): its structural half runs with `make test`, and its

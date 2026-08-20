@@ -3,8 +3,6 @@ package cli
 import (
 	"fmt"
 	"os"
-	"os/exec"
-	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -88,7 +86,7 @@ func runScope(cmd *cobra.Command, identifier, harness, model, effort string, int
 	if err != nil {
 		return fail(err)
 	}
-	repo, err := repoRoot()
+	repo, err := repoRoot("scope")
 	if err != nil {
 		return fail(err)
 	}
@@ -137,15 +135,4 @@ func requireTTY(cmd *cobra.Command) error {
 		return fmt.Errorf("--interactive needs a terminal: stdin is a pipe or a file here, and an interview nobody can answer would hang the run. Drop the flag for an unattended scope")
 	}
 	return nil
-}
-
-// repoRoot resolves the repository an orchestrator acts on from the working
-// directory — the scout's working directory and the journal's Meta.Repo
-// both hang off it.
-func repoRoot() (string, error) {
-	out, err := exec.Command("git", "rev-parse", "--show-toplevel").Output()
-	if err != nil {
-		return "", fmt.Errorf("not inside a git repository: wand scope reads the repo it is run from")
-	}
-	return strings.TrimSpace(string(out)), nil
 }

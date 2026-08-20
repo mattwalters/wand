@@ -219,28 +219,48 @@ func Compose(spec Spec) string {
 // file carries the worker's actual result; output is diagnostics only.
 const tailLimit = 64 << 10
 
-// tail is an io.Writer keeping only the last limit bytes. os/exec
-// serializes writes when stdout and stderr share one non-file writer, so
-// no lock is needed.
-type tail struct {
+// Tail is an io.Writer keeping only the last Limit bytes, so a chatty or
+// wedged child cannot grow an unbounded buffer. os/exec serializes writes
+// when stdout and stderr share one non-file writer, so no lock is needed.
+// Exported because every subprocess wand spawns — workers here, git and
+// covenant commands in the orchestrator — needs the same bound, and one
+// clipping rule (marker included) beats three drifting copies.
+type Tail struct {
+	// Limit is the byte bound; zero means the worker default.
+	Limit   int
 	buf     []byte
 	clipped bool
 }
 
-func (t *tail) Write(p []byte) (int, error) {
+func (t *Tail) limit() int {
+	if t.Limit > 0 {
+		return t.Limit
+	}
+	return tailLimit
+}
+
+func (t *Tail) Write(p []byte) (int, error) {
 	t.buf = append(t.buf, p...)
-	if len(t.buf) > tailLimit {
-		t.buf = t.buf[len(t.buf)-tailLimit:]
+	if n := t.limit(); len(t.buf) > n {
+		t.buf = t.buf[len(t.buf)-n:]
 		t.clipped = true
 	}
 	return len(p), nil
 }
 
-func (t *tail) String() string {
+func (t *Tail) String() string {
 	if t.clipped {
 		return "[… earlier output clipped …]\n" + string(t.buf)
 	}
 	return string(t.buf)
+}
+
+// Clip is Tail for text already in hand: the last limit bytes of s, marked
+// when anything was dropped.
+func Clip(s string, limit int) string {
+	t := &Tail{Limit: limit}
+	t.Write([]byte(s))
+	return t.String()
 }
 
 // Run spawns one worker through the adapter and collects its handoff.
@@ -285,7 +305,7 @@ func Run(ctx context.Context, a Adapter, spec Spec) (Result, error) {
 	cmd.Dir = inv.Dir
 	cmd.Env = inv.Env
 	cmd.Stdin = strings.NewReader(inv.Stdin)
-	out := &tail{}
+	out := &Tail{}
 	cmd.Stdout, cmd.Stderr = out, out
 	// The deadline must actually end the run. Killing only the direct
 	// child is not enough: a harness spawns helpers of its own, and any
@@ -293,8 +313,8 @@ func Run(ctx context.Context, a Adapter, spec Spec) (Result, error) {
 	// output pipe open — and Wait blocks until every write end closes. So
 	// the kill targets the whole process group, and WaitDelay bounds the
 	// wait for anything that escapes even that (a double-forked daemon).
-	setupProcessGroup(cmd)
-	cmd.WaitDelay = waitDelay
+	SetupProcessGroup(cmd)
+	cmd.WaitDelay = WaitDelay
 
 	runErr := cmd.Run()
 
@@ -329,12 +349,13 @@ func Run(ctx context.Context, a Adapter, spec Spec) (Result, error) {
 	return res, nil
 }
 
-// waitDelay bounds how long Run waits, after the child exits or the kill
+// WaitDelay bounds how long a Run waits, after the child exits or the kill
 // lands, for the output pipe to close. It exists for the escape artists: a
 // descendant that detached into its own process group before the kill still
 // holds the pipe, and without a bound its survival would hold Run open
-// forever.
-const waitDelay = 10 * time.Second
+// forever. Exported alongside SetupProcessGroup: every subprocess wand
+// spawns needs both, or a surviving grandchild holds it open forever.
+const WaitDelay = 10 * time.Second
 
 // collect reads the handoff and deletes it. Deletion is not tidiness: a
 // handoff that outlives its read could be consumed again by the next phase,

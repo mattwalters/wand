@@ -8,12 +8,14 @@ import (
 	"syscall"
 )
 
-// setupProcessGroup places the child in its own process group and makes
+// SetupProcessGroup places the child in its own process group and makes
 // context cancellation kill the whole group, not just the direct child. A
 // harness spawns helpers of its own (shells, MCP transports); a survivor of
 // a single-process kill would keep running in the worktree — and could
 // rewrite the handoff path after the runner has collected and deleted it.
-func setupProcessGroup(cmd *exec.Cmd) {
+// Exported for the orchestrator's own subprocesses (verify, git, gh), which
+// face the same hazard.
+func SetupProcessGroup(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 	cmd.Cancel = func() error {
 		err := syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
