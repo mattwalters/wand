@@ -125,7 +125,7 @@ func TestLanesAreOrderedBySeverityThenAge(t *testing.T) {
 	}})
 
 	var got []string
-	for _, row := range b.Sections[3].Rows {
+	for _, row := range b.Sections[4].Rows {
 		got = append(got, row.Lane.RunID)
 	}
 	want := []string{"a", "b", "c", "d"}
