@@ -72,7 +72,7 @@ search before the filing.
 
 **Orchestrators that hand back.** [`wand scope`](docs/commands/scope/) sends
 a cold, read-only scout over one ticket and writes a plan plus the argued
-options a human blesses it on — ending at Needs Input, never at Todo.
+options a human blesses it on — ending at Scoped, never at Todo.
 [`wand run`](docs/commands/run/) takes a ticket a human *has* blessed and
 drives it through implement → CI → review → revise. Neither ever blesses
 its own work.

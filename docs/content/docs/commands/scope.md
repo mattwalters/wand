@@ -7,7 +7,7 @@ summary: Research one Scoping ticket into a plan a human can bless.
 `scope` is the research orchestrator. It sends a cold, read-only scout over
 your repository to research one ticket, validates what the scout hands back,
 and writes the result onto the ticket: the plan into the description, the
-approaches and their trade-offs as a comment, the estimate, and Needs Input
+approaches and their trade-offs as a comment, the estimate, and Scoped
 last.
 
 It is the smallest orchestrator wand has — no worktree, no branch, no PR, no
@@ -43,10 +43,10 @@ Four writes, and the order is the contract:
    every approach with its trade-off, which one is recommended and why,
    what the plan rests on, what is still open, and the ask.
 3. **The estimate**, on the team's scale.
-4. **Needs Input**.
+4. **Scoped**.
 
 Each deliverable lands before the transition that advertises it. A ticket in
-Needs Input promises a scope to read, so the status move is last, and if
+Scoped promises a finished plan to judge, so the status move is last, and if
 anything before it fails the ticket stays in Scoping — carrying whatever
 did land, and nothing claiming to be finished.
 
@@ -170,9 +170,9 @@ A scheduler contract, and the one `wand run` publishes too.
 
 | Code | Meaning |
 |---|---|
-| `0` | Scoped. The plan, the options and the estimate are on the ticket, and it is in Needs Input. |
+| `0` | Scoped. The plan, the options and the estimate are on the ticket, and it is in Scoped for a human to judge. |
 | `1` | The run never started: no API key, the ticket is not in Scoping, `--interactive` with no terminal, another process holds the ticket. Nothing was written. |
-| `2` | Handed back. The scout judged the ticket's premise wrong; its account is on the ticket and no plan was written. |
+| `2` | Handed back. The scout judged the ticket's premise wrong; its account is on the ticket, no plan was written, and it is in Needs Input for a human to answer. |
 | `3` | Parked. The run stopped without deciding — an unusable handoff, a worker failure, a write that failed part-way. The journal says which, and how much reached the ticket. |
 
 ## The journal

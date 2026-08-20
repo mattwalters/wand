@@ -48,6 +48,7 @@ func (b *board) TeamStates(ctx context.Context, teamID string) ([]linear.Workflo
 	return []linear.WorkflowState{
 		{ID: "state-needs-input", Name: "Needs Input", Type: "unstarted"},
 		{ID: "state-scoping", Name: "Scoping", Type: "unstarted"},
+		{ID: "state-scoped", Name: "Scoped", Type: "unstarted"},
 	}, nil
 }
 
@@ -216,7 +217,7 @@ func (h *harness) run(t *testing.T) (scope.Outcome, error) {
 func draftHandoff() map[string]any { return goodDraft() }
 
 // The deliverables land in one order, and the status that advertises them
-// lands last. A ticket in Needs Input promises a scope to read; every
+// lands last. A ticket in Scoped promises a finished plan to judge; every
 // earlier write is part of that scope, and the comment precedes the
 // estimate because a number nothing explains is worse than an argument
 // with no number.
@@ -234,7 +235,7 @@ func TestScopeWritesInTheFixedOrder(t *testing.T) {
 		t.Errorf("exit code = %d, want %d", out.ExitCode(), scope.ExitScoped)
 	}
 
-	want := []string{"section=plan", "comment", "estimate", "state=state-needs-input"}
+	want := []string{"section=plan", "comment", "estimate", "state=state-scoped"}
 	if strings.Join(h.board.calls, ",") != strings.Join(want, ",") {
 		t.Fatalf("writes = %v\nwant  %v", h.board.calls, want)
 	}
@@ -540,7 +541,7 @@ func TestAFailedEstimateParksBeforeTheStatusMove(t *testing.T) {
 		t.Fatalf("outcome = %s, want parked", out.Kind)
 	}
 	if h.board.stateID != "" {
-		t.Error("the ticket was moved to Needs Input with a deliverable missing")
+		t.Error("the ticket was moved to Scoped with a deliverable missing")
 	}
 }
 
