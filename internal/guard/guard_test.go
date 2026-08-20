@@ -178,15 +178,15 @@ func TestForbiddenSetMatchesCovenant(t *testing.T) {
 		}
 	}
 
-	// The ambiguity message for the unstarted type claims exactly three
-	// unstarted statuses: Todo, Needs Input, Scoping.
+	// The ambiguity message for the unstarted type claims exactly four
+	// unstarted statuses: Todo, Needs Input, Scoping, Scoped.
 	unstarted := map[string]bool{}
 	for _, s := range cov.Statuses {
 		if s.Type == "unstarted" {
 			unstarted[normalize(s.Name)] = true
 		}
 	}
-	want := map[string]bool{"todo": true, "needs input": true, "scoping": true}
+	want := map[string]bool{"todo": true, "needs input": true, "scoping": true, "scoped": true}
 	if len(unstarted) != len(want) {
 		t.Errorf("covenant has %d unstarted statuses %v, the unstarted reason claims %v", len(unstarted), unstarted, want)
 	}

@@ -32,8 +32,8 @@ and should feel like one.
    If wand ever grows a second backend, it will be because wand won, not as
    a hedge.
 2. **Fixed topology, parameterized covenant.** The state graph — Triage →
-   Backlog → Scoping → Todo → Needs Input → In Progress → In Review → Done —
-   is wand's opinion, gofmt-style. Every state exists because of a failure
+   Backlog → Scoping → Scoped → Todo → Needs Input → In Progress →
+   In Review → Done — is wand's opinion, gofmt-style. Every state exists because of a failure
    mode every team running agents will eventually hit. A repo's covenant
    file customizes the parameters of the machine (names, caps, commands,
    toggles), never its shape. Topology changes ship as wand upgrades, for

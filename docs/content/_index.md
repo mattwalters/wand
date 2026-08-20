@@ -52,8 +52,8 @@ written. `wand ui --team-key WND` shows your team's.
 > last one, is not built yet.
 
 **A covenant, not a config file.** The state graph — Triage → Backlog →
-Scoping → Todo → Needs Input → In Progress → In Review → Done — is wand's
-opinion, gofmt-style. A checked-in `wand.toml` carries the *parameters* of
+Scoping → Scoped → Todo → Needs Input → In Progress → In Review → Done — is
+wand's opinion, gofmt-style. A checked-in `wand.toml` carries the *parameters* of
 the machine — status names, caps, commands — never its shape.
 [The covenant](docs/covenant/) is the reasoning behind every state in it.
 

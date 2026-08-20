@@ -54,6 +54,7 @@ func TestPlanFreshTeam(t *testing.T) {
 
 	want := []string{
 		`create status "Scoping" (unstarted)`,
+		`create status "Scoped" (unstarted)`,
 		`create status "Needs Input" (unstarted)`,
 		`create label "human-only"`,
 		`create label "agent-filed"`,
@@ -71,6 +72,7 @@ func TestPlanIsIdempotentOnceSatisfied(t *testing.T) {
 	current := freshTeam()
 	current.States = append(current.States,
 		linear.WorkflowState{ID: "st-Scoping", Name: "Scoping", Type: "unstarted"},
+		linear.WorkflowState{ID: "st-Scoped", Name: "Scoped", Type: "unstarted"},
 		linear.WorkflowState{ID: "st-NI", Name: "Needs Input", Type: "unstarted"},
 	)
 	for _, name := range []string{"human-only", "agent-filed", "ready-for-human", "re-review"} {
@@ -138,6 +140,7 @@ func TestPlanMatchesNamesCaseInsensitively(t *testing.T) {
 	current.States = append(current.States,
 		linear.WorkflowState{ID: "st-x", Name: "needs input", Type: "unstarted"},
 		linear.WorkflowState{ID: "st-y", Name: "SCOPING", Type: "unstarted"},
+		linear.WorkflowState{ID: "st-z", Name: "scoped", Type: "unstarted"},
 	)
 	for _, a := range Plan(covenant.Default(), current) {
 		if a.Op == CreateStatus {

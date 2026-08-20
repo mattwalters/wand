@@ -104,11 +104,12 @@ const (
 		"If you have found something that ought to be scoped, say so in a comment " +
 		"and leave the status alone. A human promotes it."
 
-	reasonAmbiguousUnstarted = "`unstarted` is a state *type*, not a status, and this team has three of " +
-		"them — **Todo**, **Needs Input** and **Scoping**. Linear resolves the " +
-		"type to whichever the team defaults to, which is Todo, so this reads as a " +
-		"hand-back and lands as a promotion. Two of the three are statuses you may " +
-		"never set, which is why the type is refused rather than resolved.\n\n" +
+	reasonAmbiguousUnstarted = "`unstarted` is a state *type*, not a status, and this team has four of " +
+		"them — **Todo**, **Needs Input**, **Scoping** and **Scoped**. Linear " +
+		"resolves the type to whichever the team defaults to, which is Todo, so " +
+		"this reads as a hand-back and lands as a promotion. Two of the four are " +
+		"statuses you may never set, which is why the type is refused rather than " +
+		"resolved.\n\n" +
 		"Name the status you actually mean: `state: \"Needs Input\"`."
 )
 
@@ -132,8 +133,8 @@ var forbiddenNames = map[string]string{
 // forbiddenTypes are the state *types* that resolve to a forbidden status.
 //
 // `completed` and `canceled` are unambiguous — one status each. `unstarted`
-// covers Todo, Needs Input and Scoping, so it gets its own message telling
-// the caller to name the status rather than the type. (`duplicate` needs no
+// covers Todo, Needs Input, Scoping and Scoped, so it gets its own message
+// telling the caller to name the status rather than the type. (`duplicate` needs no
 // entry: the string is already forbidden as a name.)
 var forbiddenTypes = map[string]string{
 	"completed": reasonClose,
