@@ -20,12 +20,33 @@
 //	Duplicate  ) the ticket looks; an agent recommends it in a comment.
 //
 // Every status an agent legitimately sets is left alone: In Progress,
-// In Review, Needs Input, Backlog, Triage. Backlog is the one downward move
-// an agent may make, and it is safe because it removes authorization rather
-// than granting it. Note which direction is blocked: moving a ticket *into*
-// Scoping is a promotion and is refused; moving one *out* of Scoping to
-// Needs Input is what every scope ends with, and it is allowed — the guard
-// sees only the destination.
+// In Review, Needs Input, Scoped, Backlog, Triage. Backlog is the one
+// downward move an agent may make, and it is safe because it removes
+// authorization rather than granting it. Note which direction is blocked:
+// moving a ticket *into* Scoping is a promotion and is refused; moving one
+// *out* of Scoping is what every scope ends with, and both ways it can end
+// are allowed — to Needs Input, the scout has a blocking question, or to
+// Scoped, the plan is finished — the guard sees only the destination.
+//
+// Scoped is the research-side analog of In Review: it is the scope
+// orchestrator's terminal write, the plan-review equivalent of "this code is
+// ready to look at". An agent may set it unattended, the same as In Review,
+// and it may never move a ticket *out* of Scoped — that destination is
+// already covered by the Todo rule above (Scoped -> Todo is blessing a plan,
+// which is the same human act as blessing anything else into Todo) and by
+// the four-close-statuses rule (Scoped -> Done/Canceled/Duplicate is closing
+// a ticket, forbidden regardless of where it is closed from). No status
+// besides Todo, Scoping, Done, Canceled and Duplicate is ever a forbidden
+// destination, so leaving Scoped needs no rule of its own: it is already
+// covered by the same five.
+//
+// WND-17: the maps below match the covenant's default English display
+// names ("Todo", "Scoping", ...), not whatever a covenant-file rename might
+// call them. A team that renames a guarded status in its covenant file
+// silently falls out of this guard's coverage — including Scoped and its
+// neighbors, added here. That gap is real and is not fixed by this change;
+// it is tracked separately as WND-17, deliberately, rather than carried
+// forward with no comment saying so.
 //
 // Known gap, accepted rather than overlooked: Linear's state parameter takes
 // "a state type, name, or ID". Names and types are matched below; a raw UUID
@@ -120,6 +141,9 @@ const (
 // matched only Linear's spelling would be bypassed by a typo that Linear
 // itself would then reject — leaving the agent improvising, which is the
 // failure this whole package exists to stop.
+//
+// These are literal default display names, not covenant-file configuration —
+// see the WND-17 ruling in the package doc above.
 var forbiddenNames = map[string]string{
 	"todo":      reasonTodo,
 	"to do":     reasonTodo,

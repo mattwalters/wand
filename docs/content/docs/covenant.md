@@ -91,10 +91,12 @@ back to Backlog with a comment, never quietly closed.
 **Scoping** blesses research. A ticket sitting in Scoping is one a
 dispatcher may spend a scout on unattended — real tokens, real time. That
 is an authorization, the same shape as Todo one rung lower, which is why
-agents may not put work there either. A scout finishing its scope moves
-the ticket *out* of Scoping to Needs Input, posting approaches, a
-recommendation and an estimate; moving out is what every scope ends with,
-and it hands the decision back to a person.
+agents may not put work there either. A scope ends one of two ways, and
+both move the ticket *out* of Scoping: a scout with a blocking question
+moves it to Needs Input, posting the question; a scout with a finished
+plan moves it to Scoped, posting approaches, a recommendation and an
+estimate. Moving out is what every scope ends with, either way, and it
+hands the decision back to a person.
 
 **Scoped** is the research side of In Review: the plan is written, the
 approaches are argued, and all that remains is a human's judgment. It exists
@@ -106,6 +108,12 @@ cannot do that while one queue holds both. Building already had the pair, In
 Progress and In Review; research now has it too. Like Needs Input it is
 `unstarted`: blessing a plan promotes it to Todo, which re-authorizes the
 work rather than resuming it.
+
+Scoped is the agent's terminal write for a scope the same way In Review is
+for a build — an agent may set it unattended, and the guard treats the two
+identically. Neither may an agent move a ticket *out* of Scoped: that
+destination is Todo (blessing) or one of the three close statuses, all
+five already forbidden regardless of where the ticket is moving from.
 
 Scoped is the newest state, and wand's own verbs move onto it one release
 at a time. Until they do, `wand scope` still ends at Needs Input, and a
@@ -156,11 +164,26 @@ happened.
 Five statuses grant or revoke authorization an agent does not have, so an
 agent may never set them: **Todo**, **Scoping**, **Done**, **Canceled**,
 **Duplicate**. Everything an agent legitimately sets is left alone:
-In Progress, In Review, Needs Input, Backlog, Triage.
+In Progress, In Review, Needs Input, **Scoped**, Backlog, Triage.
 
 Note which *direction* is blocked. Moving a ticket into Scoping is a
-promotion and is refused; moving one out of Scoping to Needs Input is how
-every scope ends, and is allowed. The guard sees only the destination.
+promotion and is refused; moving one out of Scoping is how every scope
+ends, and is allowed either way it ends — to Needs Input (a blocking
+question) or to Scoped (a finished plan). The guard sees only the
+destination.
+
+Leaving Scoped toward Todo needs no rule of its own: it is the same
+promotion the Todo rule above already forbids from every status, Scoped
+included. Setting Scoped is new with this status; blocking the way out of
+it is not — it falls out of a rule that already existed.
+
+One gap this status inherits rather than fixes: the guard matches statuses
+by their default English display name (`"Scoped"`, `"Todo"`, ...), not
+whatever a covenant-file rename might call them. A team that renames a
+guarded status in its covenant file silently falls out of the guard's
+coverage. That gap predates Scoped, applies to it and its neighbors alike,
+and is tracked separately rather than fixed here — see
+[WND-17](https://linear.app/prosewell/issue/WND-17/guards-forbidden-status-list-ignores-covenant-file-status-renames).
 
 This rule is enforced, not requested. Every rule in wand lives in exactly
 one of four tiers, and being honest about which tier a rule occupies is
