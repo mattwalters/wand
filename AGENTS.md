@@ -19,7 +19,7 @@ read-mostly pass that picks the one ticket to run next through `run` or
 detached children; `sweep` is everything that happens after a run exits —
 a re-review label, an unresolved PR thread on a ready-for-human ticket, or
 a lease whose owner is provably dead, one action per pass; and `ui` is the
-cockpit: the four queues waiting on a human, and the only surface in wand
+cockpit: the five queues waiting on a human, and the only surface in wand
 that performs the transitions the guard forbids — blessing is a human act,
 so it has a human door. [PLAN.md](./PLAN.md) is the build order and the
 reasoning — a deliberately mortal document; the Linear tickets are the
@@ -35,7 +35,7 @@ internal/linear/     the Linear GraphQL client — raw net/http, no GraphQL libr
 internal/covenant/   the process contract: fixed topology, parameterized covenant
 internal/bootstrap/  planner/executor over the covenant; all decisions in the pure Plan
 internal/guard/      the one verdict function: which ticket writes an agent may never make
-internal/cockpit/    what is waiting on a human: the four queues, the six judgments,
+internal/cockpit/    what is waiting on a human: the five queues, the seven judgments,
                      and the one write path that deliberately does not call the guard
 internal/doctor/     read-only drift report: bootstrap.Plan as the diff, plus what Plan cannot express
 internal/shim/       generates the PreToolUse hook entry that routes save_issue to wand guard

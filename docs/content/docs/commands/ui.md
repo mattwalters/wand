@@ -21,14 +21,17 @@ wand ui --sample
 wand ui --dump-screen [--script KEYS] [--width N] [--height N]
 ```
 
-## The four queues
+## The five queues
 
 ```
- wand cockpit · WND                                             6 waiting on you
+ wand cockpit · WND                                             7 waiting on you
 
   Triage  2 to judge
 › WND-42  doctor prints an empty drift section on a clean board              Low
   WND-41  guard: a raw state UUID is not matched
+
+  Scoped  1 to bless
+  WND-44  cockpit: a fifth queue for plans awaiting blessing              Urgent
 
   Needs Input  1 to answer
   WND-38  Second harness adapter: which one?                                High
@@ -44,16 +47,20 @@ wand ui --dump-screen [--script KEYS] [--width N] [--height N]
   ↑/k ↓/j move • enter open • r refresh • q quit
 ```
 
-Each of the four is a queue nothing drains on its own, and each is
+Each of the five is a queue nothing drains on its own, and each is
 invisible until something puts it on one screen:
 
 * **Triage** — what agents filed, waiting to be judged. Ranked in the same
   order [`wand queue`](../queue/) ranks work, so the ticket you bless first
   is the one an agent starts first.
+* **Scoped** — tickets carrying a finished plan, waiting on the judgment
+  that either blesses it into Todo or sends it back. Opening a row shows
+  the plan itself — the marker-fenced region [`wand scope`](../scope/)
+  wrote into the description — not the ticket's original body. See
+  [Blessing a plan](#blessing-a-plan) below.
 * **Needs Input** — runs parked on a question: a scope that judged the
   ticket's premise wrong, or a run that hands back. It means one thing —
-  answer me — never "a plan is ready to bless," which is
-  [Scoped's](../../covenant/#the-states-and-why-each-exists) job.
+  answer me — never "a plan is ready to bless," which is Scoped's job.
 * **Ready for human** — every open issue carrying the `ready-for-human`
   label: a pull request to review, a merge to press. Closed issues are
   dropped, because the label outlives the merge that answered it.
@@ -65,7 +72,7 @@ invisible until something puts it on one screen:
   automatically), and `parked` (the run stopped and recorded why). Read-only:
   a lane is not a ticket, and resolving one means going to the machine.
 
-The sections are always all four, even when empty. A queue that vanished
+The sections are always all five, even when empty. A queue that vanished
 when it drained would teach you to stop looking for it, and the day it
 refilled you would not notice.
 
@@ -109,39 +116,107 @@ disposition itself cannot know: an unranked ticket promoted to Todo sorts
 behind everything ranked, so the blessing works and the work still never
 starts.
 
-## The six judgments
+## Blessing a plan
 
-They apply to Triage and Needs Input rows. Ready-for-human and lane rows
-offer none, and the screen says why rather than leaving a key to do nothing.
+Opening a Scoped row shows the plan [`wand scope`](../scope/) wrote — the
+marker-fenced region of the description, and nothing else. Not the ticket's
+original body, and not the scout's argued-options comment (the approaches it
+weighed, the trade-offs, the estimate): that stays in Linear, one click away
+from a ticket you already have open, and this screen exists to put your
+judgment on the plan itself rather than the argument for it.
 
-| Key | Judgment | Asks for | Writes |
-|---|---|---|---|
-| `t` | Bless → Todo | — | status |
-| `s` | Bless → Scoping | — | status |
-| `b` | Backlog, ranked | a priority, `1`–`4` | status + priority |
-| `u` | Backlog, unranked | — | status + priority `0` |
-| `d` | Duplicate | the canonical issue | relation, **then** status |
-| `x` | Canceled, with reason | the reason | comment, **then** status |
+```
+ WND-44  cockpit: a fifth queue for plans awaiting blessing
+
+  status    Scoped
+  priority  Urgent
+  assignee  Matt Walters
+
+  ## Implementation plan
+
+  **Add a Scoped section.** Triage and Scoped are both authorization judgments;
+  putting them next to each other reads as one job, not two.
+
+  ### Steps
+
+  1. Read the Scoped state into the snapshot.
+  2. Render the plan section on the detail screen.
+  3. Wire Bless → Todo and Backlog, with reason.
+
+  ### How it is proven
+
+  Golden screens at two widths, plus the existing cockpit test tiers.
+  … 8 more lines; read it in Linear
+
+  judge  t ✦Todo  b Backlog
+  esc back • q quit
+```
+
+Like the description on every other row, the plan is clipped rather than
+scrolled: a plan that needs more than a screenful to judge is one to read in
+Linear.
+
+Judging it has two answers, not six — there is no research left to
+authorize here, and no title vague enough yet to belong to someone else's
+ticket. `t` blesses it into Todo, exactly like Triage's. `b` sends it back to
+Backlog with your reasoning posted as a comment first, the same ordering
+Cancel and Duplicate use below, so a crash between the two leaves an open
+ticket carrying its own argument rather than a status move nobody can
+explain — and so the next scope of this ticket starts from why the last one
+did not land instead of guessing:
+
+```
+  Backlog, with reason
+
+    WND-44  cockpit: a fifth queue for plans awaiting blessing
+    Scoped → Backlog
+
+    Backlog is the pool. The reason is posted as a comment before the status
+    moves, because a rejected plan with no reason on it leaves the next scope of
+    this ticket guessing at what was wrong.
+
+    reason       wrong approach
+
+  enter move WND-44 → Backlog • esc back
+```
+
+## The seven judgments
+
+Triage and Needs Input rows get all six of the first table below. A Scoped
+row gets only two — bless, or reject with a reason — which is `t` and `b`
+from the same table, but pointed at a plan rather than a raw ticket. Ready-
+for-human and lane rows offer none, and the screen says why rather than
+leaving a key to do nothing.
+
+| Key | Judgment | Where | Asks for | Writes |
+|---|---|---|---|---|
+| `t` | Bless → Todo | Triage, Needs Input, Scoped | — | status |
+| `s` | Bless → Scoping | Triage, Needs Input | — | status |
+| `b` | Backlog, ranked | Triage, Needs Input | a priority, `1`–`4` | status + priority |
+| `u` | Backlog, unranked | Triage, Needs Input | — | status + priority `0` |
+| `d` | Duplicate | Triage, Needs Input | the canonical issue | relation, **then** status |
+| `x` | Canceled, with reason | Triage, Needs Input | the reason | comment, **then** status |
+| `b` | Backlog, with reason | Scoped | the reason | comment, **then** status |
 
 `enter` confirms, `esc` goes back. The unranked Backlog move sends an
 explicit `0` rather than leaving the field alone: carrying the old rank into
 the pool is the opposite of the judgment "worth keeping, not worth ranking".
 
-Duplicate and Cancel write their evidence *before* the status moves, for the
-same reason [`wand handback`](../handback/) posts its question first. The
-status write is what ends the ticket's visibility, so anything a reader will
-later need has to already be on it. A crash between the two leaves an open
-ticket carrying its own argument for closure, which a person can finish; the
-reverse leaves a closed ticket nobody can explain.
+Duplicate, Cancel and the Scoped row's Backlog write their evidence *before*
+the status moves, for the same reason [`wand handback`](../handback/) posts
+its question first. The status write is what ends the ticket's visibility,
+so anything a reader will later need has to already be on it. A crash
+between the two leaves an open ticket carrying its own argument, which a
+person can finish; the reverse leaves a ticket nobody can explain.
 
 When the status move fails after that first write has landed, the
 confirmation stays up so you can press `enter` again — and the retry does
 **not** repeat the write that already succeeded. The screen says so, and the
 field it came from goes read-only, because the text is on the ticket and
 editing it could no longer reach anywhere. Retrying from the top would post
-the same cancellation reason twice, and would re-issue a relation Linear
-already holds and now refuses, which would leave the duplicate permanently
-uncompletable through the only screen that can complete it.
+the same reason twice, and would re-issue a relation Linear already holds
+and now refuses, which would leave the duplicate permanently uncompletable
+through the only screen that can complete it.
 
 Every status is named by what it *means*, so a covenant that renames `todo`
 to `Ready` gets a screen that says `→ Ready`.
@@ -161,12 +236,12 @@ again to disengage.
 The header names what engage mode is doing:
 
 ```
- wand cockpit · WND                                             6 waiting on you
+ wand cockpit · WND                                             7 waiting on you
   engaged · idle · next poll in 40s
 ```
 
 ```
- wand cockpit · WND                                             6 waiting on you
+ wand cockpit · WND                                             7 waiting on you
   engaged · dispatched WND-9 (run) · next poll in 60s
 ```
 
