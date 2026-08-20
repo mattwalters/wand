@@ -150,6 +150,11 @@ covenant, terminal success is reached only on positive evidence;
 exhaustion is a hand-back that says so. A cap set to zero is refused
 outright, because a cap of nothing is a request to loop forever.
 
+`caps.lanes` (default `1`) is a different kind of limit: how many
+`wand run` loops [`wand dispatch`](../commands/dispatch/) runs against this
+repository at once. A Scoping ticket never counts against it — research
+needs no lane — so raising it only ever buys more concurrent building.
+
 ## Toggles
 
 Two optional stages of the scope orchestrator are the covenant's to switch,

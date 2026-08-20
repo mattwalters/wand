@@ -1,0 +1,120 @@
+package dispatch
+
+import (
+	"testing"
+	"time"
+
+	"github.com/mattwalters/wand/internal/journal"
+	"github.com/mattwalters/wand/internal/linear"
+)
+
+func issue(id string, priority int, age time.Duration) linear.Issue {
+	return linear.Issue{
+		ID:         "id-" + id,
+		Identifier: id,
+		Title:      "title " + id,
+		Priority:   priority,
+		CreatedAt:  time.Now().Add(-age),
+	}
+}
+
+func TestSelectPrefersTodoWhenALaneIsFree(t *testing.T) {
+	todo := []linear.Issue{issue("WND-2", 2, time.Hour), issue("WND-1", 1, time.Hour)}
+	scoping := []linear.Issue{issue("WND-9", 1, time.Hour)}
+
+	winner, ok, _, _ := Select(todo, scoping, true)
+	if !ok {
+		t.Fatal("expected a winner")
+	}
+	if winner.Verb != VerbRun || winner.Issue.Identifier != "WND-1" {
+		t.Errorf("winner = %+v, want the highest-ranked Todo issue via run", winner)
+	}
+}
+
+func TestSelectFallsBackToScopingWhenLanesAreFull(t *testing.T) {
+	todo := []linear.Issue{issue("WND-1", 1, time.Hour)}
+	scoping := []linear.Issue{issue("WND-9", 1, time.Hour)}
+
+	winner, ok, _, _ := Select(todo, scoping, false)
+	if !ok {
+		t.Fatal("expected a winner")
+	}
+	if winner.Verb != VerbScope || winner.Issue.Identifier != "WND-9" {
+		t.Errorf("winner = %+v, want the Scoping issue via scope — a scope needs no lane", winner)
+	}
+}
+
+func TestSelectFallsBackToScopingWhenTodoIsEmpty(t *testing.T) {
+	scoping := []linear.Issue{issue("WND-9", 1, time.Hour)}
+
+	winner, ok, _, _ := Select(nil, scoping, true)
+	if !ok {
+		t.Fatal("expected a winner")
+	}
+	if winner.Verb != VerbScope {
+		t.Errorf("winner.Verb = %s, want scope: a free lane with nothing to build should not leave research idle", winner.Verb)
+	}
+}
+
+func TestSelectNothingWhenBothAreEmpty(t *testing.T) {
+	if _, ok, _, _ := Select(nil, nil, true); ok {
+		t.Error("expected no winner")
+	}
+}
+
+func TestSelectVetsScopingCandidates(t *testing.T) {
+	blocked := issue("WND-9", 1, time.Hour)
+	blocked.Labels = []string{"human-only"}
+
+	winner, ok, _, scopingSkips := Select(nil, []linear.Issue{blocked}, false)
+	if ok {
+		t.Fatalf("expected no winner, got %+v", winner)
+	}
+	if len(scopingSkips) != 1 || scopingSkips[0].Issue.Identifier != "WND-9" {
+		t.Errorf("scopingSkips = %+v, want WND-9 skipped", scopingSkips)
+	}
+}
+
+func TestSelectNoLaneStillSkipsUnstartableTodo(t *testing.T) {
+	blocked := issue("WND-1", 1, time.Hour)
+	blocked.Labels = []string{"human-only"}
+
+	_, ok, todoSkips, _ := Select([]linear.Issue{blocked}, nil, true)
+	if ok {
+		t.Fatal("expected no winner: the only Todo issue is human-only")
+	}
+	if len(todoSkips) != 1 || todoSkips[0].Reason == "" {
+		t.Errorf("todoSkips = %+v, want one skip with a reason", todoSkips)
+	}
+}
+
+func report(repo, verb string, ended bool, live journal.Liveness) journal.Report {
+	s := journal.State{Meta: journal.Meta{Repo: repo, Verb: verb}}
+	if ended {
+		s.Outcome = journal.Converged
+	}
+	return journal.Report{State: s, Live: live}
+}
+
+func TestLanesUsedCountsOnlyLiveRunsForThisRepo(t *testing.T) {
+	reports := []journal.Report{
+		report("/repo/a", "run", false, journal.Alive),
+		report("/repo/a", "run", false, journal.Alive),
+		report("/repo/b", "run", false, journal.Alive),   // a different repo
+		report("/repo/a", "scope", false, journal.Alive), // a scope needs no lane
+		report("/repo/a", "run", true, journal.Alive),    // ended: not occupying anything
+		report("/repo/a", "run", false, journal.Dead),    // gc'd: provably dead
+	}
+	if got := LanesUsed(reports, "/repo/a"); got != 2 {
+		t.Errorf("LanesUsed = %d, want 2", got)
+	}
+}
+
+func TestLanesUsedCountsUnknownLiveness(t *testing.T) {
+	reports := []journal.Report{
+		report("/repo/a", "run", false, journal.Unknown),
+	}
+	if got := LanesUsed(reports, "/repo/a"); got != 1 {
+		t.Errorf("LanesUsed = %d, want 1 — an unknown holder may well be alive, and undercounting capacity is the safe direction to be wrong in", got)
+	}
+}
