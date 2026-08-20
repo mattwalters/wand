@@ -29,6 +29,38 @@ func covenantTeam() (linear.Team, bootstrap.Current) {
 	return team, current
 }
 
+// schema1Team is what a team bootstrapped under WND-32's original covenant —
+// before Scoped existed — looks like today: every status the pre-Scoped
+// covenant created, Scoped absent. It mirrors bootstrap_test.go's
+// existingSchema1Team, duplicated here because that fixture is unexported in
+// another package's _test.go file.
+func schema1Team() (linear.Team, bootstrap.Current) {
+	team := linear.Team{ID: "team-1", Name: "Wand", Key: "WND", TriageEnabled: true, IssueEstimationType: "fibonacci"}
+	var current bootstrap.Current
+	for _, s := range []struct {
+		name, typ string
+		pos       float64
+	}{
+		{"Triage", "triage", 0}, {"Backlog", "backlog", 0},
+		{"Scoping", "unstarted", -50}, {"Todo", "unstarted", 1},
+		{"Needs Input", "unstarted", 50}, {"In Progress", "started", 2},
+		{"In Review", "started", 3}, {"Done", "completed", 4},
+		{"Canceled", "canceled", 5}, {"Duplicate", "duplicate", 6},
+	} {
+		current.States = append(current.States, linear.WorkflowState{ID: "st-" + s.name, Name: s.name, Type: s.typ, Position: s.pos})
+	}
+	for _, l := range []string{"human-only", "agent-filed", "ready-for-human", "re-review"} {
+		current.Labels = append(current.Labels, linear.Label{ID: "l-" + l, Name: l})
+	}
+	for _, a := range []struct{ event, state string }{
+		{"draft", "In Progress"}, {"start", "In Progress"},
+		{"review", "In Review"}, {"merge", "Done"},
+	} {
+		current.Automations = append(current.Automations, automation("ga-"+a.event, a.event, a.state))
+	}
+	return team, current
+}
+
 func automation(id, event, state string) linear.GitAutomation {
 	a := linear.GitAutomation{ID: id, Event: event}
 	if state != "" {
@@ -43,6 +75,19 @@ func TestDiagnoseCleanTeam(t *testing.T) {
 	team, current := covenantTeam()
 	if findings := Diagnose(covenant.Default(), team, current); len(findings) != 0 {
 		t.Errorf("a team at the covenant reports drift:\n%s", strings.Join(findings, "\n"))
+	}
+}
+
+func TestDiagnoseMissingScopedStatus(t *testing.T) {
+	// A team bootstrapped before Scoped existed (WND-32's original covenant)
+	// predates WND-38's addition of Scoped to covenant.Default(). Diagnose
+	// should surface that gap the same way it surfaces any other missing
+	// status: as drift, with a remedy, not an accusation.
+	team, current := schema1Team()
+	findings := Diagnose(covenant.Default(), team, current)
+	want := `status "Scoped" (unstarted) is missing`
+	if len(findings) != 1 || findings[0] != want {
+		t.Errorf("findings:\n got %s\nwant %s", strings.Join(findings, "\n     "), want)
 	}
 }
 
@@ -248,6 +293,24 @@ func TestRunExitContract(t *testing.T) {
 			t.Errorf("output does not report the drift:\n%s", out.String())
 		}
 		if !strings.Contains(out.String(), "4 drifts from the covenant") {
+			t.Errorf("output does not count the drift:\n%s", out.String())
+		}
+	})
+
+	t.Run("team predating Scoped exits 1", func(t *testing.T) {
+		// A team bootstrapped before WND-38 added Scoped to the covenant is
+		// drift, not silence, and the report reads as a remedy: init adds
+		// the missing status, nobody removed it.
+		schemaTeam, schemaCurrent := schema1Team()
+		var out, errOut bytes.Buffer
+		code := Run(context.Background(), &fakeClient{team: schemaTeam, current: schemaCurrent}, &out, &errOut, "WND", covenant.Default())
+		if code != ExitDrift {
+			t.Fatalf("exit code = %d, want %d; stderr:\n%s", code, ExitDrift, errOut.String())
+		}
+		if !strings.Contains(out.String(), `drift: status "Scoped" (unstarted) is missing`) {
+			t.Errorf("output does not report the missing status:\n%s", out.String())
+		}
+		if !strings.Contains(out.String(), "1 drift from the covenant") {
 			t.Errorf("output does not count the drift:\n%s", out.String())
 		}
 	})
