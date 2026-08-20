@@ -146,6 +146,23 @@ func (r *Run) StartPhase(name string, round int) error {
 	return r.renew()
 }
 
+// Heartbeat renews the lease at the run's current phase and round without
+// otherwise touching the journal — no record, no sequence number spent.
+//
+// It exists so the periodic narration a worker already writes (see
+// worker.Spec.Out) can also update the one liveness fact a lease carries.
+// Without it, Lease.Renewed only moves at a phase boundary, and a long
+// single phase would read as exactly as stale to a lease reader as a
+// wedged one — the distinction the heartbeat exists to make.
+func (r *Run) Heartbeat() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if err := r.usable(); err != nil {
+		return err
+	}
+	return r.renew()
+}
+
 // EndPhase records that the current phase returned, with whatever the
 // orchestrator wants kept about it — exit code, timeout, rounds, tokens.
 // detail is passed through opaquely, which is what keeps this package
