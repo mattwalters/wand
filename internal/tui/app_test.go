@@ -112,9 +112,9 @@ func TestCursorMoves(t *testing.T) {
 		{name: "j moves down", script: "j", want: 1, wantRow: "WND-41"},
 		{name: "arrow moves down", script: "down", want: 1, wantRow: "WND-41"},
 		{name: "k moves back up", script: "j,k", want: 0, wantRow: "WND-42"},
-		{name: "crosses a section boundary", script: "j,j", want: 2, wantRow: "WND-38"},
-		{name: "reaches the lanes", script: "j,j,j,j", want: 4, wantRow: "WND-36"},
-		{name: "stops at the last row", script: "j,j,j,j,j,j,j,j", want: 5, wantRow: "WND-33"},
+		{name: "crosses a section boundary", script: "j,j", want: 2, wantRow: "WND-44"},
+		{name: "reaches the lanes", script: "j,j,j,j,j", want: 5, wantRow: "WND-36"},
+		{name: "stops at the last row", script: "j,j,j,j,j,j,j,j", want: 6, wantRow: "WND-33"},
 		{name: "stops at the first row", script: "k,k,k", want: 0, wantRow: "WND-42"},
 	}
 
@@ -225,7 +225,7 @@ func TestDispositionKeysOpenTheConfirmation(t *testing.T) {
 // Lanes and ready-for-human rows are read-only by design: the act each is
 // asking for happens somewhere other than a status field.
 func TestRowsWithoutDispositions(t *testing.T) {
-	for _, script := range []string{"j,j,j", "j,j,j,j"} {
+	for _, script := range []string{"j,j,j,j", "j,j,j,j,j"} {
 		t.Run(script, func(t *testing.T) {
 			m, _ := apply(t, board(t, &fakeBackend{}), script+",t")
 			if m.state != stateBoard {
@@ -478,9 +478,10 @@ func TestScreens(t *testing.T) {
 		script string
 	}{
 		{golden: "board", script: ""},
-		{golden: "board-lane-selected", script: "j,j,j,j"},
+		{golden: "board-lane-selected", script: "j,j,j,j,j"},
 		{golden: "detail", script: "j,enter"},
-		{golden: "detail-lane", script: "j,j,j,j,enter"},
+		{golden: "detail-lane", script: "j,j,j,j,j,enter"},
+		{golden: "detail-scoped", script: "j,j,enter"},
 		{golden: "bless-todo", script: "t"},
 		{golden: "bless-todo-unranked", script: "j,t"},
 		{golden: "bless-scoping", script: "s"},
@@ -488,6 +489,8 @@ func TestScreens(t *testing.T) {
 		{golden: "backlog-unranked", script: "u"},
 		{golden: "duplicate", script: "d,W,N,D,-,4,1"},
 		{golden: "cancel", script: "x,o,b,s,o,l,e,t,e"},
+		{golden: "bless-scoped-todo", script: "j,j,t"},
+		{golden: "reject-plan", script: "j,j,b,w,r,o,n,g"},
 	}
 
 	for _, tt := range tests {
@@ -497,8 +500,34 @@ func TestScreens(t *testing.T) {
 	}
 }
 
+// The plan is the one thing on the detail screen whose wrapping and
+// line-clamping depend on the terminal it is shown in — every other field
+// there is a short, fixed-width line. A narrower or shorter terminal must
+// still produce a readable, deterministic screen rather than a garbled one.
+func TestScopedPlanAtOtherSizes(t *testing.T) {
+	tests := []struct {
+		golden        string
+		width, height int
+	}{
+		{golden: "detail-scoped-narrow", width: 48, height: screen.DefaultHeight},
+		{golden: "detail-scoped-short", width: screen.DefaultWidth, height: 14},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.golden, func(t *testing.T) {
+			m := New(Config{
+				Snapshot: cockpit.Sample(),
+				Backend:  &fakeBackend{},
+				Width:    tt.width,
+				Height:   tt.height,
+			})
+			tuitest.AssertScreenSized(t, tt.golden, m, "j,j,enter", tt.width, tt.height)
+		})
+	}
+}
+
 // The empty board is the answer the cockpit exists to be able to give, and
-// it has to say so rather than showing four blank headings.
+// it has to say so rather than showing five blank headings.
 func TestEmptyBoard(t *testing.T) {
 	m := New(Config{
 		Snapshot: cockpit.Snapshot{Team: "WND"},

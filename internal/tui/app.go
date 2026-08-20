@@ -512,7 +512,10 @@ func placeholderFor(d cockpit.Disposition) string {
 	case cockpit.FieldIdentifier:
 		return "the issue this duplicates, e.g. WND-3"
 	case cockpit.FieldReason:
-		return "why this is being closed"
+		if d.Status == "canceled" {
+			return "why this is being closed"
+		}
+		return "why the plan is wrong"
 	default:
 		return ""
 	}
@@ -691,6 +694,7 @@ func dropIssue(issues []linear.Issue, id, identifier string) []linear.Issue {
 // already judged.
 func withoutIssue(s cockpit.Snapshot, id, identifier string) cockpit.Snapshot {
 	s.Triage = dropIssue(s.Triage, id, identifier)
+	s.Scoped = dropIssue(s.Scoped, id, identifier)
 	s.NeedsInput = dropIssue(s.NeedsInput, id, identifier)
 	s.ReadyForHuman = dropIssue(s.ReadyForHuman, id, identifier)
 	return s

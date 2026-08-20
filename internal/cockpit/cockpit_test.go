@@ -18,14 +18,14 @@ func issue(id string, priority int, created int) linear.Issue {
 	}
 }
 
-// The board always has all four sections, whatever is in them: a queue that
+// The board always has all five sections, whatever is in them: a queue that
 // vanishes when it drains teaches you to stop looking for it.
-func TestBuildAlwaysHasFourSections(t *testing.T) {
+func TestBuildAlwaysHasFiveSections(t *testing.T) {
 	b := Build(Snapshot{Team: "WND"})
-	if len(b.Sections) != 4 {
-		t.Fatalf("sections = %d, want 4", len(b.Sections))
+	if len(b.Sections) != 5 {
+		t.Fatalf("sections = %d, want 5", len(b.Sections))
 	}
-	want := []Kind{KindTriage, KindNeedsInput, KindReadyForHuman, KindLanes}
+	want := []Kind{KindTriage, KindScoped, KindNeedsInput, KindReadyForHuman, KindLanes}
 	for i, k := range want {
 		if b.Sections[i].Kind != k {
 			t.Errorf("section %d = %q, want %q", i, b.Sections[i].Kind, k)
@@ -89,7 +89,7 @@ func TestReadyForHumanDropsClosedWork(t *testing.T) {
 	canceled.State = linear.IssueState{Name: "Canceled", Type: "canceled"}
 
 	b := Build(Snapshot{ReadyForHuman: []linear.Issue{open, done, canceled}})
-	rows := b.Sections[2].Rows
+	rows := b.Sections[3].Rows
 	if len(rows) != 1 || rows[0].Issue.Identifier != "WND-6" {
 		t.Errorf("ready-for-human rows = %v, want only the open one", rows)
 	}
@@ -102,6 +102,7 @@ func TestDispositions(t *testing.T) {
 	}{
 		{kind: KindTriage, want: 6},
 		{kind: KindNeedsInput, want: 6},
+		{kind: KindScoped, want: 2},
 		{kind: KindReadyForHuman, want: 0},
 		{kind: KindLanes, want: 0},
 	}
@@ -114,19 +115,24 @@ func TestDispositions(t *testing.T) {
 	}
 }
 
-// Every disposition must be reachable by a key, and no two may share one.
+// Every disposition must be reachable by a key, and no two may share one
+// within the row kind that offers them — DispositionByKey only ever
+// searches one row's own list, so a collision across lists is not a bug,
+// but a collision within one silently shadows a judgment.
 func TestDispositionKeysAreUnique(t *testing.T) {
-	seen := map[string]string{}
-	for _, d := range judgments {
-		if d.Key == "" {
-			t.Errorf("%q has no key", d.Name)
-		}
-		if prev, dup := seen[d.Key]; dup {
-			t.Errorf("key %q is bound to both %q and %q", d.Key, prev, d.Name)
-		}
-		seen[d.Key] = d.Name
-		if d.Gravity == "" {
-			t.Errorf("%q has no gravity sentence; the confirmation would say nothing", d.Name)
+	for name, disps := range map[string][]Disposition{"judgments": judgments, "scopedJudgments": scopedJudgments} {
+		seen := map[string]string{}
+		for _, d := range disps {
+			if d.Key == "" {
+				t.Errorf("%s: %q has no key", name, d.Name)
+			}
+			if prev, dup := seen[d.Key]; dup {
+				t.Errorf("%s: key %q is bound to both %q and %q", name, d.Key, prev, d.Name)
+			}
+			seen[d.Key] = d.Name
+			if d.Gravity == "" {
+				t.Errorf("%s: %q has no gravity sentence; the confirmation would say nothing", name, d.Name)
+			}
 		}
 	}
 }
@@ -136,11 +142,46 @@ func TestDispositionKeysAreUnique(t *testing.T) {
 // will one day cancel a ticket somebody was only scrolling past.
 func TestDispositionKeysAvoidNavigation(t *testing.T) {
 	for _, nav := range []string{"j", "k", "q", "enter", "esc", "r", "up", "down"} {
-		for _, d := range judgments {
-			if d.Key == nav {
-				t.Errorf("%q is bound to %q, which the screen uses for navigation", nav, d.Name)
+		for name, disps := range map[string][]Disposition{"judgments": judgments, "scopedJudgments": scopedJudgments} {
+			for _, d := range disps {
+				if d.Key == nav {
+					t.Errorf("%s: %q is bound to %q, which the screen uses for navigation", name, d.Name, nav)
+				}
 			}
 		}
+	}
+}
+
+// PlanSection reads exactly the region scope fences, leaving whatever a
+// human wrote around it alone — the same contract [linear.WithSection]
+// promises the other direction.
+func TestPlanSection(t *testing.T) {
+	desc := "A human's own words.\n\n" +
+		"<!-- wand:plan -->\n## Implementation plan\n\nDo the thing.\n<!-- /wand:plan -->\n\n" +
+		"More of the human's words, after."
+
+	text, ok, err := PlanSection(linear.Issue{Description: desc})
+	if err != nil {
+		t.Fatalf("PlanSection: %v", err)
+	}
+	if !ok {
+		t.Fatal("PlanSection reported no plan section on a description that has one")
+	}
+	want := "## Implementation plan\n\nDo the thing."
+	if text != want {
+		t.Errorf("plan = %q, want %q", text, want)
+	}
+}
+
+// A ticket that has never been scoped — or whose fence a human broke by hand
+// — is reported rather than guessed at.
+func TestPlanSectionAbsent(t *testing.T) {
+	_, ok, err := PlanSection(linear.Issue{Description: "just a plain description"})
+	if err != nil {
+		t.Fatalf("PlanSection: %v", err)
+	}
+	if ok {
+		t.Error("PlanSection reported a plan on a description with no fence")
 	}
 }
 
@@ -167,6 +208,8 @@ func TestIntentReady(t *testing.T) {
 		{name: "cancel with no reason", in: Intent{Issue: subject, Disp: Cancel}},
 		{name: "cancel with whitespace", in: Intent{Issue: subject, Disp: Cancel, Text: "   \n "}},
 		{name: "cancel with a reason", in: Intent{Issue: subject, Disp: Cancel, Text: "obsolete"}, want: true},
+		{name: "reject with no reason", in: Intent{Issue: subject, Disp: RejectPlan}},
+		{name: "reject with a reason", in: Intent{Issue: subject, Disp: RejectPlan, Text: "wrong approach"}, want: true},
 	}
 
 	for _, tt := range tests {

@@ -65,11 +65,20 @@ func updateRequested() bool {
 // goldenDir is where screen goldens live, relative to the package under test.
 const goldenDir = "testdata/screens"
 
-// Render renders m after applying script, failing the test on error.
+// Render renders m after applying script at the default screen size,
+// failing the test on error.
 //
 // script is a comma-separated key sequence such as "j,j,enter"; see
 // screen.ParseScript.
 func Render(tb testing.TB, m tea.Model, script string) screen.Result {
+	tb.Helper()
+	return RenderSized(tb, m, script, screen.DefaultWidth, screen.DefaultHeight)
+}
+
+// RenderSized is [Render] at an explicit width and height, for a screen
+// whose wrapping or line-clamping is the thing under test rather than an
+// incidental detail of it.
+func RenderSized(tb testing.TB, m tea.Model, script string, width, height int) screen.Result {
 	tb.Helper()
 
 	msgs, err := screen.ParseScript(script)
@@ -77,22 +86,28 @@ func Render(tb testing.TB, m tea.Model, script string) screen.Result {
 		tb.Fatalf("bad key script %q: %v", script, err)
 	}
 
-	result, err := screen.Render(m, msgs, screen.DefaultWidth, screen.DefaultHeight)
+	result, err := screen.Render(m, msgs, width, height)
 	if err != nil {
 		tb.Fatalf("rendering screen: %v", err)
 	}
 	return result
 }
 
-// AssertScreen renders m after applying script and compares the result against
-// the golden file named by name.
+// AssertScreen renders m after applying script at the default screen size
+// and compares the result against the golden file named by name.
 //
 // On mismatch the failure is a unified diff of the rendered screen, which is
 // readable directly: it shows what changed on screen, not which bytes moved.
 func AssertScreen(tb testing.TB, name string, m tea.Model, script string) {
 	tb.Helper()
+	AssertScreenSized(tb, name, m, script, screen.DefaultWidth, screen.DefaultHeight)
+}
 
-	got := Render(tb, m, script).String()
+// AssertScreenSized is [AssertScreen] at an explicit width and height.
+func AssertScreenSized(tb testing.TB, name string, m tea.Model, script string, width, height int) {
+	tb.Helper()
+
+	got := RenderSized(tb, m, script, width, height).String()
 	path := filepath.Join(goldenDir, name+".txt")
 
 	if updateRequested() {

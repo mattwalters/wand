@@ -200,6 +200,28 @@ func TestDuplicateLinksBeforeItCloses(t *testing.T) {
 	}
 }
 
+// Same shape as Cancel, one disposition over and a different destination: a
+// rejected plan with no reason on it leaves the next scope guessing.
+func TestRejectPlanCommentsBeforeItMovesToBacklog(t *testing.T) {
+	cl := newFake()
+	_, err := Apply(context.Background(), cl, covenant.Default(),
+		Intent{Issue: subject(), Disp: RejectPlan, Text: "  the estimate assumed a library that does not exist  "})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+
+	comment, update := indexOf(cl.calls, "CreateComment"), indexOf(cl.calls, "UpdateIssue")
+	if comment < 0 || update < 0 || comment > update {
+		t.Fatalf("calls = %v, want the comment before the status move", cl.calls)
+	}
+	if got := cl.calls[comment]; !strings.HasSuffix(got, "the estimate assumed a library that does not exist") {
+		t.Errorf("comment = %q, want the trimmed reason", got)
+	}
+	if last := cl.calls[len(cl.calls)-1]; last != "UpdateIssue uuid-WND-9 state=st-backlog" {
+		t.Errorf("last call = %q, want the plain backlog move with no priority touched", last)
+	}
+}
+
 func TestDuplicateRefusesAnUnknownIssue(t *testing.T) {
 	cl := newFake()
 	_, err := Apply(context.Background(), cl, covenant.Default(),
@@ -303,6 +325,12 @@ func TestApplyRetryDoesNotRepeatThePreWrite(t *testing.T) {
 			in:   Intent{Issue: subject(), Disp: AsDuplicate, Text: "WND-3"},
 			pre:  "CreateRelation uuid-WND-9 duplicate uuid-WND-3",
 			move: "UpdateIssue uuid-WND-9 state=st-duplicate",
+		},
+		{
+			name: "a rejected plan does not post its reason twice",
+			in:   Intent{Issue: subject(), Disp: RejectPlan, Text: "wrong approach"},
+			pre:  "CreateComment uuid-WND-9 wrong approach",
+			move: "UpdateIssue uuid-WND-9 state=st-backlog",
 		},
 	}
 

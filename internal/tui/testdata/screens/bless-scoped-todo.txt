@@ -1,0 +1,10 @@
+  ✦ Blessing
+
+    WND-44  cockpit: a fifth queue for plans awaiting blessing
+    Scoped → Todo
+
+    Todo is the gate between written down and a bot may act on this unattended.
+    Blessing it lets an agent claim the ticket, branch, write code and open a
+    pull request without asking you again.
+
+  enter bless WND-44 → Todo • esc back

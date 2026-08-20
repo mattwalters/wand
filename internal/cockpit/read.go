@@ -33,7 +33,7 @@ type Runs interface {
 	Inspect(id string) (journal.Report, error)
 }
 
-// Read fetches the whole board. Four reads and a walk of the run store, in
+// Read fetches the whole board. Five reads and a walk of the run store, in
 // that order, with no interleaving: this runs once per refresh and the
 // simplicity is worth more than the round trips.
 //
@@ -49,6 +49,12 @@ func Read(ctx context.Context, cl Linear, runs Runs, cov covenant.Covenant, team
 		return Snapshot{}, fmt.Errorf("reading Triage: %w", err)
 	}
 	snap.Triage = triage
+
+	scoped, err := cl.TeamIssuesByState(ctx, teamKey, cov.StatusName("scoped"))
+	if err != nil {
+		return Snapshot{}, fmt.Errorf("reading Scoped: %w", err)
+	}
+	snap.Scoped = scoped
 
 	needsInput, err := cl.TeamIssuesByState(ctx, teamKey, cov.StatusName("needs_input"))
 	if err != nil {

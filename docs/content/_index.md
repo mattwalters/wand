@@ -17,12 +17,15 @@ install: brew install mattwalters/wand/wand
 ```console
 $ wand ui --sample
 
- wand cockpit · WND                                             6 waiting on you
+ wand cockpit · WND                                             7 waiting on you
   sample board — reads no Linear team, and writes none
 
   Triage  2 to judge
 › WND-42  doctor prints an empty drift section on a clean board              Low
   WND-41  guard: a raw state UUID is not matched
+
+  Scoped  1 to bless
+  WND-44  cockpit: a fifth queue for plans awaiting blessing              Urgent
 
   Needs Input  1 to answer
   WND-38  Second harness adapter: which one?                                High

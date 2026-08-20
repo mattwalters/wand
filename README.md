@@ -73,11 +73,14 @@ wand version                # build info, and the covenant schema this binary sp
 `wand ui` is one screen answering one question: **what is waiting on me?**
 
 ```
- wand cockpit · WND                                             6 waiting on you
+ wand cockpit · WND                                             7 waiting on you
 
   Triage  2 to judge
 › WND-42  doctor prints an empty drift section on a clean board              Low
   WND-41  guard: a raw state UUID is not matched
+
+  Scoped  1 to bless
+  WND-44  cockpit: a fifth queue for plans awaiting blessing              Urgent
 
   Needs Input  1 to answer
   WND-38  Second harness adapter: which one?                                High
@@ -93,10 +96,17 @@ wand version                # build info, and the covenant schema this binary sp
   ↑/k ↓/j move • enter open • r refresh • q quit
 ```
 
-Four queues, and nothing else. Each is one that nothing drains on its own,
+Five queues, and nothing else. Each is one that nothing drains on its own,
 and each is invisible until something puts it on one screen. Backlog is
 deliberately absent: a Backlog ticket is not waiting on you, it is the pool,
 and browsing a pool is Linear's job.
+
+**Scoped is where a plan gets judged.** A ticket lands there with the plan
+`wand scope` wrote in its description, and opening the row shows that plan in
+place — nothing else in the description, and no comment. Judging it has two
+answers: bless it into Todo, the same way Triage does, or send it back to
+Backlog with the reasoning as a comment, so the next scope of the ticket
+starts from why the last plan did not land instead of guessing.
 
 **Blessing lives here.** Promoting a ticket to Todo or Scoping is the
 transition [the guard](#the-guard) refuses everywhere else, because it hands

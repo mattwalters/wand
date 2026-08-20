@@ -3,6 +3,9 @@
   Triage
     nothing filed since you last looked.
 
+  Scoped
+    no plan is waiting on a blessing.
+
   Needs Input
     no run is parked on a question.
 

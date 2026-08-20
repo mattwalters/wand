@@ -197,7 +197,7 @@ func (m Model) sectionHeading(s cockpit.Section) string {
 }
 
 // identifierWidth is the width the identifier column is padded to, taken
-// across the whole board — the four queues and the Running strip both —
+// across the whole board — the five queues and the Running strip both —
 // so every ticket on screen lines up as one table.
 func (m Model) identifierWidth() int {
 	w := 0
@@ -412,7 +412,13 @@ func shortName(d cockpit.Disposition, status string) string {
 	case cockpit.FieldIdentifier:
 		return "duplicate"
 	case cockpit.FieldReason:
-		return "cancel"
+		// FieldReason now backs two dispositions with different
+		// destinations — Cancel and RejectPlan — so the label has to name
+		// which one this is rather than assuming the older of the two.
+		if d.Status == "canceled" {
+			return "cancel"
+		}
+		return status
 	}
 	if d.Bless {
 		return "✦" + status
@@ -467,14 +473,11 @@ func (m Model) detailView() string {
 	}
 	b.WriteString("\n")
 
-	desc := strings.TrimSpace(issue.Description)
-	if desc == "" {
-		desc = "(no description)"
-	}
-	// The description is clipped rather than scrolled: this screen exists
-	// to remind you what the ticket is before you judge it, and a ticket
-	// that needs more than a screenful to decide on is one to read in
-	// Linear, where the comments are too.
+	desc := m.body(row)
+	// The body is clipped rather than scrolled: this screen exists to
+	// remind you what the ticket is before you judge it, and a ticket that
+	// needs more than a screenful to decide on is one to read in Linear,
+	// where the comments are too.
 	b.WriteString(m.clampLines(m.wrap(m.theme.Body, desc), m.descriptionRoom()))
 	b.WriteString("\n\n")
 
@@ -485,6 +488,30 @@ func (m Model) detailView() string {
 	b.WriteString(m.flashLine())
 	b.WriteString(m.theme.Muted.Render(pad(gutter) + "esc back • q quit"))
 	return b.String()
+}
+
+// body is what the detail screen shows under the header block: the plan
+// scope wrote, for a Scoped row, or the ticket's own description for every
+// other kind. A Scoped row shows only the fenced region — the thing this
+// screen exists to put a human's judgment on — not the description around
+// it, which is the ticket as it stood before the scope that just ended.
+func (m Model) body(row cockpit.Row) string {
+	if row.Kind == cockpit.KindScoped {
+		text, ok, err := cockpit.PlanSection(row.Issue)
+		switch {
+		case err != nil:
+			return "the plan section could not be read: " + err.Error()
+		case !ok:
+			return "(no plan section — this ticket has not been through `wand scope`)"
+		default:
+			return text
+		}
+	}
+	desc := strings.TrimSpace(row.Issue.Description)
+	if desc == "" {
+		return "(no description)"
+	}
+	return desc
 }
 
 // descriptionRoom is how many lines of description fit under the header
