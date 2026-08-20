@@ -85,9 +85,11 @@ func runRun(cmd *cobra.Command, identifier, harness, model, effort string) int {
 	defer stop()
 
 	outcome, err := run.Execute(ctx, run.Deps{
-		Board:   cl,
-		Cov:     cov,
-		Git:     run.ExecGit{},
+		Board: cl,
+		Cov:   cov,
+		// The store root is what tells resume which preserved worktrees
+		// are wand's to reclaim and which belong to a human.
+		Git:     run.ExecGit{RunsRoot: store.Root},
 		Hub:     run.ExecHub{},
 		Workers: run.AdapterWorkers{Adapter: adapter},
 		Shell:   run.ExecShell{},

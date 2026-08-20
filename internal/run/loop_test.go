@@ -117,10 +117,19 @@ type fakeGit struct {
 	ahead   int
 	pushes  int
 	removed bool
+
+	// worktreeBase and aheadBase record the commit-ish the loop actually
+	// handed git: the run must branch from and count against the
+	// remote-tracking ref, never the bare branch name.
+	worktreeBase string
+	aheadBase    string
 }
 
-func (g *fakeGit) DefaultBranch(context.Context, string) (string, error) { return "main", nil }
-func (g *fakeGit) AddWorktree(context.Context, string, string, string, string) error {
+func (g *fakeGit) DefaultBranch(context.Context, string) (Base, error) {
+	return Base{Name: "main", Ref: "origin/main"}, nil
+}
+func (g *fakeGit) AddWorktree(_ context.Context, _, _, _, base string) error {
+	g.worktreeBase = base
 	return nil
 }
 func (g *fakeGit) RemoveWorktree(context.Context, string, string) error {
@@ -135,7 +144,10 @@ func (g *fakeGit) Dirty(context.Context, string) (bool, error) {
 	g.dirty = g.dirty[1:]
 	return d, nil
 }
-func (g *fakeGit) CommitsAhead(context.Context, string, string) (int, error) { return g.ahead, nil }
+func (g *fakeGit) CommitsAhead(_ context.Context, _, base string) (int, error) {
+	g.aheadBase = base
+	return g.ahead, nil
+}
 func (g *fakeGit) Push(context.Context, string, string) error {
 	g.pushes++
 	return nil
@@ -143,6 +155,7 @@ func (g *fakeGit) Push(context.Context, string, string) error {
 
 type fakeHub struct {
 	pr          *PR
+	openedBase  string
 	openedTitle string
 	openedBody  string
 	unresolved  int
@@ -154,8 +167,8 @@ func (h *fakeHub) PRForBranch(context.Context, string, string) (PR, bool, error)
 	}
 	return *h.pr, true, nil
 }
-func (h *fakeHub) OpenPR(_ context.Context, _, _, _, title, body string) (string, error) {
-	h.openedTitle, h.openedBody = title, body
+func (h *fakeHub) OpenPR(_ context.Context, _, base, _, title, body string) (string, error) {
+	h.openedBase, h.openedTitle, h.openedBody = base, title, body
 	h.pr = &PR{Number: 1, Title: title, URL: "https://example.test/pr/1"}
 	return h.pr.URL, nil
 }
@@ -661,6 +674,50 @@ func TestDescriptionCorrectionsReachTheTicket(t *testing.T) {
 	}
 }
 
+// A deviation reported by a revise worker arrives after the PR body was
+// composed, so on a hand-back the PR body cannot carry it and the converged
+// comment never runs. Nothing downstream would ever say it — which is the
+// transcript death the rule exists against (the PW-191 lesson) — so every
+// hand-back carries the run's deviations, and the journal keeps them too
+// for the endings that write nothing else.
+func TestDeviationsReachAHandBack(t *testing.T) {
+	f := newFixture(t)
+	f.deps.Cov.Caps.ReviewRounds = 2
+	f.workers.steps = []workerStep{
+		{handoff: doneHandoff},
+		{handoff: `{"verdict": "revise", "findings": [{"summary": "off by one",
+			"failure_scenario": "n=0 underflows the slice index"}]}`},
+		{handoff: `{"status": "done", "summary": "fixed the index",
+			"plan_deviations": ["dropped the retry the ticket asked for: the call is already idempotent"]}`},
+		{handoff: `{"verdict": "revise", "findings": [{"summary": "still off by one",
+			"failure_scenario": "n=0 still underflows"}]}`},
+	}
+	f.shell.steps = []shellStep{{ok: true}, {ok: true}}
+
+	out := f.execute(t)
+	if out.Kind != journal.HandedBack {
+		t.Fatalf("outcome %+v, want handed back at the review cap", out)
+	}
+	const deviation = "dropped the retry the ticket asked for"
+	if c := f.board.lastComment(); !strings.Contains(c, deviation) {
+		t.Errorf("the hand-back comment lost the revise worker's deviation:\n%s", c)
+	}
+	// The PR body was composed before the revise phase existed, so it
+	// cannot be what carries this — the hand-back has to.
+	if strings.Contains(f.hub.openedBody, deviation) {
+		t.Error("the PR body somehow carried a deviation reported after it was written")
+	}
+	// And the journal has it, so a park — which writes nothing else —
+	// would keep it too.
+	raw, err := os.ReadFile(filepath.Join(f.store.Dir(out.RunID), "journal.jsonl"))
+	if err != nil {
+		t.Fatalf("reading the journal: %v", err)
+	}
+	if !strings.Contains(string(raw), deviation) {
+		t.Error("the deviation never reached the journal")
+	}
+}
+
 func TestHumanThreadsBlockConvergence(t *testing.T) {
 	f := newFixture(t)
 	f.workers.steps = []workerStep{{handoff: doneHandoff}, {handoff: approveHandoff}}
@@ -711,8 +768,38 @@ func TestWorkerSpecsCarryTheContract(t *testing.T) {
 	if !strings.Contains(strings.Join(review.Rules, "\n"), "Do not modify the working tree") {
 		t.Errorf("review rules do not forbid writes: %v", review.Rules)
 	}
-	if !strings.Contains(review.Prompt, "git diff main...HEAD") {
+	// The reviewer's commands run in the worktree, where a bare "main" may
+	// name nothing at all — the diff has to be against the tracking ref.
+	if !strings.Contains(review.Prompt, "git diff origin/main...HEAD") {
 		t.Errorf("review prompt does not point at the diff:\n%s", review.Prompt)
+	}
+}
+
+// The base has two forms and they are not interchangeable: everything local
+// — the worktree's starting point, the commit count, the reviewer's diff —
+// resolves the remote-tracking ref, while GitHub is asked to merge into the
+// branch. Swapping them is how a run branches from a stale local main, or
+// from nothing at all when the branch was never checked out locally.
+func TestTheBaseIsARefLocallyAndABranchOnGitHub(t *testing.T) {
+	f := newFixture(t)
+	f.shell.steps = []shellStep{{ok: true}}
+	f.workers.steps = []workerStep{
+		{handoff: `{"status":"done","summary":"did it"}`},
+		{handoff: `{"verdict":"approve","summary":"verified the parser against the fixtures"}`},
+	}
+
+	out := f.execute(t)
+	if out.Kind != journal.Converged {
+		t.Fatalf("outcome = %s (%s), want converged", out.Kind, out.Reason)
+	}
+	if f.git.worktreeBase != "origin/main" {
+		t.Errorf("worktree branched from %q, want origin/main", f.git.worktreeBase)
+	}
+	if f.git.aheadBase != "origin/main" {
+		t.Errorf("commits counted against %q, want origin/main", f.git.aheadBase)
+	}
+	if f.hub.openedBase != "main" {
+		t.Errorf("PR opened against %q, want the branch name main", f.hub.openedBase)
 	}
 }
 

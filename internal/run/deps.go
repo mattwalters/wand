@@ -25,13 +25,30 @@ type Board interface {
 	AddLabel(ctx context.Context, issueID, labelID string) error
 }
 
+// Base is the branch a run's work targets, in the two forms the run needs.
+// They are not interchangeable, and conflating them is how a run branches
+// from the wrong commit: the branch name is what GitHub is asked to merge
+// into, while every local git command has to name the remote-tracking ref.
+type Base struct {
+	// Name is the branch on the remote — "main". It is what
+	// `gh pr create --base` takes, and nothing else.
+	Name string
+	// Ref is the remote-tracking ref — "origin/main". Every local command
+	// resolves this instead of Name: the branch may not exist locally at
+	// all (a clone that never checked it out), and where it does exist it
+	// is only as fresh as the last pull.
+	Ref string
+}
+
 // Git is the loop's git surface, on the orchestrator's own credentials.
 // Workers commit; everything that leaves the machine goes through here.
 type Git interface {
-	// DefaultBranch names the branch PRs target.
-	DefaultBranch(ctx context.Context, repo string) (string, error)
+	// DefaultBranch resolves the branch PRs target, in both forms.
+	DefaultBranch(ctx context.Context, repo string) (Base, error)
 	// AddWorktree creates the run's worktree at dir on branch, branching
-	// from base when the branch does not exist yet.
+	// from base when the branch does not exist yet. base is a commit-ish
+	// that must resolve on its own: a bare branch name that exists only on
+	// the remote is not one (see Base).
 	AddWorktree(ctx context.Context, repo, dir, branch, base string) error
 	// RemoveWorktree removes a clean, fully-pushed worktree.
 	RemoveWorktree(ctx context.Context, repo, dir string) error

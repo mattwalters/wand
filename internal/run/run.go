@@ -154,7 +154,7 @@ type loop struct {
 
 	tree   string // the worktree
 	branch string
-	base   string
+	base   Base
 	prURL  string
 	pushed bool // the branch has reached origin at least once
 
@@ -189,11 +189,14 @@ func (l *loop) run(ctx context.Context) Outcome {
 		branch = "wand/" + strings.ToLower(l.issue.Identifier)
 	}
 	tree := filepath.Join(l.r.Dir(), "tree")
-	if err := l.d.Git.AddWorktree(ctx, l.d.Repo, tree, branch, base); err != nil {
+	// The worktree starts from the remote-tracking ref, never the bare
+	// branch name: the local branch may not exist, and where it does it is
+	// only as fresh as the last pull.
+	if err := l.d.Git.AddWorktree(ctx, l.d.Repo, tree, branch, base.Ref); err != nil {
 		return *l.park(ctx, fmt.Sprintf("could not create the worktree: %v", err))
 	}
 	l.tree, l.branch, l.base = tree, branch, base
-	fmt.Fprintf(l.d.Out, "worktree %s on branch %s (base %s)\n", tree, branch, base)
+	fmt.Fprintf(l.d.Out, "worktree %s on branch %s (base %s)\n", tree, branch, base.Ref)
 
 	if p := l.d.Cov.Commands.Provision; p != "" {
 		ok, output, err := l.shell(ctx, p)
@@ -226,7 +229,7 @@ func (l *loop) run(ctx context.Context) Outcome {
 	if out := l.requireClean(ctx, "implement"); out != nil {
 		return *out
 	}
-	ahead, err := l.d.Git.CommitsAhead(ctx, l.tree, l.base)
+	ahead, err := l.d.Git.CommitsAhead(ctx, l.tree, l.base.Ref)
 	if err != nil {
 		return *l.park(ctx, fmt.Sprintf("could not count the branch's commits: %v", err))
 	}
@@ -248,7 +251,7 @@ func (l *loop) run(ctx context.Context) Outcome {
 
 	// --- review rounds -----------------------------------------------
 	for round := 1; ; round++ {
-		res, out := l.work(ctx, "review", round, reviewRules(), reviewPrompt(l.ticketText, l.base))
+		res, out := l.work(ctx, "review", round, reviewRules(), reviewPrompt(l.ticketText, l.base.Ref))
 		if out != nil {
 			return *out
 		}
@@ -359,7 +362,14 @@ func (l *loop) work(ctx context.Context, phase string, round int, rules []string
 // deviations and description corrections, then the blocked hand-back if the
 // worker stopped.
 func (l *loop) afterWork(ctx context.Context, phase string, h WorkHandoff) *Outcome {
-	l.deviations = append(l.deviations, h.PlanDeviations...)
+	if len(h.PlanDeviations) > 0 {
+		// Journaled as they arrive, not only carried: a park writes nothing
+		// but the journal, and a deviation that reached only the ticket
+		// would still die on every parked run.
+		l.deviations = append(l.deviations, h.PlanDeviations...)
+		l.note(fmt.Sprintf("the %s worker reported %d plan deviation(s)", phase, len(h.PlanDeviations)),
+			map[string][]string{"deviations": h.PlanDeviations})
+	}
 	l.applyCorrections(ctx, phase, h.DescriptionCorrections)
 	if h.Status == "blocked" {
 		return l.handback(ctx,
@@ -449,7 +459,7 @@ func (l *loop) workState(ctx context.Context) workState {
 	if l.tree == "" {
 		return s
 	}
-	ahead, aerr := l.d.Git.CommitsAhead(ctx, l.tree, l.base)
+	ahead, aerr := l.d.Git.CommitsAhead(ctx, l.tree, l.base.Ref)
 	dirty, derr := l.d.Git.Dirty(ctx, l.tree)
 	if aerr != nil || derr != nil {
 		return s
@@ -523,7 +533,9 @@ func (l *loop) ensurePR(ctx context.Context, title, body string) *Outcome {
 		return l.park(ctx, fmt.Sprintf("could not look up the branch's PR: %v", err))
 	}
 	if !found {
-		url, err := l.d.Hub.OpenPR(ctx, l.tree, l.base, l.branch, title, body)
+		// GitHub is asked to merge into the branch, not into the
+		// remote-tracking ref that names it locally.
+		url, err := l.d.Hub.OpenPR(ctx, l.tree, l.base.Name, l.branch, title, body)
 		if err != nil {
 			return l.park(ctx, fmt.Sprintf("could not open the PR: %v", err))
 		}
@@ -617,6 +629,12 @@ func (l *loop) converge(ctx context.Context, round int, reviewSummary string) Ou
 // fail, the run parks instead — carrying both what it wanted to say and why
 // it could not.
 func (l *loop) handback(ctx context.Context, comment, reason string) *Outcome {
+	// Deviations are appended here rather than by each comment builder, so
+	// no hand-back can forget them. The PR body carries only the ones known
+	// when it was composed — every revise round's arrive after — and a
+	// hand-back is exactly the ending where a human is about to read what
+	// the run did (the PW-191 lesson).
+	comment = withDeviations(comment, l.deviations)
 	if _, err := verbs.Handback(ctx, l.d.Board, l.d.Cov, l.issue.Identifier, comment); err != nil {
 		return l.park(ctx, fmt.Sprintf("hand-back failed: %v (the run was handing back because: %s)", err, reason))
 	}

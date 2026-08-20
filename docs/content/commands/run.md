@@ -20,7 +20,9 @@ wand run <identifier> [--harness <name>] [--model <m>] [--effort <e>]
 `run` claims the ticket exactly as [`wand claim`](../claim/) does — in
 Todo, not `human-only`, no unresolved blockers, one write — then opens a
 run in the journal and works the loop in a run-private git worktree, on the
-branch Linear names for the ticket:
+branch Linear names for the ticket, started from the remote-tracking ref of
+the repository's default branch (`origin/main`, not a local `main` that may
+be stale or absent):
 
 1. **implement** — a cold worker gets the whole ticket (description and
    comments) and commits its work in the worktree.
@@ -83,7 +85,12 @@ A later run of the same ticket resumes its branch: a preserved worktree
 that is clean (everything committed on the branch) is removed and replaced;
 one holding uncommitted work makes the new run refuse, naming the old
 worktree's path — work at risk is a human's call, never collateral of a
-resume.
+resume. Only wand's own worktrees, though. If the branch is checked out
+somewhere you made — your own `git worktree`, or the repository itself —
+the run refuses and names it rather than removing it: `git worktree remove`
+declines uncommitted *tracked* work and nothing else, so a clean checkout
+would go quietly and take its ignored files (`.env`, build caches) with
+it.
 
 ## What the handoff carries back
 
@@ -91,8 +98,12 @@ Beyond its status, a worker's handoff can carry **description
 corrections** — exact ticket wording its work disproved — and **plan
 deviations**. The orchestrator applies corrections to the ticket (quoting
 the old wording in a comment first, in the same act) and carries deviations
-into the PR body and the terminal comment. One writer per ticket, and
-deviations reach the ticket instead of dying in a worker's transcript.
+into the PR body, the terminal comment — converged or handed back alike —
+and the run journal. One writer per ticket, and deviations reach the ticket
+instead of dying in a worker's transcript. A deviation reported by a revise
+worker arrives after the PR body was written, so the hand-back and the
+journal are what carry it; nothing about a run's ending is allowed to be
+the place its account gets dropped.
 
 ## Flags
 

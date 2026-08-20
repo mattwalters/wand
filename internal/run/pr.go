@@ -42,10 +42,8 @@ func PRBody(issue linear.Issue, summary string, deviations []string) string {
 		b.WriteString("\n")
 	}
 	if len(deviations) > 0 {
-		b.WriteString("\nDeviations from the ticket's plan:\n")
-		for _, d := range deviations {
-			fmt.Fprintf(&b, "- %s\n", strings.TrimSpace(d))
-		}
+		b.WriteString("\n")
+		b.WriteString(deviationList(deviations))
 	}
 	fmt.Fprintf(&b, "\nTicket: %s\n", TicketGloss(issue))
 	return b.String()

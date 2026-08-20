@@ -42,12 +42,15 @@ func TestAddWorktreeResumesPastAPreservedCleanWorktree(t *testing.T) {
 	g := ExecGit{}
 	ctx := context.Background()
 
-	first := filepath.Join(t.TempDir(), "tree")
+	runs := t.TempDir()
+	g.RunsRoot = runs
+
+	first := filepath.Join(runs, "run-1", "tree")
 	if err := g.AddWorktree(ctx, repo, first, "wand/wnd-9", "trunk"); err != nil {
 		t.Fatalf("first AddWorktree: %v", err)
 	}
 
-	second := filepath.Join(t.TempDir(), "tree")
+	second := filepath.Join(runs, "run-2", "tree")
 	if err := g.AddWorktree(ctx, repo, second, "wand/wnd-9", "trunk"); err != nil {
 		t.Fatalf("resume AddWorktree: %v", err)
 	}
@@ -66,7 +69,10 @@ func TestAddWorktreeRefusesToDropUncommittedWork(t *testing.T) {
 	g := ExecGit{}
 	ctx := context.Background()
 
-	first := filepath.Join(t.TempDir(), "tree")
+	runs := t.TempDir()
+	g.RunsRoot = runs
+
+	first := filepath.Join(runs, "run-1", "tree")
 	if err := g.AddWorktree(ctx, repo, first, "wand/wnd-9", "trunk"); err != nil {
 		t.Fatalf("first AddWorktree: %v", err)
 	}
@@ -74,7 +80,7 @@ func TestAddWorktreeRefusesToDropUncommittedWork(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	err := g.AddWorktree(ctx, repo, filepath.Join(t.TempDir(), "tree"), "wand/wnd-9", "trunk")
+	err := g.AddWorktree(ctx, repo, filepath.Join(runs, "run-2", "tree"), "wand/wnd-9", "trunk")
 	if err == nil {
 		t.Fatal("resume dropped a dirty worktree without a word")
 	}
@@ -112,19 +118,20 @@ func TestDefaultBranchFallsBackOnlyToARealRemoteBranch(t *testing.T) {
 
 	// origin/HEAD unset, only origin/master exists (a remote-add repo).
 	mustGit(t, repo, "update-ref", "refs/remotes/origin/master", sha)
+	want := Base{Name: "master", Ref: "origin/master"}
 	got, err := ExecGit{}.DefaultBranch(context.Background(), repo)
 	if err != nil {
 		t.Fatalf("DefaultBranch: %v", err)
 	}
-	if got != "master" {
-		t.Errorf("DefaultBranch = %q, want the branch that exists (master)", got)
+	if got != want {
+		t.Errorf("DefaultBranch = %+v, want the branch that exists (%+v)", got, want)
 	}
 
 	// origin/HEAD set: it wins over the fallback order.
 	mustGit(t, repo, "symbolic-ref", "refs/remotes/origin/HEAD", "refs/remotes/origin/master")
 	got, err = ExecGit{}.DefaultBranch(context.Background(), repo)
-	if err != nil || got != "master" {
-		t.Errorf("DefaultBranch with origin/HEAD = %q (%v), want master", got, err)
+	if err != nil || got != want {
+		t.Errorf("DefaultBranch with origin/HEAD = %+v (%v), want %+v", got, err, want)
 	}
 }
 
@@ -136,5 +143,87 @@ func TestDefaultBranchSurfacesAnUnresolvableRemote(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "set-head") {
 		t.Errorf("the error does not tell the operator the fix: %v", err)
+	}
+}
+
+// The base a worktree starts from must be a ref that resolves on its own.
+// With only origin/main on hand, `git worktree add -b <ticket> <dir> main`
+// does not fail: git DWIMs the bare name into a new local branch called
+// "main" and drops the -b outright, so the run commits onto main, counts
+// zero commits ahead of it, and parks blaming the worker for writing
+// nothing. Resolving the base to origin/main is what makes -b hold.
+func TestAddWorktreeStartsTheTicketBranchFromARemoteOnlyBase(t *testing.T) {
+	ctx := context.Background()
+	g := ExecGit{RunsRoot: t.TempDir()}
+
+	// A clone whose default branch was never checked out locally: origin
+	// has main, the working copy is on a feature branch, refs/heads/main
+	// does not exist. A CI checkout and `git clone --branch` both land here.
+	origin := filepath.Join(t.TempDir(), "origin.git")
+	mustGit(t, t.TempDir(), "init", "-q", "--bare", "-b", "main", origin)
+	seed := testRepo(t)
+	mustGit(t, seed, "branch", "-M", "main")
+	mustGit(t, seed, "remote", "add", "origin", origin)
+	mustGit(t, seed, "push", "-q", "-u", "origin", "main")
+
+	repo := filepath.Join(t.TempDir(), "clone")
+	mustGit(t, t.TempDir(), "clone", "-q", origin, repo)
+	mustGit(t, repo, "checkout", "-q", "-b", "feature")
+	mustGit(t, repo, "branch", "-D", "main")
+
+	base, err := ExecGit{}.DefaultBranch(ctx, repo)
+	if err != nil {
+		t.Fatalf("DefaultBranch: %v", err)
+	}
+	if base.Name != "main" || base.Ref != "origin/main" {
+		t.Fatalf("DefaultBranch = %+v, want {main origin/main}", base)
+	}
+
+	tree := filepath.Join(g.RunsRoot, "run-1", "tree")
+	if err := g.AddWorktree(ctx, repo, tree, "wand/wnd-10", base.Ref); err != nil {
+		t.Fatalf("AddWorktree: %v", err)
+	}
+	if got := mustGit(t, tree, "branch", "--show-current"); got != "wand/wnd-10" {
+		t.Errorf("the worktree is on branch %q, want wand/wnd-10 — the -b was DWIMed away", got)
+	}
+}
+
+// Resume reclaims what wand left behind; it does not clear a human out of
+// the way to do it. `git worktree remove` refuses uncommitted *tracked*
+// work and nothing else, so a clean worktree a developer made goes quietly
+// — ignored files (.env, build caches) and all.
+func TestAddWorktreeRefusesToRemoveAWorktreeItDidNotCreate(t *testing.T) {
+	repo := testRepo(t)
+	ctx := context.Background()
+	g := ExecGit{RunsRoot: t.TempDir()}
+
+	if err := os.WriteFile(filepath.Join(repo, ".gitignore"), []byte(".env\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mustGit(t, repo, "add", ".gitignore")
+	mustGit(t, repo, "commit", "-q", "-m", "ignore .env")
+
+	// A developer's own worktree on the ticket branch: clean by git's
+	// reckoning, and holding a file `worktree remove` would delete without
+	// a word.
+	mine := filepath.Join(t.TempDir(), "my-checkout")
+	mustGit(t, repo, "worktree", "add", "-q", "-b", "wand/wnd-9", mine, "trunk")
+	env := filepath.Join(mine, ".env")
+	if err := os.WriteFile(env, []byte("SECRET=1"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if out := mustGit(t, mine, "status", "--porcelain"); out != "" {
+		t.Fatalf("the developer's worktree is not clean, so the refusal proves nothing: %q", out)
+	}
+
+	err := g.AddWorktree(ctx, repo, filepath.Join(g.RunsRoot, "run-1", "tree"), "wand/wnd-9", "trunk")
+	if err == nil {
+		t.Fatal("resume removed a worktree wand did not create")
+	}
+	if !strings.Contains(err.Error(), mine) {
+		t.Errorf("the refusal does not name the worktree in the way: %v", err)
+	}
+	if _, serr := os.Stat(env); serr != nil {
+		t.Errorf("the developer's ignored file did not survive the refusal: %v", serr)
 	}
 }

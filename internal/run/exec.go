@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -28,7 +29,37 @@ import (
 const outputLimit = 16 << 10
 
 // ExecGit is Git over the git binary.
-type ExecGit struct{}
+type ExecGit struct {
+	// RunsRoot is the run journal's store directory. Resume may remove a
+	// worktree holding the ticket branch only from inside it: a worktree
+	// anywhere else belongs to a human, and `git worktree remove` takes a
+	// clean tree's ignored files (.env, node_modules, build caches) with
+	// it without the refusal a dirty tree would earn.
+	RunsRoot string
+}
+
+// owns reports whether a worktree lives inside the run store — the only
+// place resume may remove one from. Both sides are resolved through
+// symlinks first: git reports a real path, while a state directory under
+// /var or /tmp on macOS is reached through one.
+func (g ExecGit) owns(dir string) bool {
+	if g.RunsRoot == "" {
+		return false
+	}
+	root, err := filepath.EvalSymlinks(g.RunsRoot)
+	if err != nil {
+		return false
+	}
+	path, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return false
+	}
+	return rel != "." && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
 
 func git(ctx context.Context, dir string, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", append([]string{"-C", dir}, args...)...)
@@ -52,28 +83,37 @@ func git(ctx context.Context, dir string, args ...string) (string, error) {
 // added with `git remote add`, a refspec-limited fetch — it falls back to
 // the conventional names, but only to one that actually exists as a remote
 // branch: guessing a base is how a PR opens against the wrong branch.
-func (ExecGit) DefaultBranch(ctx context.Context, repo string) (string, error) {
+//
+// What it resolves is always a *remote* branch, so it returns both forms
+// (see [Base]) rather than the bare name. Handing the bare name to a local
+// command is not a failure git reports cleanly: with origin/main on hand
+// and no local main, `worktree add -b <ticket> <dir> main` DWIMs the name
+// into a new local branch called "main" and drops the -b outright. The run
+// then commits onto main, counts zero commits ahead of it, and parks
+// blaming the worker for writing nothing.
+func (ExecGit) DefaultBranch(ctx context.Context, repo string) (Base, error) {
 	out, err := git(ctx, repo, "symbolic-ref", "--short", "refs/remotes/origin/HEAD")
 	if err == nil {
-		// The ref reads "origin/main"; the branch name is the part after
-		// the remote.
+		// The ref reads "origin/main": the whole string is the
+		// remote-tracking ref, and the part after the remote is the branch
+		// name a PR is opened against.
 		if _, name, ok := strings.Cut(out, "/"); ok {
-			return name, nil
+			return Base{Name: name, Ref: out}, nil
 		}
-		return out, nil
+		err = fmt.Errorf("origin/HEAD reads %q, not origin/<branch>", out)
 	}
 	if ctx.Err() != nil {
-		return "", err
+		return Base{}, err
 	}
 	for _, name := range []string{"main", "master"} {
 		if _, verr := git(ctx, repo, "rev-parse", "--verify", "--quiet", "refs/remotes/origin/"+name); verr == nil {
-			return name, nil
+			return Base{Name: name, Ref: "origin/" + name}, nil
 		}
 	}
-	return "", fmt.Errorf("origin/HEAD is unset and neither origin/main nor origin/master exists — run `git remote set-head origin --auto` in the repository: %w", err)
+	return Base{}, fmt.Errorf("origin/HEAD is unset and neither origin/main nor origin/master exists — run `git remote set-head origin --auto` in the repository: %w", err)
 }
 
-func (ExecGit) AddWorktree(ctx context.Context, repo, dir, branch, base string) error {
+func (g ExecGit) AddWorktree(ctx context.Context, repo, dir, branch, base string) error {
 	// A branch left by an earlier run is resumed, not recreated: -b would
 	// refuse, and a second branch for one ticket is a fork nobody asked for.
 	if _, err := git(ctx, repo, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch); err == nil {
@@ -83,8 +123,17 @@ func (ExecGit) AddWorktree(ctx context.Context, repo, dir, branch, base string) 
 		// branch — so remove it and resume; `worktree remove` itself
 		// refuses a dirty tree, and that refusal is surfaced whole: work
 		// at risk stays a human's call, never collateral of a resume.
+		//
+		// Only a tree inside the run store, though. `worktree remove`
+		// refuses uncommitted *tracked* work and nothing else: a clean
+		// worktree a human made goes quietly, ignored files and all. A
+		// resume may reclaim what wand left behind; it may not clear a
+		// human out of the way to do it.
 		git(ctx, repo, "worktree", "prune")
 		if old, err := worktreeFor(ctx, repo, branch); err == nil && old != "" && old != dir {
+			if !g.owns(old) {
+				return fmt.Errorf("branch %s is checked out at %s, which wand did not create — removing it would take its ignored files (.env, build caches) with it, so that is your call: check the branch out elsewhere, or `git worktree remove %s` yourself", branch, old, old)
+			}
 			if _, rerr := git(ctx, repo, "worktree", "remove", old); rerr != nil {
 				return fmt.Errorf("branch %s is held by an earlier run's worktree at %s, which could not be removed (it may hold uncommitted work — inspect it, then `git worktree remove --force %s`): %w", branch, old, old, rerr)
 			}

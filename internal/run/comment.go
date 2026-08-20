@@ -62,6 +62,31 @@ func workNote(branch, prURL, treeDir string, s workState) string {
 	return b.String()
 }
 
+// deviationList renders the plan deviations a run collected. One renderer,
+// because the PR body, the converged comment and every hand-back are all
+// reporting the same thing and should not drift apart in wording.
+func deviationList(deviations []string) string {
+	var b strings.Builder
+	b.WriteString("Deviations from the ticket's plan:\n")
+	for _, d := range deviations {
+		fmt.Fprintf(&b, "- %s\n", strings.TrimSpace(d))
+	}
+	return b.String()
+}
+
+// withDeviations appends the run's deviations to a hand-back comment.
+// [loop.handback] applies it to every hand-back rather than each builder
+// doing it, so none can forget: the PR body carries only the deviations
+// known when it was composed, and a run that hands back at the review cap
+// would otherwise let every revise round's account die in a transcript
+// (the PW-191 lesson) on the one ending a human is about to read.
+func withDeviations(comment string, deviations []string) string {
+	if len(deviations) == 0 {
+		return comment
+	}
+	return strings.TrimRight(comment, "\n") + "\n\n" + deviationList(deviations)
+}
+
 // blockedComment is the hand-back for a worker that reported blocked. The
 // reason is the worker's own account, verbatim (the PW-190 lesson) — never a
 // guess inferred from the phase.
@@ -141,10 +166,8 @@ func convergedComment(round int, reviewSummary, prURL string, deviations []strin
 	b.WriteString(blockquote(reviewSummary))
 	b.WriteString("\n")
 	if len(deviations) > 0 {
-		b.WriteString("\nDeviations from the ticket's plan:\n")
-		for _, d := range deviations {
-			fmt.Fprintf(&b, "- %s\n", strings.TrimSpace(d))
-		}
+		b.WriteString("\n")
+		b.WriteString(deviationList(deviations))
 	}
 	fmt.Fprintf(&b, "\nPR: %s — ready for a human.\n", prURL)
 	return b.String()
