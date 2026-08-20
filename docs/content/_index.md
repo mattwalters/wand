@@ -83,6 +83,18 @@ its own work.
 brew install mattwalters/wand/wand
 ```
 
+Or with a shell script, on macOS or Linux — this is the one to put on a
+Linux box where the cask doesn't reach:
+
+```bash
+curl -fsSL https://wandcli.com/install.sh | sh
+```
+
+It downloads the release archive matching your OS and arch, verifies it
+against the published checksums, and installs to `/usr/local/bin` (falling
+back to `~/.local/bin` if that isn't writable — override either with
+`WAND_INSTALL_DIR`). Pin a version with `WAND_VERSION=v0.1.0`.
+
 Or with Go:
 
 ```bash
@@ -90,8 +102,9 @@ go install github.com/mattwalters/wand@latest
 ```
 
 That puts `wand` in `$(go env GOPATH)/bin`, which needs to be on your
-`PATH`. Prebuilt binaries for macOS, Linux and Windows are on the
-[releases page](https://github.com/mattwalters/wand/releases).
+`PATH`. Prebuilt binaries for macOS, Linux and Windows (amd64 and arm64)
+are on the [releases page](https://github.com/mattwalters/wand/releases);
+the `v1` tag always points at the latest `v1.x.y`.
 
 ## Start here
 
