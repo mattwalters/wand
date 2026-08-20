@@ -1,7 +1,7 @@
 # The versioned docs site, at https://wandcli.com.
 #
 # The root is the latest build. https://wandcli.com/ is the homepage and
-# https://wandcli.com/commands/ the current reference; every released version
+# https://wandcli.com/docs/ the current documentation; every released version
 # also keeps a frozen copy at /vX.Y.Z/ forever, so a repo pinned to wand
 # vX.Y.Z can read the doctrine matching its covenant schema. /latest/ is the
 # same build as the root, published a second time so links that predate this
