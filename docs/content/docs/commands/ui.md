@@ -81,6 +81,45 @@ somebody else judged it — the screen returns to the board and says so
 rather than closing without a word. A refresh that *fails* says that too,
 on whichever screen you were on.
 
+## What is running right now
+
+Above the four queues, when anything is running, sits a strip answering a
+different question — not *what is waiting on me?* but *what is the machine
+doing?*:
+
+```
+  Running  2 in flight
+  WND-12  implement (round 1) · claude-code · up 18m · hb 8s ago
+  WND-7   possibly dead, sweep will confirm · scout · — · up 42m · hb 6m ago
+
+  Triage  2 to judge
+  ...
+```
+
+Each row is one run the crash-only run journal says has not ended: its
+current phase (`implement`, `review`, `revise`, `scout`, …), its harness, how
+long it has been going (`up`), and how long since its lease last renewed
+(`hb`, for heartbeat — the periodic tick a long single phase writes so it
+does not read as stale the moment it passes a minute). A harness shown as
+`—` is a scope-style run, which picks its harness per phase rather than
+fixing one for the whole run.
+
+**Nothing here is waiting on you**, so nothing here counts toward the
+header's count or takes a cursor: hand-launched `wand run` and `wand scope`
+invocations journal identically to an engaged cockpit's own, and appear here
+identically, whether or not engage mode is on. The strip is read-only and
+disappears entirely when nothing is running — a cockpit nobody has pointed
+at a live run still reads exactly as it did before this existed.
+
+A run whose own liveness judgment says its holder is gone reads
+`possibly dead, sweep will confirm` rather than being dropped or guessed at
+a second time: that judgment is the same one [Lanes](#the-four-queues) uses
+for a `stuck` lane, and only [`wand sweep`](../sweep/) ever turns it into an
+action. A run that is actually stuck this way is *also* a `stuck` lane below
+— the strip says what the journal currently believes is running, the lane
+says a person has to do something about it, and a run can be both at once
+until sweep reaps it.
+
 ## Blessing
 
 Promoting a ticket to **Todo** or **Scoping** is the transition

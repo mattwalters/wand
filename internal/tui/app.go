@@ -99,6 +99,14 @@ type Config struct {
 	// Interval is how long engage mode waits between polls. Zero means one
 	// minute, `wand dispatch --watch`'s own default.
 	Interval time.Duration
+	// Now is when Snapshot was read — frozen at construction, and carried
+	// forward by the refresh key and by engage mode's own redraw tick (see
+	// refreshedMsg and clockTickMsg). It is the one clock reading the
+	// Active-runs strip is allowed: elapsed and heartbeat age are always
+	// Now minus an absolute timestamp out of the journal, never a live
+	// read of the wall clock from inside View. Zero is safe when Snapshot
+	// has no active runs to time.
+	Now time.Time
 }
 
 // state is which screen the app is showing.
@@ -166,8 +174,11 @@ type Model struct {
 	// nextPollAt is when the next poll fires, carried in from the tea.Cmd
 	// that observed the clock — Update and View never read it themselves.
 	nextPollAt time.Time
-	// now is the last clock reading a redraw tick carried in, for rendering
-	// the countdown to nextPollAt without View reading the clock itself.
+	// now is the clock reading the Active-runs strip and the engage
+	// countdown are both rendered against — seeded from Config.Now, and
+	// carried forward by refreshedMsg (a fresh read) and clockTickMsg (the
+	// engage redraw tick). View reads no clock of its own; every relative
+	// time on screen is this minus an absolute timestamp out of the board.
 	now time.Time
 }
 
@@ -200,6 +211,7 @@ func New(cfg Config) Model {
 		input:    in,
 		engager:  cfg.Engager,
 		interval: interval,
+		now:      cfg.Now,
 	}
 	if m.width <= 0 {
 		m.width = 80
@@ -254,9 +266,12 @@ type appliedMsg struct {
 	err    error
 }
 
-// refreshedMsg carries a re-read board.
+// refreshedMsg carries a re-read board, alongside the clock reading the
+// tea.Cmd took at the moment the read landed — Update stores it, never
+// reads the clock itself, the same discipline engageTickMsg already uses.
 type refreshedMsg struct {
 	snap cockpit.Snapshot
+	at   time.Time
 	err  error
 }
 
@@ -329,6 +344,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.snap = msg.snap
 		m.board = cockpit.Build(m.snap)
+		m.now = msg.at
 		m.clampCursor()
 		m.flash, m.flashOK = "", false
 		m.resyncDetail()
@@ -690,7 +706,7 @@ func applyCmd(b Backend, in cockpit.Intent) tea.Cmd {
 func refreshCmd(b Backend) tea.Cmd {
 	return func() tea.Msg {
 		snap, err := b.Read(context.Background())
-		return refreshedMsg{snap: snap, err: err}
+		return refreshedMsg{snap: snap, at: time.Now(), err: err}
 	}
 }
 

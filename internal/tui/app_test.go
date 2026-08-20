@@ -5,10 +5,12 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/mattwalters/wand/internal/cockpit"
+	"github.com/mattwalters/wand/internal/journal"
 	"github.com/mattwalters/wand/internal/linear"
 	"github.com/mattwalters/wand/internal/screen"
 	"github.com/mattwalters/wand/internal/tuitest"
@@ -132,6 +134,56 @@ func TestCursorMoves(t *testing.T) {
 			}
 			if got != tt.wantRow {
 				t.Errorf("row under cursor = %q, want %q", got, tt.wantRow)
+			}
+		})
+	}
+}
+
+// Running rows are chrome, not cursor stops: an active run is not a ticket
+// a person disposits, so it must not shift the cursor order the four
+// queues already have, nor be reachable by it.
+func TestRunningRowsAreNotInTheCursorOrder(t *testing.T) {
+	plain := board(t, &fakeBackend{})
+
+	withRunning := cockpit.Sample()
+	withRunning.Active = []cockpit.Active{{RunID: "r", Ticket: "WND-99", Phase: "implement", Verb: "run"}}
+	m := New(Config{
+		Snapshot: withRunning,
+		Backend:  &fakeBackend{},
+		Width:    screen.DefaultWidth,
+		Height:   screen.DefaultHeight,
+	})
+
+	if got, want := len(m.rows()), len(plain.rows()); got != want {
+		t.Errorf("rows = %d, want %d: the Active run must not appear in the cursor order", got, want)
+	}
+	row, ok := m.current()
+	if !ok || row.Issue.Identifier != "WND-42" {
+		t.Errorf("row under cursor = %+v, want the board's first Triage row, unmoved by Running", row)
+	}
+}
+
+// ago is the one clock arithmetic the Active-runs strip does, and it is
+// pure: no clock read of its own, and unset readings degrade to a dash
+// rather than a nonsense duration.
+func TestAgo(t *testing.T) {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	tests := []struct {
+		name    string
+		now, at time.Time
+		want    string
+	}{
+		{"a zero now reads as unset", time.Time{}, base, "—"},
+		{"a zero at reads as unset", base, time.Time{}, "—"},
+		{"seconds", base.Add(8 * time.Second), base, "8s"},
+		{"minutes", base.Add(12 * time.Minute), base, "12m"},
+		{"hours and minutes", base.Add(3*time.Hour + 4*time.Minute), base, "3h4m"},
+		{"a heartbeat newer than now clamps to zero", base, base.Add(time.Minute), "0s"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := ago(tt.now, tt.at); got != tt.want {
+				t.Errorf("ago() = %q, want %q", got, tt.want)
 			}
 		})
 	}
@@ -470,6 +522,38 @@ func TestSampleBoardScreens(t *testing.T) {
 	}
 	tuitest.AssertScreen(t, "board-sample", sample(), "")
 	tuitest.AssertScreen(t, "bless-read-only", sample(), "t")
+}
+
+// The Running strip is what WND-41 adds: what a live process is doing right
+// now, above the four queues and outside their cursor order. One alive run
+// and one whose own liveness judgment already says its holder is gone —
+// the "possibly dead, sweep will confirm" note is that judgment surfacing,
+// never a second one this screen invents from the heartbeat's age.
+func TestRunningStripScreen(t *testing.T) {
+	now := time.Date(2026, 3, 5, 9, 30, 0, 0, time.UTC)
+	snap := cockpit.Sample()
+	snap.Active = []cockpit.Active{
+		{
+			RunID: "run-1", Ticket: "WND-12", Verb: "run", Harness: "claude-code",
+			Phase: "implement", Round: 1,
+			Started: now.Add(-18 * time.Minute), Heartbeat: now.Add(-8 * time.Second),
+			Live: journal.Alive,
+		},
+		{
+			RunID: "run-2", Ticket: "WND-7", Verb: "scope", Harness: "",
+			Phase: "scout", Round: 0,
+			Started: now.Add(-42 * time.Minute), Heartbeat: now.Add(-6 * time.Minute),
+			Live: journal.Dead,
+		},
+	}
+	m := New(Config{
+		Snapshot: snap,
+		Backend:  &fakeBackend{},
+		Width:    screen.DefaultWidth,
+		Height:   screen.DefaultHeight,
+		Now:      now,
+	})
+	tuitest.AssertScreen(t, "board-running", m, "")
 }
 
 // --- refreshing from the detail screen -----------------------------------

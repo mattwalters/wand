@@ -468,6 +468,7 @@ func (s *scoping) work(ctx context.Context, phase string, round int, rules []str
 		Effort:      s.d.Effort,
 		Out:         s.d.Out,
 		Label:       fmt.Sprintf("%s round %d", phase, round),
+		OnHeartbeat: s.heartbeat(phase, round),
 	}
 	start := time.Now()
 	res, err := s.d.Workers.Run(ctx, spec)
@@ -498,6 +499,19 @@ func (s *scoping) work(ctx context.Context, phase string, round int, rules []str
 		return res, s.park(fmt.Sprintf("the %s worker failed: %v", phase, err))
 	}
 	return res, nil
+}
+
+// heartbeat returns the worker.Spec.OnHeartbeat callback for one phase: a
+// closure that renews the run's lease on every tick, so a long single phase
+// keeps looking alive to a lease reader instead of going stale the moment it
+// passes its first minute. A renewal failure is narrated, never fatal — the
+// worker is mid-flight, and a lease write hiccup is not a reason to kill it.
+func (s *scoping) heartbeat(phase string, round int) func() {
+	return func() {
+		if err := s.r.Heartbeat(); err != nil {
+			fmt.Fprintf(s.d.Out, "phase %s round %d: heartbeat renewal failed: %v\n", phase, round, err)
+		}
+	}
 }
 
 // requireUntouched parks if a worker changed the repository it was told to
