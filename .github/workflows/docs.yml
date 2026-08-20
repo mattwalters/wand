@@ -1,13 +1,17 @@
-# The versioned docs site, at https://wandcli.com. On every release tag the
-# site is built twice — once frozen under /vX.Y.Z, once as the moving /latest
-# — staged together with an updated versions.json manifest, and deployed to
-# GitHub Pages with keep_files, so every released version's docs stay
-# addressable forever and a repo pinned to wand vX.Y.Z can read the doctrine
-# matching its schema.
+# The versioned docs site, at https://wandcli.com.
 #
-# workflow_dispatch republishes /latest (and the root redirect) from the
-# current main without cutting a release; frozen versions and the manifest
-# are left untouched.
+# The root is the latest build. https://wandcli.com/ is the homepage and
+# https://wandcli.com/docs/ the current documentation; every released version
+# also keeps a frozen copy at /vX.Y.Z/ forever, so a repo pinned to wand
+# vX.Y.Z can read the doctrine matching its covenant schema. /latest/ is the
+# same build as the root, published a second time so links that predate this
+# layout — and the version picker's own "latest" option — keep resolving.
+#
+# "Latest" therefore means main, not the last release: the homepage has to be
+# editable without cutting a release, and this repo's rule is already that
+# docs change with the code in the same PR. So push-to-main republishes the
+# root and /latest/; a tag additionally freezes /vX.Y.Z/ and appends to the
+# manifest; workflow_dispatch republishes the root and /latest/ by hand.
 #
 # One-time setup, already done: GitHub Pages serves the gh-pages branch
 # (Settings → Pages), with wandcli.com as the verified custom domain and
@@ -16,6 +20,8 @@ name: Docs
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*.*.*"
   workflow_dispatch:
@@ -58,25 +64,31 @@ jobs:
         with:
           hugo-version: ${{ env.HUGO_VERSION }}
 
-      # A tag build publishes twice: the frozen copy this tag owns forever,
-      # and the moving /latest. Every emitted link is relative (see
-      # docs/hugo.toml), so no baseURL is passed: the same pages serve from
-      # any host and any directory, and only the stamped version label
-      # differs between the two builds. A dispatch run rebuilds /latest only.
+      # Every emitted link is relative (see docs/hugo.toml), so no baseURL is
+      # passed: the same pages serve from any host and any directory, and only
+      # the stamped version label differs between builds. The root goes first
+      # because the version directories are staged inside it.
+      - name: Build root
+        run: hugo --source docs --destination "$PWD/public"
+        env:
+          HUGO_PARAMS_VERSION: latest
+
+      # The same build again, for links written before the root was the site.
+      - name: Build latest
+        run: hugo --source docs --destination "$PWD/public/latest"
+        env:
+          HUGO_PARAMS_VERSION: latest
+
+      # A tag additionally publishes the frozen copy this tag owns forever.
       - name: Build ${{ github.ref_name }}
         if: github.ref_type == 'tag'
         run: hugo --source docs --destination "$PWD/public/${{ github.ref_name }}"
         env:
           HUGO_PARAMS_VERSION: ${{ github.ref_name }}
 
-      - name: Build latest
-        run: hugo --source docs --destination "$PWD/public/latest"
-        env:
-          HUGO_PARAMS_VERSION: latest
-
       # The manifest feeding the version picker: append this tag to whatever
       # gh-pages already carries, unique, sorted newest first. The first
-      # release finds no branch and starts from []. Dispatch runs skip this —
+      # release finds no branch and starts from []. Non-tag runs skip this —
       # keep_files leaves the existing manifest in place.
       - name: Update versions.json
         if: github.ref_type == 'tag'
@@ -91,19 +103,8 @@ jobs:
             versions.json > public/versions.json
           cat public/versions.json
 
-      # The site root only redirects: every real page lives under a version.
-      - name: Stage root redirect
-        run: |
-          cat > public/index.html <<'EOF'
-          <!DOCTYPE html>
-          <meta charset="utf-8">
-          <meta http-equiv="refresh" content="0; url=./latest/">
-          <title>wand</title>
-          <a href="./latest/">wand documentation</a>
-          EOF
-
       # keep_files is the point: this deploy adds or overwrites only what it
-      # staged — /latest, the root redirect, and on tag builds /vX.Y.Z and
+      # staged — the root, /latest, and on tag builds /vX.Y.Z and
       # versions.json — while every previously released version's directory
       # stays frozen in place. cname re-asserts the custom-domain CNAME file
       # on every deploy so it can never be lost to a future non-keep deploy.

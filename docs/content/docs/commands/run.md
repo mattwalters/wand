@@ -1,6 +1,6 @@
 ---
 title: wand run
-weight: 195
+weight: 196
 summary: Own one ticket from claim to a terminal state — implement, CI, review, revise.
 ---
 

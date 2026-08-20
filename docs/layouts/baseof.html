@@ -9,6 +9,9 @@
 <body>
   <header>
     <a class="brand" href="{{ "" | relURL }}">wand</a>
+    {{/* The docs are what most people come for, so the way in is in the
+         header on every page — including the homepage, which has no rail. */}}
+    <a class="nav{{ if not .IsHome }} here{{ end }}" href="{{ "docs/" | relURL }}">Docs</a>
     <span class="spacer"></span>
     <a href="https://github.com/mattwalters/wand">GitHub</a>
     <span class="version">
@@ -16,7 +19,11 @@
       <select id="version-picker" hidden aria-label="Documentation version"></select>
     </span>
   </header>
-  <div class="wrap">
+  {{/* The homepage is a splash, not a manual page: it drops both rails and
+       runs full width, so its own section links (rendered in home.html) are
+       the navigation. Every other page keeps the three-region shell. */}}
+  <div class="wrap{{ if .IsHome }} wrap-home{{ end }}">
+    {{ if not .IsHome }}
     <nav class="sidenav">
       {{ $section := "" }}
       {{ range site.Menus.main }}
@@ -30,13 +37,14 @@
       <a href="{{ .URL | relURL }}"{{ with $classes }} class="{{ delimit . " " }}"{{ end }}{{ if $current }} aria-current="page"{{ end }}>{{ .Name }}</a>
       {{ end }}
     </nav>
+    {{ end }}
     <main>
       {{ block "main" . }}{{ end }}
     </main>
     {{/* plainify strips the empty <nav> Hugo emits for heading-less pages,
          so the rail only appears when there is something to point at. */}}
     {{ $toc := .TableOfContents }}
-    {{ if plainify $toc }}
+    {{ if and (not .IsHome) (plainify $toc) }}
     <nav class="toc">
       <h5>On this page</h5>
       {{ $toc }}
