@@ -230,6 +230,37 @@ key that hides how stale it is. If the row is gone from the re-read board —
 somebody else judged it — the screen returns to the board and says so
 rather than closing without a word. A refresh that <em>fails</em> says that too,
 on whichever screen you were on.</p>
+<h2 id="what-is-running-right-now">What is running right now</h2>
+<p>Above the four queues, when anything is running, sits a strip answering a
+different question — not <em>what is waiting on me?</em> but <em>what is the machine
+doing?</em>:</p>
+<pre tabindex="0"><code>  Running  2 in flight
+  WND-12  implement (round 1) · claude-code · up 18m · hb 8s ago
+  WND-7   possibly dead, sweep will confirm · scout · — · up 42m · hb 6m ago
+
+  Triage  2 to judge
+  ...
+</code></pre><p>Each row is one run the crash-only run journal says has not ended: its
+current phase (<code>implement</code>, <code>review</code>, <code>revise</code>, <code>scout</code>, …), its harness, how
+long it has been going (<code>up</code>), and how long since its lease last renewed
+(<code>hb</code>, for heartbeat — the periodic tick a long single phase writes so it
+does not read as stale the moment it passes a minute). A harness shown as
+<code>—</code> is a scope-style run, which picks its harness per phase rather than
+fixing one for the whole run.</p>
+<p><strong>Nothing here is waiting on you</strong>, so nothing here counts toward the
+header&rsquo;s count or takes a cursor: hand-launched <code>wand run</code> and <code>wand scope</code>
+invocations journal identically to an engaged cockpit&rsquo;s own, and appear here
+identically, whether or not engage mode is on. The strip is read-only and
+disappears entirely when nothing is running — a cockpit nobody has pointed
+at a live run still reads exactly as it did before this existed.</p>
+<p>A run whose own liveness judgment says its holder is gone reads
+<code>possibly dead, sweep will confirm</code> rather than being dropped or guessed at
+a second time: that judgment is the same one <a href="#the-four-queues">Lanes</a> uses
+for a <code>stuck</code> lane, and only <a href="../sweep/"><code>wand sweep</code></a> ever turns it into an
+action. A run that is actually stuck this way is <em>also</em> a <code>stuck</code> lane below
+— the strip says what the journal currently believes is running, the lane
+says a person has to do something about it, and a run can be both at once
+until sweep reaps it.</p>
 <h2 id="blessing">Blessing</h2>
 <p>Promoting a ticket to <strong>Todo</strong> or <strong>Scoping</strong> is the transition
 <a href="../guard/"><code>wand guard</code></a> refuses everywhere else, because it hands out
@@ -519,6 +550,7 @@ trapped inside a full-screen app you have to quit out of to read.</p>
   <ul>
     <li><a href="#synopsis">Synopsis</a></li>
     <li><a href="#the-four-queues">The four queues</a></li>
+    <li><a href="#what-is-running-right-now">What is running right now</a></li>
     <li><a href="#blessing">Blessing</a></li>
     <li><a href="#the-six-judgments">The six judgments</a></li>
     <li><a href="#engage-mode">Engage mode</a></li>
