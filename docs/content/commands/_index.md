@@ -6,17 +6,19 @@ Every command wand implements today, one page each. The pages are written
 from the command definitions, not from memory: flags, help text and exit
 codes match what the binary does.
 
-`covenant` and `bless` are not here. They are stubs — they parse and print
-and nothing else — and a reference page for a command that does not work
-yet is worse than a missing one. They get pages in the change that makes
-them real.
+There is no `bless` page because there is no `bless` command. Blessing is a
+human act, so it has a human door: it lives in the cockpit,
+[`wand ui`](../ui/). A one-shot CLI verb that promoted a ticket to Todo
+would be a verb an agent could call, which is the whole thing the guard
+exists to prevent.
 
 ## What every command shares
 
 **`LINEAR_API_KEY`.** Everything that talks to Linear reads a full-access
 key from the environment, never from a file — a key in a checked-in file is
 a key in the repo forever. Create one in Linear's security settings.
-`wand ui` and `wand version` are the exceptions; they need no key.
+`wand version` is the exception, along with `wand ui --sample` and
+`wand ui --dump-screen`, which render a built-in board.
 
 **The covenant file.** A checked-in [`wand.toml`](../covenant/)
 parameterizes the covenant — status names, caps, commands. Absent one, the

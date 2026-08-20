@@ -121,6 +121,69 @@ func TestAddLabelSurfacesRefusal(t *testing.T) {
 	}
 }
 
+// Priority 0 is "No priority", which the cockpit sets deliberately when a
+// human judges a ticket worth keeping and not worth ranking. A plain int
+// field would make that indistinguishable from "leave it alone", and the
+// ticket would carry its old rank into the pool — the exact opposite of the
+// judgment. Both directions are pinned here.
+func TestUpdateIssuePriorityZeroIsSent(t *testing.T) {
+	none := 0
+	input := captureInput(t, IssueUpdate{StateID: "st-1", Priority: &none})
+	raw, present := input["priority"]
+	if !present {
+		t.Fatal("priority omitted; an explicit No priority has to reach the wire")
+	}
+	if string(raw) != "0" {
+		t.Errorf("priority = %s, want 0", raw)
+	}
+}
+
+func TestUpdateIssueOmitsAnUnsetPriority(t *testing.T) {
+	input := captureInput(t, IssueUpdate{StateID: "st-1"})
+	if _, present := input["priority"]; present {
+		t.Error("priority sent on a status-only update; that would reset the rank")
+	}
+}
+
+// The duplicate relation has a direction, and getting it backwards records
+// the canonical issue as a duplicate of the throwaway.
+func TestCreateRelationDirection(t *testing.T) {
+	var input map[string]json.RawMessage
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Variables struct {
+				Input map[string]json.RawMessage `json:"input"`
+			} `json:"variables"`
+		}
+		json.NewDecoder(r.Body).Decode(&req) //nolint:errcheck // stub
+		input = req.Variables.Input
+		w.Write([]byte(`{"data":{"issueRelationCreate":{"success":true}}}`)) //nolint:errcheck // stub
+	}))
+	defer srv.Close()
+
+	c := &Client{APIKey: "k", Endpoint: srv.URL}
+	if err := c.CreateRelation(context.Background(), "uuid-dupe", "uuid-canonical", RelationDuplicate); err != nil {
+		t.Fatalf("CreateRelation: %v", err)
+	}
+	if got := string(input["issueId"]); got != `"uuid-dupe"` {
+		t.Errorf("issueId = %s, want the duplicate", got)
+	}
+	if got := string(input["relatedIssueId"]); got != `"uuid-canonical"` {
+		t.Errorf("relatedIssueId = %s, want the canonical issue", got)
+	}
+	if got := string(input["type"]); got != `"duplicate"` {
+		t.Errorf("type = %s", got)
+	}
+}
+
+func TestCreateRelationRefusesSelfLink(t *testing.T) {
+	c := &Client{APIKey: "k", Endpoint: "http://127.0.0.1:0"}
+	err := c.CreateRelation(context.Background(), "uuid-1", "uuid-1", RelationDuplicate)
+	if err == nil {
+		t.Fatal("CreateRelation succeeded, want a refusal to link an issue to itself")
+	}
+}
+
 // Zero is an estimate Linear accepts, so it cannot double as "leave this
 // alone". A plain int field would make an unset estimate indistinguishable
 // from a deliberate zero, and every status-only update would quietly wipe

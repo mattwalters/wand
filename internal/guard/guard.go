@@ -34,8 +34,18 @@
 // `state: "Todo"`, not a uuid it would have to look up first.
 //
 // This is the one verdict function. The PreToolUse hook (Run, in run.go) and
-// wand's own future Linear write path both call it, so the forbidden list
-// cannot drift between enforcement paths.
+// wand's own lifecycle verbs (internal/verbs) both call it, so the forbidden
+// list cannot drift between enforcement paths.
+//
+// One caller deliberately does not: internal/cockpit, the TUI's write path.
+// The subject of every sentence above is an *agent acting unattended*, and
+// none of them is true of a person at a terminal pressing a key on a screen
+// that has just told them what the transition authorizes. Blessing has to
+// happen somewhere, and a system that forbids it everywhere is one whose
+// board never moves. The guard is not a lock on the statuses; it is a lock
+// on who may reach them, and the cockpit is the door with a human on the
+// other side. See cockpit.Apply, where the absence of the call is
+// documented as the load-bearing detail it is.
 package guard
 
 import (

@@ -81,10 +81,17 @@ and no branch, and the next dispatcher pass spent a slot rediscovering the
 same wall. A correctly written instruction that is only sometimes followed
 looks, from the outside, exactly like one that was never written.
 
+So the blessing has one door, and it is a human one:
+[`wand ui`](../commands/ui/), the cockpit. Every other write path in wand
+runs through the guard's verdict function first and is refused; the cockpit
+is the one that does not, because the thing on the other side of it is a
+person who has just been told what the transition authorizes.
+
 **Needs Input** parks a question on a human. Without it, a blocked agent
 has two bad options: guess, or stall in In Progress looking healthy. Needs
 Input makes being blocked *visible and cheap* — the ticket says what it is
-waiting for, and surfacing that queue is the whole job of the cockpit.
+waiting for, and surfacing that queue is one quarter of the whole job of
+[the cockpit](../commands/ui/).
 It is deliberately an `unstarted` state: answering the question re-blesses
 the work, it does not resume it automatically.
 

@@ -1,0 +1,12 @@
+  Duplicate
+
+    WND-42  doctor prints an empty drift section on a clean board
+    Triage → Duplicate
+
+    The link is written before the status moves, so a Duplicate ticket always
+    names the one it duplicates. A duplicate that points at nothing is a dead
+    end someone re-reads a year from now.
+
+    duplicate of WND-41
+
+  enter move WND-42 → Duplicate • esc back

@@ -42,7 +42,7 @@ type Skip struct {
 func Build(issues []linear.Issue) (ready []linear.Issue, skips []Skip) {
 	ranked := make([]linear.Issue, len(issues))
 	copy(ranked, issues)
-	sort.SliceStable(ranked, func(i, j int) bool { return less(ranked[i], ranked[j]) })
+	sort.SliceStable(ranked, func(i, j int) bool { return Less(ranked[i], ranked[j]) })
 
 	for _, issue := range ranked {
 		if reason := Vet(issue); reason != "" {
@@ -54,9 +54,13 @@ func Build(issues []linear.Issue) (ready []linear.Issue, skips []Skip) {
 	return ready, skips
 }
 
-// less is the queue order. Deterministic all the way down: two readers
+// Less is the queue order. Deterministic all the way down: two readers
 // holding the same issues must print the same queue.
-func less(a, b linear.Issue) bool {
+//
+// Exported because the cockpit ranks its judgment queues with it. Two
+// orderings would mean the ticket a human blessed first is not the one an
+// agent starts first, which makes the ranking they did meaningless.
+func Less(a, b linear.Issue) bool {
 	if pa, pb := effectivePriority(a.Priority), effectivePriority(b.Priority); pa != pb {
 		return pa < pb
 	}

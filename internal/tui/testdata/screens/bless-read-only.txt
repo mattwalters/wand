@@ -1,0 +1,12 @@
+  ✦ Blessing
+
+    WND-42  doctor prints an empty drift section on a clean board
+    Triage → Todo
+
+    Todo is the gate between written down and a bot may act on this unattended.
+    Blessing it lets an agent claim the ticket, branch, write code and open a
+    pull request without asking you again.
+
+  read-only: this is the sample board. Every key here walks the screen; none of
+  them write.
+  esc back

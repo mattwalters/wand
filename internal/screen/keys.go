@@ -58,7 +58,15 @@ func ParseKey(name string) (tea.KeyPressMsg, error) {
 	}
 
 	if code, ok := namedKeys[strings.ToLower(name)]; ok {
-		return tea.KeyPressMsg{Code: code, Mod: mod}, nil
+		key := tea.KeyPressMsg{Code: code, Mod: mod}
+		// Space is the one named key that also inserts a character, and a
+		// script driving a text field needs it to: without Text set, a
+		// scripted "space" moves nothing and types nothing, which reads
+		// as the script being wrong rather than the parser.
+		if code == tea.KeySpace && mod == 0 {
+			key.Text = " "
+		}
+		return key, nil
 	}
 
 	runes := []rune(name)

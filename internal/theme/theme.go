@@ -19,6 +19,21 @@ type Theme struct {
 	Body     lipgloss.Style
 	Muted    lipgloss.Style
 	Selected lipgloss.Style
+
+	// Bless is the one style reserved for a single act: promoting work to
+	// Todo or Scoping. Nothing else on the board wears it, which is what
+	// makes the blessing screen read as a different kind of moment rather
+	// than another confirmation dialog.
+	Bless lipgloss.Style
+	// Warn marks a state that needs a person — a stuck lane, an unranked
+	// ticket about to be blessed.
+	Warn lipgloss.Style
+	// Bad marks a failure the user has to read: a refused write.
+	Bad lipgloss.Style
+	// Good marks a completed act.
+	Good lipgloss.Style
+	// Key styles a keystroke inside a help or prompt line.
+	Key lipgloss.Style
 }
 
 // New returns the default theme.
@@ -37,5 +52,18 @@ func New() Theme {
 		Selected: lipgloss.NewStyle().
 			Bold(true).
 			Foreground(lipgloss.Color("13")),
+		Bless: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("13")),
+		Warn: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("3")),
+		Bad: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("1")),
+		Good: lipgloss.NewStyle().
+			Foreground(lipgloss.Color("2")),
+		Key: lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("12")),
 	}
 }

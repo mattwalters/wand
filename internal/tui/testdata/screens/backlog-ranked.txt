@@ -1,0 +1,11 @@
+  Backlog, ranked
+
+    WND-42  doctor prints an empty drift section on a clean board
+    Triage → Backlog
+
+    Backlog is the pool. A priority says you have judged this worth doing and
+    roughly when — it is what decides the order the queue hands work out in.
+
+    priority      1 Urgent   2 High   3 Medium  [4 Low]
+
+  enter move WND-42 → Backlog • esc back

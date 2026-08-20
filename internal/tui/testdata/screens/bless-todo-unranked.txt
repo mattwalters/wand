@@ -1,0 +1,13 @@
+  ✦ Blessing
+
+    WND-41  guard: a raw state UUID is not matched
+    Triage → Todo
+
+    Todo is the gate between written down and a bot may act on this unattended.
+    Blessing it lets an agent claim the ticket, branch, write code and open a
+    pull request without asking you again.
+
+    WND-41 has no priority, and No priority sorts last in the queue. Blessing it
+    authorizes the work without scheduling it.
+
+  enter bless WND-41 → Todo • esc back

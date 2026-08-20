@@ -1,0 +1,15 @@
+ wand cockpit · WND                                       nothing waiting on you
+
+  Triage
+    nothing filed since you last looked.
+
+  Needs Input
+    no run is parked on a question.
+
+  Ready for human
+    nothing is labeled ready-for-human.
+
+  Lanes
+    every run is either finished or being driven.
+
+  ↑/k ↓/j move • enter open • r refresh • q quit
