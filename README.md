@@ -8,7 +8,9 @@ machinery — its covenant, and the blessing path work travels along.
 > rules; `queue` and `ticket` are the read layer; `doctor` reports a
 > team's drift from the covenant; `scope` is the first orchestrator — a
 > cold scout that turns one blessed-for-research ticket into a plan a human
-> can bless for building. The `covenant` and `bless` verbs are stubs.
+> can bless for building; `run` drives one blessed ticket through the
+> implement → CI → review → revise loop. The `covenant` and `bless` verbs
+> are stubs.
 
 ## Install
 
@@ -39,6 +41,7 @@ wand handback WND-3 -m "…"  # park it on a human: question first, Needs Input 
 wand abandon WND-3 -m "…"   # return it to Backlog with the evidence that undid it
 wand file "…" --team-key WND  # file a finding into Triage, duplicates searched first
 wand scope WND-3            # research one Scoping ticket into a plan, ending at Needs Input
+wand run WND-3              # own one blessed ticket: implement → CI → review → revise
 wand doctor --team-key WND  # report the team's drift from the covenant
 wand version                # build info, and the covenant schema this binary speaks
 ```
@@ -209,6 +212,40 @@ guard hook, so wand's own write path cannot drift from what the guard
 promises — and the respect runs both ways: `handback` and `abandon` refuse
 a ticket a human already closed, because reopening a close is as much a
 human's call as making one.
+
+## The run loop
+
+`wand run WND-3` owns one blessed ticket from claim to a terminal state:
+implement → CI → review → revise, a cold worker per phase, in a run-private
+worktree, with phases and caps from the covenant (`caps.review_rounds`,
+`caps.ci_attempts`, `caps.worker_timeout_minutes`; `commands.verify` is
+required). Workers commit and are mute — their environments carry no Linear
+or GitHub credentials, proven per harness by the isolation conformance
+suite — while the orchestrator makes every external write: it runs verify,
+pushes, opens and titles the PR (`[WND-3] …`, written at open and repaired
+in code), applies the handoff's description corrections to the ticket, and
+moves the status.
+
+Every run ends in exactly one journaled terminal state, and the exit code
+is a contract a scheduler can read:
+
+- **converged** (exit 0) — the reviewer approved on positive evidence and
+  no human PR thread stands unresolved (outdated included: outdated is not
+  answered); the ticket is In Review with `ready-for-human`, and the PR
+  awaits a human.
+- **handed back** (exit 2) — Needs Input, comment first: a worker's own
+  verbatim account of what blocked it, or a cap that ran out saying so.
+  Convergence never happens by exhaustion; a spent cap is a hand-back that
+  quotes the final round's findings whole.
+- **parked** (exit 3) — stopped without deciding (interrupt, unparseable
+  handoff, dirty tree), journal-only so it works even when Linear is down,
+  worktree preserved. A reviewer that leaves no parseable handoff parks
+  rather than converges: anything else turns reviewer crashes into clean
+  passes.
+
+The run journal makes all of it crash-only: every phase is journaled before
+its worker spawns, and a run killed outright is provably dead and cheap to
+re-enter.
 
 ## Docs
 

@@ -113,6 +113,30 @@ func (c *Client) UpdateIssue(ctx context.Context, issueID string, u IssueUpdate)
 	return nil
 }
 
+// AddLabel adds one label to an issue, leaving the rest of its labels
+// alone. Linear's issueUpdate takes the full label set, so "add one" through
+// it would race any other writer touching labels; issueAddLabel is the
+// mutation shaped like the intent.
+func (c *Client) AddLabel(ctx context.Context, issueID, labelID string) error {
+	var out struct {
+		IssueAddLabel struct {
+			Success bool `json:"success"`
+		} `json:"issueAddLabel"`
+	}
+	err := c.Do(ctx, `
+		mutation($id: String!, $labelId: String!) {
+		  issueAddLabel(id: $id, labelId: $labelId) { success }
+		}`,
+		map[string]any{"id": issueID, "labelId": labelID}, &out)
+	if err != nil {
+		return err
+	}
+	if !out.IssueAddLabel.Success {
+		return fmt.Errorf("linear: refused the label add")
+	}
+	return nil
+}
+
 // IssueCreate is the slice of issueCreate fields `wand file` sets. There is
 // deliberately no priority and no assignee: an agent-filed issue enters
 // Triage unowned and unranked, because ranking work is part of blessing it.
