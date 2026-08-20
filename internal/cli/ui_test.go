@@ -82,6 +82,16 @@ func TestUIFlagContract(t *testing.T) {
 			want: "does not apply",
 		},
 		{
+			name: "harness with dump",
+			args: []string{"--dump-screen", "--harness", "codex"},
+			want: "does not apply",
+		},
+		{
+			name: "interval with sample",
+			args: []string{"--sample", "--interval", "30s"},
+			want: "does not apply",
+		},
+		{
 			name: "unparseable script",
 			args: []string{"--dump-screen", "--script", "ctrl+nope"},
 			want: "could not parse --script",
@@ -153,5 +163,31 @@ func TestDumpScreenHonorsTheSizeFlags(t *testing.T) {
 		if len([]rune(line)) > 60 {
 			t.Errorf("line is %d wide, want no more than 60: %q", len([]rune(line)), line)
 		}
+	}
+}
+
+// --- engage mode's dependency wiring ----------------------------------------
+
+// buildEngager must fail closed: with no resolvable team key it cannot even
+// get as far as reading Linear, and the cockpit still has to open — engage
+// mode just is not available, the same way a missing Backend leaves the
+// board read-only rather than refusing to open at all.
+func TestBuildEngagerReturnsNilWithoutATeamKey(t *testing.T) {
+	t.Chdir(t.TempDir())
+	cmd := newUICmd()
+	if eng := buildEngager(cmd, "", "claude-code", "", ""); eng != nil {
+		t.Error("buildEngager returned a non-nil Engager with no resolvable team key and no wand.toml")
+	}
+}
+
+// The same refusal applies with a team key but no Linear credential —
+// dispatchDeps needs LINEAR_API_KEY exactly as `wand dispatch` does, and
+// engage mode inherits that requirement rather than working around it.
+func TestBuildEngagerReturnsNilWithoutALinearKey(t *testing.T) {
+	t.Setenv("LINEAR_API_KEY", "")
+	t.Chdir(t.TempDir())
+	cmd := newUICmd()
+	if eng := buildEngager(cmd, "WND", "claude-code", "", ""); eng != nil {
+		t.Error("buildEngager returned a non-nil Engager with no LINEAR_API_KEY set")
 	}
 }
