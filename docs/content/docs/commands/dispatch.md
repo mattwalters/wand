@@ -71,6 +71,13 @@ Each spawned child's own narration (the same lines `wand run` or
 the run journal's state directory, one file per child, since the journal
 itself only carries the structured half of that account.
 
+[`wand ui`](../ui/)'s engage mode (the `e` key) is this exact mechanism run
+from inside the cockpit instead of a standalone process — the same lock,
+the same lane accounting, the same detached spawn. An engaged cockpit and a
+`--watch` process, or two engaged cockpits, arbitrate through the one
+dispatch lock exactly as two `--watch` processes would: the loser of a
+pass refuses and no-ops rather than racing the winner's selection.
+
 ## Exit codes
 
 A scheduler's whole view of a pass is a status and a log, so every ending a

@@ -4,6 +4,7 @@ package cli
 import (
 	"io"
 	"os"
+	"time"
 
 	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
@@ -35,7 +36,12 @@ func Root() *cobra.Command {
 			if !isTTY(cmd.OutOrStdout()) {
 				return cmd.Help()
 			}
-			return runCockpit(cmd, "", screen.DefaultWidth, screen.DefaultHeight)
+			// Bare `wand` never engages by itself — opening a dashboard
+			// must not start spending money. Engage mode is a deliberate
+			// key press, reachable from here exactly as it is from
+			// `wand ui`, with the same default harness and poll interval
+			// `wand ui`'s own flags default to.
+			return runCockpit(cmd, "", "claude-code", "", "", screen.DefaultWidth, screen.DefaultHeight, time.Minute)
 		},
 	}
 

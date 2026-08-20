@@ -36,15 +36,15 @@ func TestWatchSpawnsAndTracksPending(t *testing.T) {
 		Interval: time.Hour, // never fires again inside this test
 	}
 
-	p := &pending{children: map[string]pendingChild{}}
+	p := NewPending()
 	logDir := t.TempDir()
 
-	summary, err := w.tick(context.Background(), store, p, logDir)
+	res, err := w.Tick(context.Background(), store, p, logDir)
 	if err != nil {
 		t.Fatalf("tick: %v", err)
 	}
-	if !strings.Contains(summary, "WND-1") {
-		t.Errorf("summary = %q, want it to name WND-1", summary)
+	if !strings.Contains(res.Summary, "WND-1") {
+		t.Errorf("summary = %q, want it to name WND-1", res.Summary)
 	}
 	if p.count() != 1 {
 		t.Fatalf("pending.count() = %d, want 1 right after spawning", p.count())
@@ -53,12 +53,12 @@ func TestWatchSpawnsAndTracksPending(t *testing.T) {
 	// A second tick, immediately: the journal has nothing new yet (the
 	// fake sleeper hasn't run.Execute'd anything — it is a stand-in
 	// process, not wand), but pending must still report the lane in use.
-	summary2, err := w.tick(context.Background(), store, p, logDir)
+	res2, err := w.Tick(context.Background(), store, p, logDir)
 	if err != nil {
 		t.Fatalf("second tick: %v", err)
 	}
-	if !strings.Contains(summary2, "idle") {
-		t.Errorf("second tick summary = %q, want idle: the lane pending already claims must not be dispatched into twice", summary2)
+	if !strings.Contains(res2.Summary, "idle") {
+		t.Errorf("second tick summary = %q, want idle: the lane pending already claims must not be dispatched into twice", res2.Summary)
 	}
 
 	// Let the spawned process finish and confirm pending drains.
@@ -89,15 +89,15 @@ func TestWatchScopingWinnerDoesNotOccupyALane(t *testing.T) {
 		Interval: time.Hour,
 	}
 
-	p := &pending{children: map[string]pendingChild{}}
+	p := NewPending()
 	logDir := t.TempDir()
 
-	summary, err := w.tick(context.Background(), store, p, logDir)
+	res, err := w.Tick(context.Background(), store, p, logDir)
 	if err != nil {
 		t.Fatalf("tick: %v", err)
 	}
-	if !strings.Contains(summary, "WND-2") {
-		t.Errorf("summary = %q, want it to name WND-2", summary)
+	if !strings.Contains(res.Summary, "WND-2") {
+		t.Errorf("summary = %q, want it to name WND-2", res.Summary)
 	}
 	if got := p.count(); got != 0 {
 		t.Fatalf("pending.count() = %d, want 0: a scope child holds no lane", got)
@@ -109,18 +109,67 @@ func TestWatchScopingWinnerDoesNotOccupyALane(t *testing.T) {
 	board.todo = []linear.Issue{
 		{Identifier: "WND-1", Title: "one", State: linear.IssueState{Name: "Todo"}, CreatedAt: time.Now()},
 	}
-	summary2, err := w.tick(context.Background(), store, p, logDir)
+	res2, err := w.Tick(context.Background(), store, p, logDir)
 	if err != nil {
 		t.Fatalf("second tick: %v", err)
 	}
-	if !strings.Contains(summary2, "WND-1") {
-		t.Errorf("second tick summary = %q, want it to dispatch WND-1: the in-flight scope must not have starved the lane", summary2)
+	if !strings.Contains(res2.Summary, "WND-1") {
+		t.Errorf("second tick summary = %q, want it to dispatch WND-1: the in-flight scope must not have starved the lane", res2.Summary)
 	}
 
 	waitForPending(t, p, 0)
 }
 
-func waitForPending(t *testing.T, p *pending, want int) {
+// TestTickIdlesWhenNoLaneAndNoScopingWinner pins Tick's own idle path,
+// independent of Watch's loop: a full lane and an empty Scoping queue must
+// report Dispatched=false with an idle summary, not merely fail to find a
+// Todo winner. This is the case an engage-mode caller needs to distinguish
+// from a real dispatch, since it renders as "idle" rather than "dispatched".
+func TestTickIdlesWhenNoLaneAndNoScopingWinner(t *testing.T) {
+	store := journal.New(t.TempDir())
+	board := &fakeBoard{todo: []linear.Issue{
+		{Identifier: "WND-1", Title: "one", State: linear.IssueState{Name: "Todo"}, CreatedAt: time.Now()},
+	}}
+	cov := covenant.Default()
+	cov.Caps.Lanes = 1
+
+	w := WatchDeps{
+		Deps: Deps{
+			Board: board, Cov: cov, Runs: &fakeRuns{reports: map[string]journal.Report{}},
+			Git: unimplementedGit{}, Hub: unimplementedHub{}, Shell: unimplementedShell{},
+			Tree: unimplementedTree{}, Workers: unimplementedWorkers{},
+			TeamKey: "WND", Repo: t.TempDir(),
+		},
+		Bin:      sleeperBinary(t),
+		Interval: time.Hour,
+	}
+
+	p := NewPending()
+	logDir := t.TempDir()
+
+	// Fill the one lane, then confirm a second tick with no scoping winner
+	// idles rather than spawning a second run into the same lane.
+	if _, err := w.Tick(context.Background(), store, p, logDir); err != nil {
+		t.Fatalf("first tick: %v", err)
+	}
+	board.todo = []linear.Issue{
+		{Identifier: "WND-3", Title: "another", State: linear.IssueState{Name: "Todo"}, CreatedAt: time.Now()},
+	}
+	res, err := w.Tick(context.Background(), store, p, logDir)
+	if err != nil {
+		t.Fatalf("second tick: %v", err)
+	}
+	if res.Dispatched {
+		t.Fatalf("res.Dispatched = true, want false: no lane is free and Scoping is empty")
+	}
+	if !strings.Contains(res.Summary, "idle") {
+		t.Errorf("summary = %q, want it to say idle", res.Summary)
+	}
+
+	waitForPending(t, p, 0)
+}
+
+func waitForPending(t *testing.T, p *Pending, want int) {
 	t.Helper()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {

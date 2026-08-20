@@ -124,10 +124,37 @@ func (m Model) headerView() string {
 	}
 
 	head := spread(left, right, m.width)
+	if line := m.engageLine(); line != "" {
+		head += "\n" + line
+	}
 	if m.notice != "" {
 		head += "\n" + m.theme.Muted.Render(pad(gutter)+truncate(m.notice, m.width-gutter))
 	}
 	return head
+}
+
+// engageLine is the header's second line while engage mode is on: idle
+// with a countdown to the next poll, or the ticket the last poll spawned.
+// Empty while disengaged, so a cockpit nobody has turned into a scheduler
+// still reads exactly as it did before this mode existed.
+func (m Model) engageLine() string {
+	if !m.engaged {
+		return ""
+	}
+	status := "idle"
+	style := m.theme.Muted
+	if m.tickResult.Dispatched {
+		status = fmt.Sprintf("dispatched %s (%s)", m.tickResult.Ticket, m.tickResult.Verb)
+		style = m.theme.Good
+	}
+	if !m.nextPollAt.IsZero() && !m.now.IsZero() {
+		remaining := int(m.nextPollAt.Sub(m.now).Seconds())
+		if remaining < 0 {
+			remaining = 0
+		}
+		status += fmt.Sprintf(" · next poll in %ds", remaining)
+	}
+	return style.Render(pad(gutter) + "engaged · " + status)
 }
 
 func (m Model) boardLines() []line {
@@ -254,6 +281,13 @@ func (m Model) navHelp() string {
 	items := []string{"↑/k ↓/j move", "enter open"}
 	if !m.readOnly() {
 		items = append(items, "r refresh")
+	}
+	if m.engager != nil {
+		label := "e engage"
+		if m.engaged {
+			label = "e disengage"
+		}
+		items = append(items, label)
 	}
 	items = append(items, "q quit")
 	return m.theme.Muted.Render(pad(gutter) + strings.Join(items, " • "))

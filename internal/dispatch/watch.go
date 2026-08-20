@@ -78,17 +78,17 @@ func Watch(ctx context.Context, w WatchDeps, store *journal.Store) error {
 	}
 	defer lock.Release()
 
-	p := &pending{children: map[string]pendingChild{}}
+	p := NewPending()
 	var lastState string
 	fmt.Fprintf(w.Out, "dispatch: watching %s (poll every %s, %d lane(s))\n", w.Repo, w.Interval, w.Cov.Caps.Lanes)
 
 	for {
-		state, err := w.tick(ctx, store, p, logDir)
+		res, err := w.Tick(ctx, store, p, logDir)
 		if err != nil {
 			fmt.Fprintf(w.Out, "dispatch: %v\n", err)
-		} else if state != lastState {
-			fmt.Fprintln(w.Out, state)
-			lastState = state
+		} else if res.Summary != lastState {
+			fmt.Fprintln(w.Out, res.Summary)
+			lastState = res.Summary
 		}
 
 		select {
@@ -107,13 +107,24 @@ type pendingChild struct {
 	verb Verb
 }
 
-// pending tracks children this watch session has spawned but that have not
-// yet exited, so a poll immediately after a spawn does not re-read the
-// journal, see no run registered yet, and dispatch a second winner into a
-// lane the first has already claimed.
-type pending struct {
+// Pending tracks children one polling session — `dispatch --watch`'s own
+// loop, or the cockpit's engage-mode loop driving [WatchDeps.Tick] itself —
+// has spawned but that have not yet exited, so a poll immediately after a
+// spawn does not re-read the journal, see no run registered yet, and
+// dispatch a second winner into a lane the first has already claimed.
+//
+// Exported so a caller outside this package can hold one across repeated
+// calls to Tick: the bookkeeping is session-scoped, not tick-scoped, and a
+// caller that made a new one every tick would lose exactly the protection
+// this type exists to provide.
+type Pending struct {
 	mu       sync.Mutex
 	children map[string]pendingChild
+}
+
+// NewPending returns an empty session, ready for repeated Tick calls.
+func NewPending() *Pending {
+	return &Pending{children: map[string]pendingChild{}}
 }
 
 // count returns the number of lanes this session's spawned-but-unregistered
@@ -121,7 +132,7 @@ type pending struct {
 // same as [LanesUsed] excludes a registered scope run — otherwise a
 // dispatched Scoping ticket would starve Todo for the length of its own
 // pass, the exact starvation the lane split exists to prevent.
-func (p *pending) count() int {
+func (p *Pending) count() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	n := 0
@@ -133,7 +144,7 @@ func (p *pending) count() int {
 	return n
 }
 
-func (p *pending) add(ticket string, verb Verb, cmd *exec.Cmd) {
+func (p *Pending) add(ticket string, verb Verb, cmd *exec.Cmd) {
 	p.mu.Lock()
 	p.children[ticket] = pendingChild{cmd: cmd, verb: verb}
 	p.mu.Unlock()
@@ -145,12 +156,35 @@ func (p *pending) add(ticket string, verb Verb, cmd *exec.Cmd) {
 	}()
 }
 
-// tick is one poll: read, select, maybe spawn. It returns a short summary
-// for state-change-only logging.
-func (w WatchDeps) tick(ctx context.Context, store *journal.Store, p *pending, logDir string) (string, error) {
+// TickResult is one poll's outcome: enough for both --watch's own
+// state-change-only logging and a caller like the cockpit's engage mode to
+// describe precisely what happened, without either re-deriving it from a
+// log line.
+type TickResult struct {
+	// Dispatched reports whether a winner was spawned this tick.
+	Dispatched bool
+	// Winner is the spawned winner. Only meaningful when Dispatched.
+	Winner Winner
+	// PID is the spawned child's process id. Only meaningful when Dispatched.
+	PID int
+	// LanesUsed and LanesCap are lane occupancy as of this tick.
+	LanesUsed, LanesCap int
+	// Summary is the one-line, human-readable report `wand dispatch
+	// --watch` prints on a state change.
+	Summary string
+}
+
+// Tick is one poll: read, select, maybe spawn. It is non-blocking — every
+// wait this method itself performs is an ordinary network or process-start
+// call, never a sleep — which is what lets a caller drive its own polling
+// schedule around it instead of being driven by Watch's own loop. Watch
+// calls this in its for-loop; the cockpit's engage mode calls it from a
+// tea.Cmd fired on its own interval, holding the same *Pending across ticks
+// the way Watch holds one across its own.
+func (w WatchDeps) Tick(ctx context.Context, store *journal.Store, p *Pending, logDir string) (TickResult, error) {
 	ids, err := w.Runs.List()
 	if err != nil {
-		return "", fmt.Errorf("listing runs: %w", err)
+		return TickResult{}, fmt.Errorf("listing runs: %w", err)
 	}
 	var reports []journal.Report
 	for _, id := range ids {
@@ -165,25 +199,36 @@ func (w WatchDeps) tick(ctx context.Context, store *journal.Store, p *pending, l
 
 	todo, err := w.Board.TeamIssuesByState(ctx, w.TeamKey, w.Cov.StatusName("todo"))
 	if err != nil {
-		return "", fmt.Errorf("reading Todo: %w", err)
+		return TickResult{}, fmt.Errorf("reading Todo: %w", err)
 	}
 	scoping, err := w.Board.TeamIssuesByState(ctx, w.TeamKey, w.Cov.StatusName("scoping"))
 	if err != nil {
-		return "", fmt.Errorf("reading Scoping: %w", err)
+		return TickResult{}, fmt.Errorf("reading Scoping: %w", err)
 	}
 
 	winner, ok, _, _ := Select(todo, scoping, laneFree)
 	if !ok {
-		return fmt.Sprintf("dispatch: idle (%d/%d lanes in use)", used, w.Cov.Caps.Lanes), nil
+		return TickResult{
+			LanesUsed: used,
+			LanesCap:  w.Cov.Caps.Lanes,
+			Summary:   fmt.Sprintf("dispatch: idle (%d/%d lanes in use)", used, w.Cov.Caps.Lanes),
+		}, nil
 	}
 
 	cmd, err := w.spawn(winner, logDir)
 	if err != nil {
-		return "", fmt.Errorf("spawning %s: %w", winner.Issue.Identifier, err)
+		return TickResult{}, fmt.Errorf("spawning %s: %w", winner.Issue.Identifier, err)
 	}
 	p.add(winner.Issue.Identifier, winner.Verb, cmd)
-	return fmt.Sprintf("dispatch: dispatched %s %s (pid %d, %d/%d lanes now in use)",
-		winner.Verb, winner.Issue.Identifier, cmd.Process.Pid, used+1, w.Cov.Caps.Lanes), nil
+	return TickResult{
+		Dispatched: true,
+		Winner:     winner,
+		PID:        cmd.Process.Pid,
+		LanesUsed:  used + 1,
+		LanesCap:   w.Cov.Caps.Lanes,
+		Summary: fmt.Sprintf("dispatch: dispatched %s %s (pid %d, %d/%d lanes now in use)",
+			winner.Verb, winner.Issue.Identifier, cmd.Process.Pid, used+1, w.Cov.Caps.Lanes),
+	}, nil
 }
 
 // spawn starts the winner's loop as a detached child: its own session, so

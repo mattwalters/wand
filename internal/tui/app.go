@@ -22,6 +22,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
@@ -44,6 +45,37 @@ type Backend interface {
 	Apply(ctx context.Context, in cockpit.Intent) (cockpit.Intent, error)
 }
 
+// EngageResult is one engage-mode poll's outcome, translated from
+// dispatch's own TickResult into what the header needs to render it. A
+// sibling type rather than a re-export of dispatch.TickResult, so this
+// package's dependency on the process-manager mechanics stays confined to
+// the shape it actually renders.
+type EngageResult struct {
+	// Dispatched reports whether a winner was spawned this poll.
+	Dispatched bool
+	// Ticket and Verb name the winner. Set only when Dispatched.
+	Ticket, Verb string
+	// LanesUsed and LanesCap are lane occupancy as of this poll.
+	LanesUsed, LanesCap int
+}
+
+// Engager is the cockpit's process-manager extension to Backend: the
+// mechanics `wand dispatch --watch` already implements, driven from inside
+// the cockpit instead of a standalone process. Nil means engage mode is
+// unavailable — the toggle refuses and says why, the same shape readOnly
+// already uses for Backend.
+//
+// AcquireLock and ReleaseLock hold the same per-repo dispatch lock
+// dispatch.Acquire arbitrates: engaging is what starts holding it, so two
+// engaged cockpits — or an engaged cockpit and a standalone `wand dispatch`
+// — never race the same Todo read. Tick drives exactly one non-blocking
+// poll of dispatch's own gc/read/select/spawn-if-winner logic.
+type Engager interface {
+	AcquireLock() error
+	ReleaseLock() error
+	Tick(ctx context.Context) (EngageResult, error)
+}
+
 // Config is what New needs. Snapshot is passed in already read rather than
 // fetched on Init, so that a failure to reach Linear is an ordinary command
 // error printed at a shell — not an error message trapped inside an
@@ -61,6 +93,12 @@ type Config struct {
 	// Notice is a banner shown under the header. Used to say that a board
 	// is the built-in sample rather than the user's team.
 	Notice string
+	// Engager makes engage mode available. Nil means the toggle refuses
+	// and says why — the same shape a nil Backend gives read-only.
+	Engager Engager
+	// Interval is how long engage mode waits between polls. Zero means one
+	// minute, `wand dispatch --watch`'s own default.
+	Interval time.Duration
 }
 
 // state is which screen the app is showing.
@@ -105,6 +143,32 @@ type Model struct {
 	// flash is what just happened, shown on the board.
 	flash   string
 	flashOK bool
+
+	// engager drives engage mode's lock and polling. Nil means the toggle
+	// refuses.
+	engager  Engager
+	interval time.Duration
+	// engaged is whether engage mode currently holds the dispatch lock.
+	engaged bool
+	// engaging is true while a lock acquire or release is in flight, so a
+	// key repeated before the first lands cannot start a second one.
+	engaging bool
+	// quitting is true once a quit key has fired while engaged: the lock
+	// release it triggered has to land before the program actually quits,
+	// or a killed terminal would not be the only way to leave the lock
+	// held past this process's own exit.
+	quitting bool
+	// clockTicking is whether the 1s countdown redraw loop is already
+	// running, so a poll result does not start a second one alongside it.
+	clockTicking bool
+	// tickResult is the last engage-mode poll's outcome.
+	tickResult EngageResult
+	// nextPollAt is when the next poll fires, carried in from the tea.Cmd
+	// that observed the clock — Update and View never read it themselves.
+	nextPollAt time.Time
+	// now is the last clock reading a redraw tick carried in, for rendering
+	// the countdown to nextPollAt without View reading the clock itself.
+	now time.Time
 }
 
 // New returns a cockpit model over an already-read snapshot.
@@ -118,17 +182,24 @@ func New(cfg Config) Model {
 		cov = covenant.Default()
 	}
 
+	interval := cfg.Interval
+	if interval <= 0 {
+		interval = time.Minute
+	}
+
 	m := Model{
-		snap:    cfg.Snapshot,
-		board:   cockpit.Build(cfg.Snapshot),
-		backend: cfg.Backend,
-		cov:     cov,
-		keys:    defaultKeyMap(),
-		theme:   theme.New(),
-		notice:  cfg.Notice,
-		width:   cfg.Width,
-		height:  cfg.Height,
-		input:   in,
+		snap:     cfg.Snapshot,
+		board:    cockpit.Build(cfg.Snapshot),
+		backend:  cfg.Backend,
+		cov:      cov,
+		keys:     defaultKeyMap(),
+		theme:    theme.New(),
+		notice:   cfg.Notice,
+		width:    cfg.Width,
+		height:   cfg.Height,
+		input:    in,
+		engager:  cfg.Engager,
+		interval: interval,
 	}
 	if m.width <= 0 {
 		m.width = 80
@@ -189,6 +260,31 @@ type refreshedMsg struct {
 	err  error
 }
 
+// lockMsg carries the result of one acquire or release of the dispatch
+// lock. acquiring distinguishes the two: both produce the same shape, but
+// only one of them turns engaged on.
+type lockMsg struct {
+	acquiring bool
+	err       error
+}
+
+// engageTickMsg carries one engage-mode poll's outcome, along with the
+// clock reading the tea.Cmd took when it fired — Update stores it, never
+// reads the clock itself, so nextPollAt is derived here and nowhere else.
+type engageTickMsg struct {
+	at  time.Time
+	res EngageResult
+	err error
+}
+
+// clockTickMsg is the low-frequency redraw tick that lets the header's
+// countdown move without a real poll happening: the countdown is derived
+// from nextPollAt and this message's own clock reading, never from View
+// reading the clock itself.
+type clockTickMsg struct {
+	now time.Time
+}
+
 // Update implements tea.Model. It is pure: no I/O, no clock, no randomness.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
@@ -238,6 +334,55 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.resyncDetail()
 		return m, nil
 
+	case lockMsg:
+		m.engaging = false
+		if msg.acquiring {
+			if msg.err != nil {
+				m.flash, m.flashOK = "engage: "+msg.err.Error(), false
+				return m, nil
+			}
+			m.engaged = true
+			return m, engageTickNowCmd(m.engager)
+		}
+		if msg.err != nil {
+			m.flash, m.flashOK = "engage: releasing the dispatch lock: "+msg.err.Error(), false
+		}
+		if m.quitting {
+			return m, tea.Quit
+		}
+		return m, nil
+
+	case engageTickMsg:
+		if !m.engaged {
+			// Disengaged while this poll was in flight: nothing left to
+			// show it on, and rescheduling would resurrect a countdown
+			// nobody asked for any more.
+			return m, nil
+		}
+		if msg.err != nil {
+			m.flash, m.flashOK = "engage: "+msg.err.Error(), false
+		} else {
+			m.tickResult = msg.res
+			if msg.res.Dispatched {
+				m.flash, m.flashOK = fmt.Sprintf("engaged: dispatched %s (%s)", msg.res.Ticket, msg.res.Verb), true
+			}
+		}
+		m.nextPollAt = msg.at.Add(m.interval)
+		next := engageTickAfterCmd(m.engager, m.interval)
+		if m.clockTicking {
+			return m, next
+		}
+		m.clockTicking = true
+		return m, tea.Batch(next, clockTickCmd())
+
+	case clockTickMsg:
+		m.now = msg.now
+		if !m.engaged {
+			m.clockTicking = false
+			return m, nil
+		}
+		return m, clockTickCmd()
+
 	case tea.KeyPressMsg:
 		return m.onKey(msg)
 	}
@@ -246,19 +391,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.ForceQuit) {
-		return m, tea.Quit
+		return m.quit()
 	}
 	if m.state == stateConfirm {
 		// Quit works here too, but only when nothing has focus: on a
 		// text field "q" is a letter, which is why ForceQuit above is
 		// the escape hatch that never depends on focus.
 		if !m.typing() && key.Matches(msg, m.keys.Quit) {
-			return m, tea.Quit
+			return m.quit()
 		}
 		return m.confirmKey(msg)
 	}
 	if key.Matches(msg, m.keys.Quit) {
-		return m, tea.Quit
+		return m.quit()
 	}
 
 	switch {
@@ -295,6 +440,9 @@ func (m Model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		m.busy, m.flash = true, ""
 		return m, refreshCmd(m.backend)
+
+	case key.Matches(msg, m.keys.Engage):
+		return m.toggleEngage()
 	}
 
 	// Anything left may be a disposition.
@@ -544,4 +692,91 @@ func refreshCmd(b Backend) tea.Cmd {
 		snap, err := b.Read(context.Background())
 		return refreshedMsg{snap: snap, err: err}
 	}
+}
+
+// --- engage mode -----------------------------------------------------------
+
+// engageUnavailable is what the toggle says when there is no Engager —
+// the same "name the mode, not the key" shape readOnlyRefusal already
+// uses for a nil Backend.
+const engageUnavailable = "engage mode is unavailable: wand ui was not given what wand dispatch needs to run a winner"
+
+// toggleEngage starts or stops engage mode. Starting acquires the repo's
+// dispatch lock through a tea.Cmd and, once held, fires an immediate poll —
+// the same "check right away, then wait" shape Watch's own loop opens
+// with. Stopping releases the lock through a tea.Cmd and clears the polling
+// state optimistically, so the header stops claiming a countdown that no
+// longer means anything even before the release lands.
+func (m Model) toggleEngage() (Model, tea.Cmd) {
+	if m.engager == nil {
+		m.flash, m.flashOK = engageUnavailable, false
+		return m, nil
+	}
+	if m.engaging {
+		return m, nil
+	}
+	if m.engaged {
+		m.engaging = true
+		m.engaged = false
+		m.tickResult = EngageResult{}
+		m.nextPollAt = time.Time{}
+		return m, releaseLockCmd(m.engager)
+	}
+	m.engaging, m.flash = true, ""
+	return m, acquireLockCmd(m.engager)
+}
+
+// quit is what every quit key calls: a plain tea.Quit normally, or — while
+// engaged — the lock release first, landing as an ordinary lockMsg that the
+// quitting flag turns into the actual tea.Quit once it lands. That keeps
+// the release on the same message-driven path toggle-off already uses,
+// rather than a second, opaque way to sequence two Cmds — a killed
+// terminal is still the only way engage mode ever leaves the lock held past
+// its own exit, and that case needs no code here: lock.go's own
+// dead-holder reclaim is what covers it.
+func (m Model) quit() (Model, tea.Cmd) {
+	if m.engaged {
+		m.quitting = true
+		return m, releaseLockCmd(m.engager)
+	}
+	return m, tea.Quit
+}
+
+func acquireLockCmd(e Engager) tea.Cmd {
+	return func() tea.Msg {
+		return lockMsg{acquiring: true, err: e.AcquireLock()}
+	}
+}
+
+func releaseLockCmd(e Engager) tea.Cmd {
+	return func() tea.Msg {
+		return lockMsg{acquiring: false, err: e.ReleaseLock()}
+	}
+}
+
+// engageTickNowCmd fires one poll immediately — used the moment the lock is
+// acquired, mirroring Watch's own "check right away" first pass.
+func engageTickNowCmd(e Engager) tea.Cmd {
+	return func() tea.Msg {
+		res, err := e.Tick(context.Background())
+		return engageTickMsg{at: time.Now(), res: res, err: err}
+	}
+}
+
+// engageTickAfterCmd waits interval, then fires one poll — the steady-state
+// shape once the first poll has landed.
+func engageTickAfterCmd(e Engager, interval time.Duration) tea.Cmd {
+	return tea.Tick(interval, func(time.Time) tea.Msg {
+		res, err := e.Tick(context.Background())
+		return engageTickMsg{at: time.Now(), res: res, err: err}
+	})
+}
+
+// clockTickCmd is the low-frequency redraw loop that moves the countdown
+// between polls, without either Update or View reading the clock
+// themselves — the tea.Cmd is the one place time.Now() is read.
+func clockTickCmd() tea.Cmd {
+	return tea.Tick(time.Second, func(t time.Time) tea.Msg {
+		return clockTickMsg{now: t}
+	})
 }

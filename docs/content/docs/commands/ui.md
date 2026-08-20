@@ -16,7 +16,7 @@ bare `wand` falls back to printing help instead.
 
 ```
 wand
-wand ui --team-key WND
+wand ui --team-key WND [--harness <name>] [--model <m>] [--effort <e>] [--interval <duration>]
 wand ui --sample
 wand ui --dump-screen [--script KEYS] [--width N] [--height N]
 ```
@@ -144,6 +144,60 @@ uncompletable through the only screen that can complete it.
 Every status is named by what it *means*, so a covenant that renames `todo`
 to `Ready` gets a screen that says `→ Ready`.
 
+## Engage mode
+
+Press `e` to engage. While engaged, the cockpit polls Todo and Scoping on
+`--interval` (default `1m`) exactly the way `wand dispatch --watch` (see
+[`wand dispatch`](../dispatch/)) does — because it *is* that mechanism,
+reused rather than reimplemented: each poll counts lanes, ranks
+and vets Todo and Scoping, and when a winner exists spawns it as a
+**detached child process** through `wand run` or `wand scope`, the same way
+`--watch` does. That child survives the cockpit: closing the UI, or the
+whole terminal it runs in, never kills work already spawned. Press `e`
+again to disengage.
+
+The header names what engage mode is doing:
+
+```
+ wand cockpit · WND                                             6 waiting on you
+  engaged · idle · next poll in 40s
+```
+
+```
+ wand cockpit · WND                                             6 waiting on you
+  engaged · dispatched WND-9 (run) · next poll in 60s
+```
+
+**Engaging is always a deliberate key press, never a default.** Bare
+`wand` opens the cockpit read-for-work but never pre-engaged — opening a
+dashboard must not start spending money. Nothing engages it for you.
+
+**Multiple engaged cockpits, and an engaged cockpit alongside a standalone
+`wand dispatch`, are all safe together.** Engaging acquires the same
+per-repo dispatch lock `wand dispatch` itself arbitrates: the loser of a
+pass — whichever process asks for the lock second — simply cannot toggle
+on, and the `e` key says why. Disengaging, or quitting the cockpit while
+engaged, releases the lock; a killed terminal releases it the same way
+`--watch` does, through the lock's own dead-holder reclaim rather than
+through any code in the cockpit.
+
+Engage mode needs the same dependencies `wand dispatch` needs to run a
+winner — `LINEAR_API_KEY`, an authenticated `gh`, `commands.verify` in
+`wand.toml`, and a resolvable team key — plus whichever of `--harness`,
+`--model` and `--effort` you want a spawned winner to run with. Missing any
+of them does not stop the cockpit from opening: it opens exactly as it
+always has, read and judge still work, and only the `e` key refuses, saying
+why.
+
+`wand dispatch`'s own conformance gate, wherever it lands, applies here
+unchanged — engage mode selects a winner through the same `dispatch.Select`
+every standalone pass uses, so a gate placed there covers both without
+engage mode needing its own copy of it.
+
+Left out of this pass, deliberately: engage mode does not also run periodic
+`wand sweep` passes, and the poll interval is a flag, not a covenant
+parameter. Both are natural extensions if engage mode earns them.
+
 ## Looking at the interface without a terminal
 
 A terminal interface is the one kind of program you cannot observe by
@@ -205,6 +259,10 @@ reason on it.
 | `--script KEYS` | — | Comma-separated keys to apply before rendering. Requires `--dump-screen`. |
 | `--width N` | `80` | Terminal width to render at. Requires `--dump-screen`. |
 | `--height N` | `24` | Terminal height to render at. Requires `--dump-screen`. |
+| `--harness` | `claude-code` | Worker harness engage mode runs a winner through: `claude-code` or `codex`. Does not apply with `--sample` or `--dump-screen`. |
+| `--model` | — | Model engage mode gives every worker. Default: the harness's default. Does not apply with `--sample` or `--dump-screen`. |
+| `--effort` | — | Reasoning effort engage mode gives every worker. Default: the harness's default. Does not apply with `--sample` or `--dump-screen`. |
+| `--interval` | `1m` | How often engage mode polls once engaged. Does not apply with `--sample` or `--dump-screen`. |
 
 The size flags are explicit rather than read from the ambient terminal: a
 screen whose width depends on whoever ran it is a screen no two people can

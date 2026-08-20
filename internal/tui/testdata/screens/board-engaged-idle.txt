@@ -1,0 +1,19 @@
+ wand cockpit · WND                                             6 waiting on you
+  engaged · idle · next poll in 40s
+
+  Triage  2 to judge
+› WND-42  doctor prints an empty drift section on a clean board              Low
+  WND-41  guard: a raw state UUID is not matched
+
+  Needs Input  1 to answer
+  WND-38  Second harness adapter: which one?                                High
+
+  Ready for human  1 to look at
+  WND-35  Run journal and lease store                                  In Review
+
+  Lanes  2 to resolve
+  stuck    WND-36  held by pid 48213 on studio.local, which is gone; the run …
+  parked   WND-33  the worktree was dirty at handoff; refusing to park noise …
+
+  judge  t ✦Todo  s ✦Scoping  b Backlog  u unranked  d duplicate  x cancel
+  ↑/k ↓/j move • enter open • r refresh • e disengage • q quit
