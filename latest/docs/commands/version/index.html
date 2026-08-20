@@ -167,7 +167,10 @@ read.</p>
 <strong>covenant schema version</strong> this binary speaks.</p>
 <p>The schema line is the one that matters operationally. A repo&rsquo;s <code>wand.toml</code>
 declares the schema it was written against; compare the two to learn
-whether this binary can read that file. The docs are versioned the same
+whether this binary can read that file. A file older than the binary is
+read as-is — but it still gets the binary&rsquo;s topology, because the state
+graph ships centrally rather than per repo. <a href="../../covenant/">The covenant</a>
+spells out what a bump does and does not change. The docs are versioned the same
 way, so a repo pinned to wand vX.Y.Z can read the doctrine matching its
 covenant schema — pick the version in the site header.</p>
 <p>The build fields are stamped at release time. An unstamped build — one
@@ -199,12 +202,12 @@ report.</p>
 </span></span></code></pre></div><pre tabindex="0"><code>wand v0.2.0
   commit:          8a63311
   built:           2026-08-19T20:11:04Z
-  covenant schema: 1
+  covenant schema: 2
 </code></pre><p>A build from a clone:</p>
 <pre tabindex="0"><code>wand dev
   commit:          none
   built:           unknown
-  covenant schema: 1
+  covenant schema: 2
 </code></pre>
 
     </main>

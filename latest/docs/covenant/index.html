@@ -169,7 +169,7 @@ private production system where it ran for months, agents and humans
 working the same board, and where every rule below was paid for by a
 specific failure.</p>
 <h2 id="why-the-shape-is-fixed">Why the shape is fixed</h2>
-<p>The state graph — Triage → Backlog → Scoping → Todo → Needs Input →
+<p>The state graph — Triage → Backlog → Scoping → Scoped → Todo → Needs Input →
 In Progress → In Review → Done — is wand&rsquo;s opinion, gofmt-style. A repo&rsquo;s
 covenant file (<code>wand.toml</code>) customizes the parameters of the machine:
 status <em>names</em> over the fixed semantics, caps, the estimate scale, toggles,
@@ -183,6 +183,25 @@ wand upgrades, for everyone, versioned by the covenant file&rsquo;s <code>schema
 field: the file declares the schema it was written against, <code>wand version</code>
 reports the schema the binary speaks, and comparing the two is how you
 learn whether a given binary can read a given file.</p>
+<p>That number is narrower than it looks, and the two halves of it pull in
+opposite directions, so it is worth saying exactly:</p>
+<ul>
+<li>It gates <strong>reading</strong>. A file declaring a schema newer than the binary
+speaks is refused outright — wand cannot know what those keys mean. An
+older one is read unchanged: every schema so far has only added optional
+keys, so a file that sets none of them says the same thing under either
+number.</li>
+<li>It does <strong>not</strong> gate topology. The state graph ships centrally, so a file
+still declaring <code>schema = 1</code> gets the current states anyway. That is the
+point rather than a leak: it is what makes a team bootstrapped before a
+new state show up as drift under <a href="../commands/doctor/"><code>wand doctor</code></a>
+instead of quietly keeping the old board.</li>
+</ul>
+<p>So the number in a file describes the file, not a pin on the lifecycle.
+Raising it is a migration — it asserts that the states exist on your board
+— and like every other blessing, a human&rsquo;s act.</p>
+<p>The schemas so far: <strong>1</strong> is the original topology; <strong>2</strong> adds
+<a href="#the-states-and-why-each-exists">Scoped</a>.</p>
 <h2 id="the-states-and-why-each-exists">The states, and why each exists</h2>
 <p>The board is a map of <em>authorization</em>, not just progress. Reading the
 states as &ldquo;how done is this?&rdquo; misses their point; read them as &ldquo;who has
@@ -206,6 +225,10 @@ decided what may happen to this next?&rdquo;</p>
 			<tr>
 					<td>Scoping</td>
 					<td>A scout may research this unattended.</td>
+			</tr>
+			<tr>
+					<td>Scoped</td>
+					<td>Nothing — a finished plan is parked on a human to judge.</td>
 			</tr>
 			<tr>
 					<td>Todo</td>
@@ -248,6 +271,20 @@ agents may not put work there either. A scout finishing its scope moves
 the ticket <em>out</em> of Scoping to Needs Input, posting approaches, a
 recommendation and an estimate; moving out is what every scope ends with,
 and it hands the decision back to a person.</p>
+<p><strong>Scoped</strong> is the research side of In Review: the plan is written, the
+approaches are argued, and all that remains is a human&rsquo;s judgment. It exists
+because Needs Input was carrying two different jobs after a scope run — &ldquo;the
+scout has a question&rdquo; and &ldquo;the plan is ready to bless&rdquo; — and those want
+different things from the person reading the board, on different clocks. A
+cockpit whose whole purpose is to sort work by the job it needs from you
+cannot do that while one queue holds both. Building already had the pair, In
+Progress and In Review; research now has it too. Like Needs Input it is
+<code>unstarted</code>: blessing a plan promotes it to Todo, which re-authorizes the
+work rather than resuming it.</p>
+<p>Scoped is new in covenant schema 2, and wand&rsquo;s own verbs move onto it one
+release at a time. Until they do, <code>wand scope</code> still ends at Needs Input,
+and a team bootstrapped before schema 2 will see the missing state reported
+by <a href="../commands/doctor/"><code>wand doctor</code></a> and created by <code>wand init</code>.</p>
 <p><strong>Todo</strong> is the gate between &ldquo;written down&rdquo; and &ldquo;a bot may act on this
 unattended&rdquo;. It is the single most consequential state on the board, and
 promotion into it is a human act — the blessing. The failure it guards
