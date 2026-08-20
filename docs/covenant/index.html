@@ -268,10 +268,12 @@ back to Backlog with a comment, never quietly closed.</p>
 <p><strong>Scoping</strong> blesses research. A ticket sitting in Scoping is one a
 dispatcher may spend a scout on unattended — real tokens, real time. That
 is an authorization, the same shape as Todo one rung lower, which is why
-agents may not put work there either. A scout finishing its scope moves
-the ticket <em>out</em> of Scoping to Needs Input, posting approaches, a
-recommendation and an estimate; moving out is what every scope ends with,
-and it hands the decision back to a person.</p>
+agents may not put work there either. A scope ends one of two ways, and
+both move the ticket <em>out</em> of Scoping: a scout with a blocking question
+moves it to Needs Input, posting the question; a scout with a finished
+plan moves it to Scoped, posting approaches, a recommendation and an
+estimate. Moving out is what every scope ends with, either way, and it
+hands the decision back to a person.</p>
 <p><strong>Scoped</strong> is the research side of In Review: the plan is written, the
 approaches are argued, and all that remains is a human&rsquo;s judgment. It exists
 because Needs Input was carrying two different jobs after a scope run — &ldquo;the
@@ -282,6 +284,11 @@ cannot do that while one queue holds both. Building already had the pair, In
 Progress and In Review; research now has it too. Like Needs Input it is
 <code>unstarted</code>: blessing a plan promotes it to Todo, which re-authorizes the
 work rather than resuming it.</p>
+<p>Scoped is the agent&rsquo;s terminal write for a scope the same way In Review is
+for a build — an agent may set it unattended, and the guard treats the two
+identically. Neither may an agent move a ticket <em>out</em> of Scoped: that
+destination is Todo (blessing) or one of the three close statuses, all
+five already forbidden regardless of where the ticket is moving from.</p>
 <p>Scoped is the newest state, and wand&rsquo;s own verbs move onto it one release
 at a time. Until they do, <code>wand scope</code> still ends at Needs Input, and a
 team bootstrapped before Scoped existed will see the missing state reported
@@ -324,10 +331,23 @@ happened.</p>
 <p>Five statuses grant or revoke authorization an agent does not have, so an
 agent may never set them: <strong>Todo</strong>, <strong>Scoping</strong>, <strong>Done</strong>, <strong>Canceled</strong>,
 <strong>Duplicate</strong>. Everything an agent legitimately sets is left alone:
-In Progress, In Review, Needs Input, Backlog, Triage.</p>
+In Progress, In Review, Needs Input, <strong>Scoped</strong>, Backlog, Triage.</p>
 <p>Note which <em>direction</em> is blocked. Moving a ticket into Scoping is a
-promotion and is refused; moving one out of Scoping to Needs Input is how
-every scope ends, and is allowed. The guard sees only the destination.</p>
+promotion and is refused; moving one out of Scoping is how every scope
+ends, and is allowed either way it ends — to Needs Input (a blocking
+question) or to Scoped (a finished plan). The guard sees only the
+destination.</p>
+<p>Leaving Scoped toward Todo needs no rule of its own: it is the same
+promotion the Todo rule above already forbids from every status, Scoped
+included. Setting Scoped is new with this status; blocking the way out of
+it is not — it falls out of a rule that already existed.</p>
+<p>One gap this status inherits rather than fixes: the guard matches statuses
+by their default English display name (<code>&quot;Scoped&quot;</code>, <code>&quot;Todo&quot;</code>, &hellip;), not
+whatever a covenant-file rename might call them. A team that renames a
+guarded status in its covenant file silently falls out of the guard&rsquo;s
+coverage. That gap predates Scoped, applies to it and its neighbors alike,
+and is tracked separately rather than fixed here — see
+<a href="https://linear.app/prosewell/issue/WND-17/guards-forbidden-status-list-ignores-covenant-file-status-renames">WND-17</a>.</p>
 <p>This rule is enforced, not requested. Every rule in wand lives in exactly
 one of four tiers, and being honest about which tier a rule occupies is
 itself a rule:</p>
