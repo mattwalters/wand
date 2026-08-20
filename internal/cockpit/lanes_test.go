@@ -136,6 +136,77 @@ func TestLanesAreOrderedBySeverityThenAge(t *testing.T) {
 	}
 }
 
+// --- supersession ----------------------------------------------------------
+
+func reportFor(ticket string, outcome journal.Outcome, updated time.Time) journal.Report {
+	return journal.Report{
+		State: journal.State{
+			Meta:    journal.Meta{ID: ticket + "-run", Ticket: ticket, Verb: "run", Repo: "/repo"},
+			Outcome: outcome,
+			Updated: updated,
+		},
+		Live: journal.Dead,
+	}
+}
+
+func TestReconcileDropsAParkResolvedByALaterRun(t *testing.T) {
+	early := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	late := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
+
+	parked := Lane{Kind: LaneParked, Ticket: "WND-37", RunID: "old", Since: early}
+	reports := []journal.Report{
+		reportFor("WND-37", journal.Parked, early),
+		reportFor("WND-37", journal.HandedBack, late),
+	}
+
+	got := Reconcile([]Lane{parked}, reports)
+	if len(got) != 0 {
+		t.Errorf("lanes = %+v, want the park dropped: a later run for the same ticket handed back cleanly", got)
+	}
+}
+
+func TestReconcileKeepsAParkNothingLaterResolved(t *testing.T) {
+	at := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	parked := Lane{Kind: LaneParked, Ticket: "WND-59", RunID: "still-parked", Since: at}
+	reports := []journal.Report{reportFor("WND-59", journal.Parked, at)}
+
+	got := Reconcile([]Lane{parked}, reports)
+	if len(got) != 1 {
+		t.Errorf("lanes = %+v, want the park kept: nothing later resolved this ticket", got)
+	}
+}
+
+func TestReconcileIgnoresAnEarlierResolution(t *testing.T) {
+	early := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	late := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
+
+	// The park happened *after* the handoff — a fresh problem, not a stale
+	// record of one already fixed.
+	parked := Lane{Kind: LaneParked, Ticket: "WND-11", RunID: "new-park", Since: late}
+	reports := []journal.Report{
+		reportFor("WND-11", journal.HandedBack, early),
+		reportFor("WND-11", journal.Parked, late),
+	}
+
+	got := Reconcile([]Lane{parked}, reports)
+	if len(got) != 1 {
+		t.Errorf("lanes = %+v, want the park kept: it postdates the only resolution on record", got)
+	}
+}
+
+func TestReconcileLeavesOtherKindsAlone(t *testing.T) {
+	early := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	late := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
+
+	stuck := Lane{Kind: LaneStuck, Ticket: "WND-11", RunID: "stuck", Since: early}
+	reports := []journal.Report{reportFor("WND-11", journal.Converged, late)}
+
+	got := Reconcile([]Lane{stuck}, reports)
+	if len(got) != 1 || got[0].Kind != LaneStuck {
+		t.Errorf("lanes = %+v, want the stuck lane kept: a later run finishing does not explain away a live process misbehaving now", got)
+	}
+}
+
 // --- the run store walk --------------------------------------------------
 
 type fakeRuns struct {
@@ -186,5 +257,31 @@ func TestReadLanesSurfacesAnUnreadableRun(t *testing.T) {
 	}
 	if lanes[0].Reason == "" {
 		t.Error("no reason; the parse error is the only thing that explains this row")
+	}
+}
+
+// The scenario off the live board: a ticket parked more than once, then a
+// later run for the same ticket handed back cleanly. None of the parks
+// should survive the walk.
+func TestReadLanesSuppressesParksALaterRunResolved(t *testing.T) {
+	early := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	mid := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
+	late := time.Date(2026, 3, 3, 0, 0, 0, 0, time.UTC)
+
+	runs := &fakeRuns{
+		ids: []string{"park-1", "park-2", "resolved"},
+		reports: map[string]journal.Report{
+			"park-1":   reportFor("WND-37", journal.Parked, early),
+			"park-2":   reportFor("WND-37", journal.Parked, mid),
+			"resolved": reportFor("WND-37", journal.HandedBack, late),
+		},
+	}
+
+	lanes, err := ReadLanes(runs, nil)
+	if err != nil {
+		t.Fatalf("ReadLanes: %v", err)
+	}
+	if len(lanes) != 0 {
+		t.Errorf("lanes = %+v, want none: both parks predate the run that handed back", lanes)
 	}
 }
