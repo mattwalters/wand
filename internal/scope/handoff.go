@@ -94,7 +94,9 @@ type Recommendation struct {
 
 // FileRef is one citation into the code.
 type FileRef struct {
-	// Location is path:line, or path:line-line for a range.
+	// Location is path:line, path:line-line for a range, or a
+	// comma-separated list of either for a thing cited in several places
+	// in one file — path:12,14,20-24.
 	Location string `json:"location"`
 	// Note is why this location matters to the plan.
 	Note string `json:"note"`
@@ -153,10 +155,13 @@ const (
 // sent to do.
 const maxApproaches = 3
 
-// fileLine matches a path with a line number, or a line range. The line is
-// the whole point of the citation: a bare filename sends the next reader
-// back to the search the scout already ran.
-var fileLine = regexp.MustCompile(`^[^\s:]+:\d+(-\d+)?$`)
+// fileLine matches a path with a line number, a line range, or a
+// comma-separated list of either — path:12, path:12-14, or
+// path:12,14,20-24. The line is the whole point of the citation: a bare
+// filename sends the next reader back to the search the scout already ran.
+// A list is still a citation, not a hedge: it is what a scout naturally
+// writes when the thing it is citing lives in several places in one file.
+var fileLine = regexp.MustCompile(`^[^\s:]+:\d+(-\d+)?(,\d+(-\d+)?)*$`)
 
 // ParseDraft validates a scout's or reviser's handoff against the covenant
 // it must satisfy. An error means nothing is written: the caller has no
@@ -263,7 +268,7 @@ func (d Draft) validateFiles() error {
 	for _, f := range d.Files {
 		loc := strings.TrimSpace(f.Location)
 		if !fileLine.MatchString(loc) {
-			return fmt.Errorf("file citation %q is not path:line (or path:line-line) — the line is what makes it a citation rather than a filename", f.Location)
+			return fmt.Errorf("file citation %q is not path:line (path:line-line for a range, or a comma-separated list of either, like path:12,14,20-24) — the line is what makes it a citation rather than a filename", f.Location)
 		}
 		if strings.TrimSpace(f.Note) == "" {
 			return fmt.Errorf("file citation %q says nothing about why it matters", loc)

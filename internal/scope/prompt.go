@@ -67,8 +67,10 @@ handoff that fails validation writes nothing at all — so:
 - One to three approaches, each with a real trade-off. Listing every option you
   can think of hands the choosing back to the human you were sent to spare.
 - The recommendation must name one of your approaches, spelled the same way.
-- At least one file citation, every one of them path:line (or path:line-line).
-  A bare filename sends the next reader back to the search you already ran.
+- At least one file citation, every one of them path:line, path:line-line for a
+  range, or a comma-separated list of either when a thing lives in several
+  places in one file, e.g. path/to/file.go:42,58,103-110. A bare filename
+  sends the next reader back to the search you already ran.
 - The plan needs ordered steps and a test story; "how it is proven" is the half
   of a plan that goes missing when nobody asks for it.
 - "premise": "wrong" is for a ticket built on something untrue — work already
