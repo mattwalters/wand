@@ -209,6 +209,21 @@ func TestFileTeamKeyResolution(t *testing.T) {
 			t.Fatalf("err = %v, want resolution to succeed and fail past it", err)
 		}
 	})
+
+	t.Run("subdirectory walk resolves", func(t *testing.T) {
+		t.Setenv("LINEAR_API_KEY", "")
+		root := t.TempDir()
+		writeKeyedWandToml(t, root, "WND")
+		sub := filepath.Join(root, "a", "b")
+		if err := os.MkdirAll(sub, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		t.Chdir(sub)
+		_, err := runFile(t)
+		if err == nil || strings.Contains(err.Error(), "team key") {
+			t.Fatalf("err = %v, want the walk to find the root's wand.toml", err)
+		}
+	})
 }
 
 func runInit(t *testing.T, args ...string) (string, error) {
@@ -238,6 +253,27 @@ func TestInitTeamKeyResolution(t *testing.T) {
 		_, err := runInit(t)
 		if err == nil || strings.Contains(err.Error(), "team key") {
 			t.Fatalf("err = %v, want resolution to succeed and fail past it", err)
+		}
+		if !strings.Contains(err.Error(), "LINEAR_API_KEY") {
+			t.Errorf("err = %v, want it to mention LINEAR_API_KEY", err)
+		}
+	})
+
+	// init must walk up from cwd the same as doctor, queue, ui and file: a
+	// re-run from a nested package directory has to see the repo root's
+	// wand.toml, not just a re-run from the root itself.
+	t.Run("subdirectory walk resolves", func(t *testing.T) {
+		t.Setenv("LINEAR_API_KEY", "")
+		root := t.TempDir()
+		writeKeyedWandToml(t, root, "WND")
+		sub := filepath.Join(root, "a", "b")
+		if err := os.MkdirAll(sub, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		t.Chdir(sub)
+		_, err := runInit(t)
+		if err == nil || strings.Contains(err.Error(), "team key") {
+			t.Fatalf("err = %v, want the walk to find the root's wand.toml", err)
 		}
 		if !strings.Contains(err.Error(), "LINEAR_API_KEY") {
 			t.Errorf("err = %v, want it to mention LINEAR_API_KEY", err)

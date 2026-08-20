@@ -95,7 +95,7 @@ func newInitCmd() *cobra.Command {
 			"commands — never its shape); absent one, the stock covenant applies.\n\n" +
 			"Requires LINEAR_API_KEY in the environment, with full access.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cov, fileTeamKey, fromFile, err := covenant.Load(covenant.FileName)
+			cov, fileTeamKey, fromFile, err := covenantFromCwd()
 			if err != nil {
 				return err
 			}
