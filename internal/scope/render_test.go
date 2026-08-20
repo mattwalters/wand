@@ -137,3 +137,43 @@ func TestOptionsCommentOmitsAnEstimateThereIsNone(t *testing.T) {
 		t.Errorf("an estimate section was written for a team that does not estimate:\n%s", got)
 	}
 }
+
+// Validation pairs the recommendation with an approach on the trimmed,
+// case-folded name, so every later reader of that pair must match the same
+// way. A comparison that trims one side and not the other accepts the
+// draft and then renders it as recommending nothing — and tells the human
+// the recommended approach is one the draft passed over, which is the
+// opposite of what it says.
+func TestARecommendationIsMatchedTheWayValidationMatchedIt(t *testing.T) {
+	d := goodDraft()
+	d["approaches"] = []any{
+		map[string]any{"name": "Filter in Vet ", "sketch": "Extend the existing vet pass.", "tradeoff": "Vet grows a second responsibility."},
+		map[string]any{"name": "Filter in Build", "sketch": "Drop them while ranking.", "tradeoff": "The skip reason is lost."},
+	}
+	d["recommendation"] = map[string]any{"approach": "filter in vet", "why": "One vetting rule, one place."}
+
+	draft, err := scope.ParseDraft(raw(t, d), covenant.Default())
+	if err != nil {
+		t.Fatalf("ParseDraft refused a draft whose recommendation names an approach: %v", err)
+	}
+
+	arg := scope.Argument(draft, "fibonacci")
+	if !strings.Contains(arg, "**1. Filter in Vet** — recommended") {
+		t.Errorf("the argument marks no approach as recommended:\n%s", arg)
+	}
+	if strings.Contains(arg, "**2. Filter in Build** — recommended") {
+		t.Errorf("the argument recommends the approach that was passed over:\n%s", arg)
+	}
+
+	for _, q := range scope.Questions(draft) {
+		if q.Topic != scope.TopicRecommendation {
+			continue
+		}
+		if strings.Contains(q.Ask, "Filter in Vet") {
+			t.Errorf("the human is told the recommended approach was passed over:\n%s", q.Ask)
+		}
+		if !strings.Contains(q.Ask, "Filter in Build") {
+			t.Errorf("the question does not name what was passed over:\n%s", q.Ask)
+		}
+	}
+}

@@ -243,6 +243,19 @@ func (d Draft) validateApproaches() error {
 	return nil
 }
 
+// isRecommended reports whether an approach is the one the draft
+// recommends.
+//
+// It exists so the match is made in exactly one place. validateApproaches
+// pairs the recommendation with an approach on the trimmed, case-folded
+// name, so every later reader of that pair must match the same way: a
+// comparison that trims one side and not the other accepts a draft as
+// valid and then renders it as recommending nothing, and lists the
+// recommended approach to the human as one the draft passed over.
+func isRecommended(d Draft, a Approach) bool {
+	return strings.EqualFold(strings.TrimSpace(a.Name), strings.TrimSpace(d.Recommendation.Approach))
+}
+
 func (d Draft) validateFiles() error {
 	if len(d.Files) == 0 {
 		return errors.New("the handoff cites no files; a scope whose reader has to find the code again did half the job")

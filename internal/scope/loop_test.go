@@ -674,6 +674,50 @@ func TestARevisionCanFindThePremiseWrong(t *testing.T) {
 	}
 }
 
+// A premise the critic's reviser found wrong ends the run there. The
+// interview must not follow it: a wrong-premise draft has no
+// understanding, no approaches and no recommendation left in it, so the
+// questions would quote blanks at a human and their answers would buy a
+// revision round over a scope that has already been argued out of
+// existence.
+func TestACriticsRevisionThatFindsThePremiseWrongSkipsTheInterview(t *testing.T) {
+	h := newHarness(t,
+		workerResult{handoff: draftHandoff()},
+		workerResult{handoff: map[string]any{"verdict": "flawed", "objections": []any{
+			map[string]any{"target": "the premise", "summary": "this landed in WND-4", "consequence": "a sprint spent rebuilding it"},
+		}}},
+		workerResult{handoff: map[string]any{
+			"premise": "wrong",
+			"reason":  "The critic is right: WND-4 shipped this, and the ticket predates it.",
+		}},
+	)
+	h.deps.Cov.Toggles.ScopeCritic = true
+	h.deps.Interactive = true
+	h.deps.In = strings.NewReader("")
+
+	out, err := h.run(t)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if out.Kind != journal.HandedBack {
+		t.Fatalf("outcome = %s (%s), want handed back", out.Kind, out.Reason)
+	}
+	if len(h.work.modes) != 3 {
+		t.Fatalf("spawned %d workers (%v), want scout, critic, reviser and no more", len(h.work.modes), h.work.modes)
+	}
+	// No interview was held, so nothing was printed to ask about.
+	if strings.Contains(h.out.String(), "question(s) about the draft") {
+		t.Errorf("a human was grilled over a draft the reviser had already withdrawn:\n%s", h.out.String())
+	}
+	want := []string{"comment", "state=state-needs-input"}
+	if strings.Join(h.board.calls, ",") != strings.Join(want, ",") {
+		t.Fatalf("writes = %v\nwant  %v", h.board.calls, want)
+	}
+	if !strings.Contains(h.board.comments[0], "WND-4 shipped this") {
+		t.Errorf("the reviser's account was not quoted:\n%s", h.board.comments[0])
+	}
+}
+
 // Every worker is told what run it is in rather than left to work it out,
 // and a scope tells them there is no workspace — the thing a harness's own
 // defaults would otherwise let it assume.

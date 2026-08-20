@@ -72,7 +72,7 @@ func Questions(d Draft) []Question {
 
 	var rejected []string
 	for _, a := range d.Approaches {
-		if !strings.EqualFold(a.Name, d.Recommendation.Approach) {
+		if !isRecommended(d, a) {
 			rejected = append(rejected, fmt.Sprintf("%s (trade-off: %s)", strings.TrimSpace(a.Name), strings.TrimSpace(a.Tradeoff)))
 		}
 	}

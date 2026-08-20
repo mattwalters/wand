@@ -231,6 +231,17 @@ func (s *scoping) run(ctx context.Context) Outcome {
 			return *out
 		}
 		draft = revised
+		// Checked after every stage that can replace the draft, not once
+		// at the end. A reviser may reach the verdict the scout did not,
+		// because the critic showed the premise was wrong — and that
+		// verdict is as terminal coming from the reviser as from the
+		// scout. Carrying such a draft into the interview would grill a
+		// human over a scope with no understanding, no approaches and no
+		// recommendation left in it, then spend another revision round on
+		// whatever they said to the blanks.
+		if out := s.wrongPremise(ctx, draft); out != nil {
+			return *out
+		}
 	}
 
 	// --- the interview, when there is a human to hold it ---------------
@@ -242,11 +253,10 @@ func (s *scoping) run(ctx context.Context) Outcome {
 		draft = revised
 	}
 
-	// Checked again: a reviser may reach the verdict the scout did not,
-	// because the critic showed the premise was wrong or the human said so.
-	// That verdict is as terminal coming from the reviser as from the
-	// scout, and writing a plan over it would write the scope the last two
-	// stages just argued out of existence.
+	// The same check after the last stage that can replace the draft: a
+	// human can be the one who says the thing that makes the premise
+	// wrong, and writing a plan over that would write the scope the last
+	// two stages just argued out of existence.
 	if out := s.wrongPremise(ctx, draft); out != nil {
 		return *out
 	}

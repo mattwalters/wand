@@ -78,7 +78,7 @@ func Argument(d Draft, scale string) string {
 
 	for i, a := range d.Approaches {
 		fmt.Fprintf(&b, "\n**%d. %s**", i+1, strings.TrimSpace(a.Name))
-		if strings.EqualFold(a.Name, d.Recommendation.Approach) {
+		if isRecommended(d, a) {
 			b.WriteString(" — recommended")
 		}
 		fmt.Fprintf(&b, "\n\n%s\n\n*Trade-off:* %s\n", strings.TrimSpace(a.Sketch), strings.TrimSpace(a.Tradeoff))
