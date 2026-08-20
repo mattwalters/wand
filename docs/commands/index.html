@@ -160,11 +160,14 @@
 <p>Every command wand implements today, one page each. The pages are written
 from the command definitions, not from memory: flags, help text and exit
 codes match what the binary does.</p>
-<p>There is no <code>bless</code> page because there is no <code>bless</code> command. Blessing is a
-human act, so it has a human door: it lives in the cockpit,
-<a href="../ui/"><code>wand ui</code></a>. A one-shot CLI verb that promoted a ticket to Todo
-would be a verb an agent could call, which is the whole thing the guard
-exists to prevent.</p>
+<p>There is no standalone <code>bless</code> page, because promoting a ticket is a human
+act with a human door: it lives in the cockpit, <a href="../ui/"><code>wand ui</code></a>. A
+one-shot CLI verb that promoted a ticket to Todo would be a verb an agent
+could call, which is the whole thing the guard exists to prevent.
+<a href="../pm/"><code>wand pm bless</code></a> is not that verb: it never sets a guarded status,
+only files a validated, human-reviewed proposal into Triage — the same
+status <a href="../file/"><code>wand file</code></a> already lands an agent&rsquo;s own findings in —
+so it is documented on <code>pm</code>&rsquo;s own page rather than getting one of its own.</p>
 <p>Bare <code>wand</code>, with a terminal attached, opens that same cockpit — it is what
 typing the tool&rsquo;s name gets you. <code>wand help</code> is the documented way to get
 help instead; <code>wand --help</code> and <code>-h</code> work everywhere they always did.
@@ -184,13 +187,16 @@ working directory; the lifecycle verbs walk up from the working directory
 to find it, so a verb run from a subdirectory sees the same covenant as one
 run at the root. Run the first three from the repo root.</p>
 <p><strong>Exit codes.</strong> Unless a page says otherwise, a command exits <code>0</code> on
-success and <code>1</code> on any failure, with the reason on stderr. Six commands
+success and <code>1</code> on any failure, with the reason on stderr. Several commands
 say otherwise, and each of their codes is a contract something else depends
 on: <code>guard</code> (the harness hook), <code>doctor</code> (CI), <code>file</code> (a refusal to file a
-duplicate is a failure, on purpose), the two orchestrators <code>scope</code> and
+duplicate is a failure, on purpose), the orchestrators <code>scope</code>, <code>pm</code> and
 <code>run</code>, whose <code>0</code>/<code>2</code>/<code>3</code> tell a scheduler how a run ended — scoped or
-converged, handed back, or parked — leaving <code>1</code> for a run that never
-started, and <a href="../dispatch/"><code>dispatch</code></a>, the selector over them, whose
+converged (or proposed), handed back, or parked — leaving <code>1</code> for a run
+that never started; <code>pm bless</code>, whose own <code>0</code>/<code>1</code>/<code>3</code> mark a batched write
+rather than a single one — filed, refused before any write, or a write
+that failed partway through, reporting what had already landed; and
+<a href="../dispatch/"><code>dispatch</code></a>, the selector over the orchestrators, whose
 <code>0</code>–<code>5</code> add locked, nothing-to-do and Linear-unreachable to that same
 vocabulary — a scheduler&rsquo;s whole view of a pass is a status and a log.</p>
 
@@ -220,6 +226,9 @@ vocabulary — a scheduler&rsquo;s whole view of a pass is a status and a log.</
   
   <dt><a href="../../docs/commands/abandon/"><code>wand abandon</code></a></dt>
   <dd>Hand one issue back to Backlog, with the evidence that undoes it.</dd>
+  
+  <dt><a href="../../docs/commands/pm/"><code>wand pm</code></a></dt>
+  <dd>Propose a set of tickets from a decided product brief, then bless the set into Triage.</dd>
   
   <dt><a href="../../docs/commands/file/"><code>wand file</code></a></dt>
   <dd>File a finding into Triage, after searching for duplicates.</dd>
