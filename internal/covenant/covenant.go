@@ -15,22 +15,24 @@ import "time"
 // whether a given binary can read a given covenant. Topology upgrades ship
 // by incrementing it.
 //
-// Schema 2 added Scoped to the topology. What the bump does and does not
-// mean is worth stating exactly, because the two halves pull in opposite
-// directions:
+// What the number does and does not mean is worth stating exactly, because
+// the two halves pull in opposite directions:
 //
 //   - It gates reading. A file declaring a schema newer than this constant
 //     is refused, because wand cannot know what its keys mean. An older one
-//     is read unchanged: every schema so far has only added keys, and a
-//     file that sets none of them says the same thing under either number.
+//     is read unchanged: schema bumps only add optional keys, so a file
+//     that sets none of them says the same thing under either number.
 //   - It does not gate topology. The state graph is wand's opinion, shipped
-//     centrally, so a schema-1 file gets schema 2's states. That is the
-//     point: it is what makes a team bootstrapped before Scoped report as
-//     drift under `wand doctor` and get repaired by `wand init`.
+//     centrally, so every file gets the current states whatever number it
+//     declares. That is the point: it is what makes a team bootstrapped
+//     under an older topology report as drift under `wand doctor` and get
+//     repaired by `wand init`.
 //
 // So the number in a file describes the file, not a pin on the lifecycle.
-// Raising it is a migration, and a human's act — see `wand init`.
-const SchemaVersion = 2
+// It stays 1 until wand is distributed: an increment is a promise to other
+// people's covenant files, and there are no other people yet. Scoped landed
+// as plain schema-1 topology for exactly that reason.
+const SchemaVersion = 1
 
 // Status is one workflow state the covenant requires on the team.
 //

@@ -39,11 +39,10 @@ opposite directions, so it is worth saying exactly:
 
 - It gates **reading**. A file declaring a schema newer than the binary
   speaks is refused outright — wand cannot know what those keys mean. An
-  older one is read unchanged: every schema so far has only added optional
-  keys, so a file that sets none of them says the same thing under either
-  number.
-- It does **not** gate topology. The state graph ships centrally, so a file
-  still declaring `schema = 1` gets the current states anyway. That is the
+  older one is read unchanged: schema bumps only add optional keys, so a
+  file that sets none of them says the same thing under either number.
+- It does **not** gate topology. The state graph ships centrally, so every
+  file gets the current states, whatever number it declares. That is the
   point rather than a leak: it is what makes a team bootstrapped before a
   new state show up as drift under [`wand doctor`](../commands/doctor/)
   instead of quietly keeping the old board.
@@ -52,8 +51,10 @@ So the number in a file describes the file, not a pin on the lifecycle.
 Raising it is a migration — it asserts that the states exist on your board
 — and like every other blessing, a human's act.
 
-The schemas so far: **1** is the original topology; **2** adds
-[Scoped](#the-states-and-why-each-exists).
+One schema exists so far: **1**, which includes every state below —
+[Scoped](#the-states-and-why-each-exists) included. The number holds at 1
+until wand is distributed: an increment is a promise to other people's
+covenant files, and there are no other people yet.
 
 ## The states, and why each exists
 
@@ -106,10 +107,12 @@ Progress and In Review; research now has it too. Like Needs Input it is
 `unstarted`: blessing a plan promotes it to Todo, which re-authorizes the
 work rather than resuming it.
 
-Scoped is new in covenant schema 2, and wand's own verbs move onto it one
-release at a time. Until they do, `wand scope` still ends at Needs Input,
-and a team bootstrapped before schema 2 will see the missing state reported
-by [`wand doctor`](../commands/doctor/) and created by `wand init`.
+Scoped is the newest state, and wand's own verbs move onto it one release
+at a time. Until they do, `wand scope` still ends at Needs Input, and a
+team bootstrapped before Scoped existed will see the missing state reported
+by [`wand doctor`](../commands/doctor/) and created by `wand init`. (It
+ships inside schema 1: wand is undistributed, so topology changes do not
+yet spend schema increments.)
 
 **Todo** is the gate between "written down" and "a bot may act on this
 unattended". It is the single most consequential state on the board, and
