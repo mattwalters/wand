@@ -63,6 +63,12 @@ type IssueUpdate struct {
 	// passes deliberately ("worth keeping, not worth ranking"), not the
 	// absence of one, and an int field could not tell the two apart.
 	Priority *int
+	// Estimate is the issue's size in points. A pointer because zero is a
+	// value Linear accepts ("no estimate"), so it cannot double as "leave
+	// this alone". The caller checks the number against the covenant's
+	// scale first — Linear adjusts an off-scale estimate to fit rather
+	// than refusing it, and a silently adjusted number is one nobody chose.
+	Estimate *int
 }
 
 // UpdateIssue applies one IssueUpdate in a single mutation. Fields that must
@@ -88,6 +94,9 @@ func (c *Client) UpdateIssue(ctx context.Context, issueID string, u IssueUpdate)
 	}
 	if u.Priority != nil {
 		input["priority"] = *u.Priority
+	}
+	if u.Estimate != nil {
+		input["estimate"] = *u.Estimate
 	}
 	if len(input) == 0 {
 		return fmt.Errorf("linear: an issue update with nothing to change")

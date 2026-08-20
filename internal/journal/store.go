@@ -29,9 +29,16 @@ import (
 //
 // The lock guards one *run*, not one ticket. Two runs against the same
 // ticket are two directories and two locks, and nothing here stops them —
-// deciding that a ticket already has a run is the dispatcher's job, made on
-// the board, before a run exists. This layer's promise is narrower and
-// absolute: one writer per run, and a dead one provably dead.
+// deciding that a ticket already has a run is normally the dispatcher's
+// job, made on the board, before a run exists. This layer's promise is
+// narrower and absolute: one writer per run, and a dead one provably dead.
+//
+// An orchestrator whose ticket never changes status while it works has no
+// board move to lose the race on, and asks for ticket-level exclusion
+// explicitly with [Store.LockTicket] (ticket.go) — machine-local, held for
+// the life of the process, released by the kernel when it dies:
+//
+//	<root>/tickets/<ticket>.lock    one scope at a time, per ticket
 type Store struct {
 	// Root is the directory runs live under. Absolute, and outside every
 	// repository the store records runs for.
