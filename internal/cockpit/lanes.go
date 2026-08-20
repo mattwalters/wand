@@ -24,7 +24,9 @@ const (
 	// behind it, which looks healthy and which nothing drains.
 	LaneStuck LaneKind = "stuck"
 	// LaneOrphaned: a live run whose ticket is not in a started status.
-	// The lane is held; nothing on the board claims it.
+	// The lane is held; nothing on the board claims it. Never fires for a
+	// scope run: its ticket lives in Scoping, an unstarted status, for its
+	// whole life by design.
 	LaneOrphaned LaneKind = "orphaned"
 	// LaneUnclear: the journal says the run is still going and its holder
 	// is on another machine, or the lock could not be examined. Never
@@ -52,7 +54,8 @@ type Lane struct {
 // started is the set of ticket identifiers currently in a started status on
 // the board — In Progress and In Review both. It is what distinguishes a
 // held lane from an orphaned one, and it is passed in rather than looked up
-// so this stays a pure function.
+// so this stays a pure function. It is never consulted for a scope run: see
+// LaneOrphaned.
 //
 // The order of the checks is the order of severity, and it matters: a dead
 // holder whose ticket also fell out of In Progress is reported stuck, not
@@ -92,7 +95,12 @@ func Classify(r journal.Report, started map[string]bool) (Lane, bool) {
 	}
 
 	// Alive. The only thing left that needs a person is the board
-	// disagreeing with the journal.
+	// disagreeing with the journal — except a scope run, whose ticket lives
+	// in Scoping (an unstarted status) for its whole life by design; started
+	// has nothing to say about it. See internal/scope/scope.go's package doc.
+	if lane.Verb == "scope" {
+		return Lane{}, false
+	}
 	if !started[lane.Ticket] {
 		lane.Kind = LaneOrphaned
 		lane.Reason = fmt.Sprintf(

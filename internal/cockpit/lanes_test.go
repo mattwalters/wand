@@ -24,6 +24,15 @@ func report(outcome journal.Outcome, reason string, live journal.Liveness) journ
 	}
 }
 
+// scopeReport builds a live scope-verb report, the shape TestClassify's
+// scope-exemption cases need: report() hardcodes Verb: "run", and adding a
+// verb parameter there would touch every existing case for one that needs it.
+func scopeReport(live journal.Liveness) journal.Report {
+	r := report("", "", live)
+	r.State.Meta.Verb = "scope"
+	return r
+}
+
 func TestClassify(t *testing.T) {
 	started := map[string]bool{"WND-9": true}
 
@@ -69,6 +78,25 @@ func TestClassify(t *testing.T) {
 			name:   "a live run nothing claims is orphaned",
 			report: report("", "", journal.Alive), started: map[string]bool{},
 			want: LaneOrphaned, wantAny: true,
+		},
+		{
+			name:   "a live scope run nothing claims is exempt, not orphaned",
+			report: scopeReport(journal.Alive), started: map[string]bool{},
+			// Scoping is an unstarted status by design; a scope run's
+			// ticket living outside started is expected, not drift.
+		},
+		{
+			name:   "a live scope run on a started ticket is also exempt",
+			report: scopeReport(journal.Alive), started: started,
+			// Proves the exemption is on the verb, not accidentally
+			// passing because started happened to contain the ticket.
+		},
+		{
+			name:   "a scope run with a dead holder is still stuck",
+			report: scopeReport(journal.Dead), started: map[string]bool{},
+			// The exemption sits inside the alive-and-board-check path
+			// only; a dead scope holder is still a zombie to report.
+			want: LaneStuck, wantAny: true,
 		},
 		{
 			name: "death outranks board drift",
