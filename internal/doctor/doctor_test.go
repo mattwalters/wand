@@ -247,7 +247,7 @@ func TestRunExitContract(t *testing.T) {
 		if !strings.Contains(out.String(), `drift: label "human-only" is missing`) {
 			t.Errorf("output does not report the drift:\n%s", out.String())
 		}
-		if !strings.Contains(out.String(), "3 drifts from the covenant") {
+		if !strings.Contains(out.String(), "4 drifts from the covenant") {
 			t.Errorf("output does not count the drift:\n%s", out.String())
 		}
 	})

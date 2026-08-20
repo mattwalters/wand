@@ -35,10 +35,12 @@ to find it, so a verb run from a subdirectory sees the same covenant as one
 run at the root. Run the first three from the repo root.
 
 **Exit codes.** Unless a page says otherwise, a command exits `0` on
-success and `1` on any failure, with the reason on stderr. Five commands
+success and `1` on any failure, with the reason on stderr. Six commands
 say otherwise, and each of their codes is a contract something else depends
 on: `guard` (the harness hook), `doctor` (CI), `file` (a refusal to file a
-duplicate is a failure, on purpose), and the two orchestrators, `scope` and
+duplicate is a failure, on purpose), the two orchestrators `scope` and
 `run`, whose `0`/`2`/`3` tell a scheduler how a run ended — scoped or
 converged, handed back, or parked — leaving `1` for a run that never
-started.
+started, and [`dispatch`](../dispatch/), the selector over them, whose
+`0`–`5` add locked, nothing-to-do and Linear-unreachable to that same
+vocabulary — a scheduler's whole view of a pass is a status and a log.

@@ -159,12 +159,25 @@ func vet(issue linear.Issue, scoping string) error {
 			"%s is in %q, not %q: scope researches blessed work, and blessing research is a human act — an issue outside %q is not yours to scope",
 			issue.Identifier, issue.State.Name, scoping, scoping)
 	}
-	for _, label := range issue.Labels {
-		if strings.EqualFold(label, queue.HumanOnlyLabel) {
-			return fmt.Errorf("%s is labeled %s: no agent may work it, scoping included", issue.Identifier, queue.HumanOnlyLabel)
-		}
+	if reason := Vet(issue); reason != "" {
+		return fmt.Errorf("%s may not be scoped: %s", issue.Identifier, reason)
 	}
 	return nil
+}
+
+// Vet returns why an issue in Scoping may not be scoped, or "" when it may.
+// Exported so `wand dispatch` can select Scoping candidates the same way
+// `wand queue` selects Todo ones: ranked, then vetted, skips never silent.
+// Deliberately not queue.Vet, for the same reason [vet] is not: a ticket
+// blocked by another is exactly the ticket worth scoping early, so only the
+// human-only label refuses here.
+func Vet(issue linear.Issue) string {
+	for _, label := range issue.Labels {
+		if strings.EqualFold(label, queue.HumanOnlyLabel) {
+			return "labeled " + queue.HumanOnlyLabel
+		}
+	}
+	return ""
 }
 
 // scoping is one run's working state. Methods that can end the run return

@@ -28,6 +28,8 @@ func Root() *cobra.Command {
 	root.AddCommand(newAbandonCmd())
 	root.AddCommand(newFileCmd())
 	root.AddCommand(newScopeCmd())
+	root.AddCommand(newDispatchCmd())
+	root.AddCommand(newSweepCmd())
 	root.AddCommand(newVersionCmd())
 	return root
 }

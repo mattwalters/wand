@@ -49,6 +49,11 @@ type Caps struct {
 	ReviewRounds  int
 	CIAttempts    int
 	WorkerTimeout time.Duration
+	// Lanes is how many `wand run` loops this repo runs at once. `wand
+	// dispatch` reads it to decide whether a Todo winner may start; a
+	// Scoping winner never needs one (see internal/dispatch), so research
+	// is never starved by full lane occupancy.
+	Lanes int
 }
 
 // Toggles switch the lifecycle's optional stages.
@@ -129,6 +134,7 @@ func Default() Covenant {
 			{Name: "human-only", Color: "#F2994A"},
 			{Name: "agent-filed", Color: "#5E6AD2"},
 			{Name: "ready-for-human", Color: "#4CB782"},
+			{Name: "re-review", Color: "#EB5757"},
 		},
 		Automations: []Automation{
 			{Event: "draft", Status: "In Progress"},
@@ -140,6 +146,7 @@ func Default() Covenant {
 			ReviewRounds:  3,
 			CIAttempts:    3,
 			WorkerTimeout: 30 * time.Minute,
+			Lanes:         1,
 		},
 		Toggles: Toggles{
 			ScopeInterview: true,

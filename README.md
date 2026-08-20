@@ -10,9 +10,10 @@ machinery — its covenant, and the blessing path work travels along.
 > reports a team's drift from the covenant; `ui` is the cockpit, where a
 > human blesses work; `scope` is the first orchestrator — a cold scout that
 > turns one blessed-for-research ticket into a plan a human can bless for
-> building; and `run` drives one blessed ticket through the implement → CI
-> → review → revise loop. `dispatch`, the last orchestrator, is not built
-> yet.
+> building; `run` drives one blessed ticket through the implement → CI →
+> review → revise loop; `dispatch` is the selector over that loop — it
+> picks the one ticket to run next and runs it, with `--watch` to poll
+> continuously; and `sweep` is everything that happens after a run exits.
 
 ## Install
 
@@ -48,6 +49,8 @@ wand abandon WND-3 -m "…"   # return it to Backlog with the evidence that undi
 wand file "…" --team-key WND  # file a finding into Triage, duplicates searched first
 wand scope WND-3            # research one Scoping ticket into a plan, ending at Needs Input
 wand run WND-3              # own one blessed ticket: implement → CI → review → revise
+wand dispatch --team-key WND  # pick the one ticket to run next, and run it
+wand sweep --team-key WND   # act on one thing left over after a run ended
 wand doctor --team-key WND  # report the team's drift from the covenant
 wand version                # build info, and the covenant schema this binary speaks
 ```

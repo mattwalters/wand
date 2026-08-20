@@ -58,6 +58,7 @@ func TestPlanFreshTeam(t *testing.T) {
 		`create label "human-only"`,
 		`create label "agent-filed"`,
 		`create label "ready-for-human"`,
+		`create label "re-review"`,
 		`create PR automation: draft → In Progress`,
 	}
 	if got := ops(actions); got != strings.Join(want, "; ") {
@@ -72,7 +73,7 @@ func TestPlanIsIdempotentOnceSatisfied(t *testing.T) {
 		linear.WorkflowState{ID: "st-Scoping", Name: "Scoping", Type: "unstarted"},
 		linear.WorkflowState{ID: "st-NI", Name: "Needs Input", Type: "unstarted"},
 	)
-	for _, name := range []string{"human-only", "agent-filed", "ready-for-human"} {
+	for _, name := range []string{"human-only", "agent-filed", "ready-for-human", "re-review"} {
 		current.Labels = append(current.Labels, linear.Label{ID: "l-" + name, Name: name})
 	}
 	draft := linear.GitAutomation{ID: "ga-draft", Event: "draft"}
