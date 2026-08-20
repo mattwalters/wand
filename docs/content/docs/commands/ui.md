@@ -193,7 +193,7 @@ reason on it.
 
 | Flag | Default | Description |
 |---|---|---|
-| `--team-key KEY` | — | Linear team key. Required unless `--sample` or `--dump-screen`. |
+| `--team-key KEY` | — | Linear team key. Falls back to `[team] key` in the nearest `wand.toml`. Not read at all, and an error if passed, with `--sample` or `--dump-screen`; required (from a flag or a file) otherwise. |
 | `--sample` | off | Open the built-in read-only sample board instead of reading Linear. |
 | `--dump-screen` | off | Render the sample board to plain text and print it. |
 | `--script KEYS` | — | Comma-separated keys to apply before rendering. Requires `--dump-screen`. |
@@ -216,7 +216,7 @@ whatever width the window happens to be.
 | Code | Meaning |
 |---|---|
 | `0` | The cockpit exited cleanly, or the screen was printed. |
-| `1` | A missing `--team-key`, an unreachable Linear, an unparseable `--script`, `--script` or `--width`/`--height` without `--dump-screen`, or a failure in the program itself. |
+| `1` | No resolvable team key (neither `--team-key` nor `[team] key` in `wand.toml`), an unreachable Linear, an unparseable `--script`, `--script` or `--width`/`--height` without `--dump-screen`, or a failure in the program itself. |
 
 The board is read *before* the alternate screen opens, deliberately: a
 Linear failure is then an ordinary error on stderr rather than a message

@@ -33,6 +33,10 @@ always points at the latest `v1.x.y`.
 
 ## Usage
 
+`--team-key` below is shown explicitly, but it is only required outside any
+repo, or to run against a team other than the one the repo is bound to. A
+repo with `[team] key = "WND"` in its `wand.toml` needs it on none of these:
+
 ```bash
 wand                        # help
 wand ui --team-key WND      # the cockpit: everything waiting on a human

@@ -39,24 +39,14 @@ func newDoctorCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&teamKey, "team-key", "", "Linear team key, e.g. WAND")
+	cmd.Flags().StringVar(&teamKey, "team-key", "", "Linear team key, e.g. WAND (falls back to [team] key in wand.toml)")
 	return cmd
 }
 
 func runDoctor(cmd *cobra.Command, teamKey string) int {
 	out, errOut := cmd.OutOrStdout(), cmd.ErrOrStderr()
 
-	apiKey := os.Getenv("LINEAR_API_KEY")
-	if apiKey == "" {
-		fmt.Fprintln(errOut, "could not check: LINEAR_API_KEY is not set; create a full-access key in Linear's security settings")
-		return doctor.ExitError
-	}
-	if teamKey == "" {
-		fmt.Fprintln(errOut, "could not check: --team-key is required (e.g. --team-key WAND)")
-		return doctor.ExitError
-	}
-
-	cov, fromFile, err := covenant.Load(covenant.FileName)
+	cov, fileTeamKey, fromFile, err := covenantFromCwd()
 	if err != nil {
 		fmt.Fprintf(errOut, "could not check: %v\n", err)
 		return doctor.ExitError
@@ -66,9 +56,20 @@ func runDoctor(cmd *cobra.Command, teamKey string) int {
 	} else {
 		fmt.Fprintln(out, "no covenant file; using the stock covenant")
 	}
+	resolvedTeamKey, err := resolveTeamKey(teamKey, fileTeamKey)
+	if err != nil {
+		fmt.Fprintf(errOut, "could not check: %v\n", err)
+		return doctor.ExitError
+	}
+
+	apiKey := os.Getenv("LINEAR_API_KEY")
+	if apiKey == "" {
+		fmt.Fprintln(errOut, "could not check: LINEAR_API_KEY is not set; create a full-access key in Linear's security settings")
+		return doctor.ExitError
+	}
 
 	ctx, cancel := context.WithTimeout(cmd.Context(), 2*time.Minute)
 	defer cancel()
 
-	return doctor.Run(ctx, &linear.Client{APIKey: apiKey}, out, errOut, teamKey, cov)
+	return doctor.Run(ctx, &linear.Client{APIKey: apiKey}, out, errOut, resolvedTeamKey, cov)
 }

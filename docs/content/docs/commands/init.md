@@ -57,7 +57,7 @@ outstanding. "Installed" and "done" mean observed.
 
 | Flag | Description |
 |---|---|
-| `--team-key KEY` | The Linear team key, e.g. `WAND`. **Required.** |
+| `--team-key KEY` | The Linear team key, e.g. `WAND`. Falls back to `[team] key` in `wand.toml`, so a re-run needs it only the first time — a fresh bootstrap with neither set must still pass it. |
 | `--team-name NAME` | Team name to use when creating. Defaults to the key. Ignored when adopting. |
 | `--dry-run` | Print the plan and write nothing — the hook install included. |
 
@@ -66,7 +66,7 @@ outstanding. "Installed" and "done" mean observed.
 | Code | Meaning |
 |---|---|
 | `0` | The team satisfies the covenant, and the hook is installed. |
-| `1` | Anything went wrong: no `LINEAR_API_KEY`, no `--team-key`, an API failure, a broken `wand.toml`, or a post-apply verification that still found work outstanding. |
+| `1` | Anything went wrong: no `LINEAR_API_KEY`, no resolvable team key (neither `--team-key` nor `[team] key` in `wand.toml`), an API failure, a broken `wand.toml`, or a post-apply verification that still found work outstanding. |
 
 ## Examples
 

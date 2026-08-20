@@ -36,7 +36,7 @@ that said so would be a doctor teams learn to ignore.
 
 | Flag | Description |
 |---|---|
-| `--team-key KEY` | The Linear team key, e.g. `WAND`. **Required.** |
+| `--team-key KEY` | The Linear team key, e.g. `WAND`. Falls back to `[team] key` in the nearest `wand.toml`; required if neither is set. |
 
 ## Exit codes
 
@@ -48,7 +48,7 @@ from what is written here.
 |---|---|
 | `0` | The team satisfies the covenant. |
 | `1` | Drift found. The findings are on stdout. |
-| `2` | The check could not run: no `LINEAR_API_KEY`, no `--team-key`, no team with that key, a broken `wand.toml`, or an API failure. The reason is on stderr. |
+| `2` | The check could not run: no `LINEAR_API_KEY`, no resolvable team key (neither `--team-key` nor `[team] key` in `wand.toml`), no team with that key, a broken `wand.toml`, or an API failure. The reason is on stderr. |
 
 `1` and `2` are kept apart deliberately. A CI job that cannot tell "your
 board drifted" from "I could not reach Linear" turns an outage into a
