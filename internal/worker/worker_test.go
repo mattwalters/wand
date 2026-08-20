@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -391,6 +392,42 @@ func TestRunHeartbeatNilOutIsANoop(t *testing.T) {
 	}
 	if res.Handoff == nil {
 		t.Fatal("Handoff = nil")
+	}
+}
+
+// OnHeartbeat fires on the same tick as the Out narration, and does so even
+// when Out is nil — a caller that only wants the lease renewed, with no
+// terminal to narrate to, must not have to fabricate a writer to get it.
+func TestRunOnHeartbeatFiresOnEachTick(t *testing.T) {
+	spec := specFor(t)
+	spec.HeartbeatInterval = 2 * time.Millisecond
+	var mu sync.Mutex
+	ticks := 0
+	spec.OnHeartbeat = func() {
+		mu.Lock()
+		ticks++
+		mu.Unlock()
+	}
+
+	if _, err := worker.Run(context.Background(), &shAdapter{script: `sleep 0.05; printf '{}' > "$HANDOFF"`}, spec); err != nil {
+		t.Fatal(err)
+	}
+
+	mu.Lock()
+	got := ticks
+	mu.Unlock()
+	if got < 2 {
+		t.Fatalf("OnHeartbeat fired %d times, want at least 2", got)
+	}
+
+	// Nothing must call OnHeartbeat after Run has handed control back —
+	// the goroutine must already be joined, same discipline as Out.
+	time.Sleep(20 * time.Millisecond)
+	mu.Lock()
+	after := ticks
+	mu.Unlock()
+	if after != got {
+		t.Errorf("OnHeartbeat fired after Run returned: before sleep %d, after %d", got, after)
 	}
 }
 
