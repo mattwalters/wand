@@ -78,6 +78,12 @@ func Read(ctx context.Context, cl Linear, runs Runs, cov covenant.Covenant, team
 		return Snapshot{}, err
 	}
 	snap.Lanes = lanes
+
+	active, err := ActiveRuns(runs)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	snap.Active = active
 	return snap, nil
 }
 

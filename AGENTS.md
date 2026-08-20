@@ -36,7 +36,8 @@ internal/covenant/   the process contract: fixed topology, parameterized covenan
 internal/bootstrap/  planner/executor over the covenant; all decisions in the pure Plan
 internal/guard/      the one verdict function: which ticket writes an agent may never make
 internal/cockpit/    what is waiting on a human: the five queues, the seven judgments,
-                     and the one write path that deliberately does not call the guard
+                     the one write path that deliberately does not call the guard, and
+                     the read-only Running strip over the journal and lease store
 internal/doctor/     read-only drift report: bootstrap.Plan as the diff, plus what Plan cannot express
 internal/shim/       generates the PreToolUse hook entry that routes save_issue to wand guard
 internal/worker/     the harness seam: an Adapter turns a Spec into one headless invocation;

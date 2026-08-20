@@ -370,6 +370,7 @@ func (l *loop) work(ctx context.Context, phase string, round int, rules []string
 		Effort:      l.d.Effort,
 		Out:         l.d.Out,
 		Label:       fmt.Sprintf("%s round %d", phase, round),
+		OnHeartbeat: l.heartbeat(phase, round),
 	}
 	start := time.Now()
 	res, err := l.d.Workers.Run(ctx, spec)
@@ -406,6 +407,19 @@ func (l *loop) work(ctx context.Context, phase string, round int, rules []string
 		return res, l.park(ctx, fmt.Sprintf("the %s worker (round %d) failed: %v", phase, round, err))
 	}
 	return res, nil
+}
+
+// heartbeat returns the worker.Spec.OnHeartbeat callback for one phase: a
+// closure that renews the run's lease on every tick, so a long single phase
+// keeps looking alive to a lease reader instead of going stale the moment it
+// passes its first minute. A renewal failure is narrated, never fatal — the
+// worker is mid-flight, and a lease write hiccup is not a reason to kill it.
+func (l *loop) heartbeat(phase string, round int) func() {
+	return func() {
+		if err := l.r.Heartbeat(); err != nil {
+			fmt.Fprintf(l.d.Out, "phase %s round %d: heartbeat renewal failed: %v\n", phase, round, err)
+		}
+	}
 }
 
 // afterWork applies what a work handoff carries beyond its status: plan

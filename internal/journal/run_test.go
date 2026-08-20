@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mattwalters/wand/internal/journal"
 )
@@ -103,6 +104,68 @@ func TestHandoffPathIsPerPhase(t *testing.T) {
 		if pair[0] == pair[1] {
 			t.Errorf("two phases share the handoff path %s", pair[0])
 		}
+	}
+}
+
+// Heartbeat is the periodic renewal a long single phase needs: it moves
+// Lease.Renewed without spending a sequence number or leaving any other
+// trace in the journal stream.
+func TestHeartbeatRenewsTheLeaseWithoutJournaling(t *testing.T) {
+	s, meta := fixture(t)
+	r, err := s.Create(meta)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	defer r.Close()
+
+	if err := r.StartPhase("implement", 1); err != nil {
+		t.Fatalf("StartPhase: %v", err)
+	}
+	before, err := s.Records(r.ID())
+	if err != nil {
+		t.Fatalf("Records: %v", err)
+	}
+
+	later := epoch.Add(6 * time.Minute)
+	s.Now = func() time.Time { return later }
+	if err := r.Heartbeat(); err != nil {
+		t.Fatalf("Heartbeat: %v", err)
+	}
+
+	after, err := s.Records(r.ID())
+	if err != nil {
+		t.Fatalf("Records: %v", err)
+	}
+	if len(after) != len(before) {
+		t.Errorf("records = %d, want %d: a heartbeat is not a journal event", len(after), len(before))
+	}
+	report, err := s.Inspect(r.ID())
+	if err != nil {
+		t.Fatalf("Inspect: %v", err)
+	}
+	if !report.Lease.Renewed.Equal(later) {
+		t.Errorf("lease renewed = %v, want %v", report.Lease.Renewed, later)
+	}
+	if report.Lease.Phase != "implement" || report.Lease.Round != 1 {
+		t.Errorf("lease phase = %q round %d, want the phase still open", report.Lease.Phase, report.Lease.Round)
+	}
+}
+
+// A heartbeat after the run ended is refused the same way any other write
+// to a finished run is: there is nothing left for it to keep alive.
+func TestHeartbeatRefusesAnEndedRun(t *testing.T) {
+	s, meta := fixture(t)
+	r, err := s.Create(meta)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	defer r.Close()
+
+	if err := r.Converged("done"); err != nil {
+		t.Fatalf("Converged: %v", err)
+	}
+	if err := r.Heartbeat(); err == nil {
+		t.Error("Heartbeat succeeded on an ended run")
 	}
 }
 

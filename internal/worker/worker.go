@@ -105,6 +105,16 @@ type Spec struct {
 	// package default (heartbeatInterval).
 	HeartbeatInterval time.Duration
 
+	// OnHeartbeat, if set, is called alongside each heartbeat tick — the
+	// same tick that writes to Out, so a caller can turn it into a lease
+	// renewal (journal.Run.Heartbeat) without this package knowing what a
+	// lease is. Runs on the heartbeat goroutine, so it must not block or
+	// touch anything Run itself is using concurrently; errors are the
+	// caller's own to report, through Out or otherwise. Nil means nothing
+	// extra happens on a tick, which is why every existing Spec literal
+	// keeps compiling unchanged.
+	OnHeartbeat func()
+
 	// Clock is the heartbeat's clock. Nil means time.Now — tests set it so
 	// heartbeat timing is reproducible, matching journal.Store.Now.
 	Clock func() time.Time
@@ -410,7 +420,7 @@ const heartbeatInterval = 60 * time.Second
 // — a heartbeat racing the caller's own use of the same writer is exactly
 // the bug this exists to avoid.
 func startHeartbeat(ctx context.Context, spec Spec) func() {
-	if spec.Out == nil {
+	if spec.Out == nil && spec.OnHeartbeat == nil {
 		return func() {}
 	}
 	interval := spec.HeartbeatInterval
@@ -436,7 +446,12 @@ func startHeartbeat(ctx context.Context, spec Spec) func() {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				fmt.Fprint(spec.Out, heartbeatLine(spec.Label, spec.Timeout, clock().Sub(start)))
+				if spec.Out != nil {
+					fmt.Fprint(spec.Out, heartbeatLine(spec.Label, spec.Timeout, clock().Sub(start)))
+				}
+				if spec.OnHeartbeat != nil {
+					spec.OnHeartbeat()
+				}
 			}
 		}
 	}()

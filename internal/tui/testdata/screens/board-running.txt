@@ -1,0 +1,24 @@
+ wand cockpit · WND                                             7 waiting on you
+
+  Running  2 in flight
+  WND-12  implement (round 1) · claude-code · up 18m · hb 8s ago
+  WND-7   possibly dead, sweep will confirm · scout · — · up 42m · hb 6m ago
+
+  Triage  2 to judge
+› WND-42  doctor prints an empty drift section on a clean board              Low
+  WND-41  guard: a raw state UUID is not matched
+
+  Scoped  1 to bless
+  WND-44  cockpit: a fifth queue for plans awaiting blessing              Urgent
+
+  Needs Input  1 to answer
+  WND-38  Second harness adapter: which one?                                High
+
+  Ready for human  1 to look at
+  WND-35  Run journal and lease store                                  In Review
+
+  Lanes  2 to resolve
+  … 0 above, 2 below
+
+  judge  t ✦Todo  s ✦Scoping  b Backlog  u unranked  d duplicate  x cancel
+  ↑/k ↓/j move • enter open • r refresh • q quit

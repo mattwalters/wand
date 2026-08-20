@@ -193,6 +193,11 @@ func runCockpit(cmd *cobra.Command, teamKey, harness, model, effort string, widt
 	if err != nil {
 		return err
 	}
+	// Read just above is already the one non-deterministic act this
+	// command performs; stamping the board with the clock reading taken
+	// right beside it is what lets the Active-runs strip show elapsed and
+	// heartbeat age without View ever reading the clock itself.
+	now := time.Now()
 
 	tm := tui.New(tui.Config{
 		Snapshot: snap,
@@ -202,6 +207,7 @@ func runCockpit(cmd *cobra.Command, teamKey, harness, model, effort string, widt
 		Height:   height,
 		Engager:  buildEngager(cmd, teamKey, harness, model, effort),
 		Interval: interval,
+		Now:      now,
 	})
 	_, err = tea.NewProgram(tm).Run()
 	return err
