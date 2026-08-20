@@ -9,6 +9,9 @@
 <body>
   <header>
     <a class="brand" href="{{ "" | relURL }}">wand</a>
+    {{/* The docs are what most people come for, so the way in is in the
+         header on every page — including the homepage, which has no rail. */}}
+    <a class="nav{{ if not .IsHome }} here{{ end }}" href="{{ "docs/" | relURL }}">Docs</a>
     <span class="spacer"></span>
     <a href="https://github.com/mattwalters/wand">GitHub</a>
     <span class="version">

@@ -40,22 +40,22 @@ $ wand ui
 Scoping → Todo → Needs Input → In Progress → In Review → Done — is wand's
 opinion, gofmt-style. A checked-in `wand.toml` carries the *parameters* of
 the machine — status names, caps, commands — never its shape.
-[The covenant](covenant/) is the reasoning behind every state in it.
+[The covenant](docs/covenant/) is the reasoning behind every state in it.
 
 **A guard that outranks the agent.** Promoting to Todo blesses building,
 promoting to Scoping blesses research, and Done, Canceled and Duplicate
 close a ticket. Those are a human's call, so
-[`wand guard`](commands/guard/) refuses them — as a harness hook, on the
+[`wand guard`](docs/commands/guard/) refuses them — as a harness hook, on the
 tool call, before the write happens.
 
-**Verbs instead of raw API calls.** [`claim`](commands/claim/),
-[`handback`](commands/handback/), [`abandon`](commands/abandon/) and
-[`file`](commands/file/) each encode an ordering rule that used to live in
+**Verbs instead of raw API calls.** [`claim`](docs/commands/claim/),
+[`handback`](docs/commands/handback/), [`abandon`](docs/commands/abandon/) and
+[`file`](docs/commands/file/) each encode an ordering rule that used to live in
 prose, where it was followed only sometimes: the question is posted before
 the ticket parks on it, the evidence before the demotion, the duplicate
 search before the filing.
 
-**Orchestrators that hand back.** [`wand scope`](commands/scope/) sends a
+**Orchestrators that hand back.** [`wand scope`](docs/commands/scope/) sends a
 cold, read-only scout over one ticket and writes a plan plus the argued
 options a human blesses it on — ending at Needs Input, never at Todo. An
 agent does not bless its own plan.
@@ -78,20 +78,17 @@ That puts `wand` in `$(go env GOPATH)/bin`, which needs to be on your
 
 ## Start here
 
-[The covenant](covenant/) — the process contract wand maintains, and the
-reasoning behind every state and rule in it. The covenant file carries the
-parameters; this page carries the *why*, which deliberately does not live
-in the file.
+[The documentation](docs/) — the doctrine and the reference, versioned with
+the tool. It is also the Docs link in the header, on every page.
 
-[The cockpit](commands/ui/) — `wand ui`: one screen answering one question,
-*what is waiting on me?*, and the one place in wand a human blesses work.
+[The cockpit](docs/commands/ui/) — `wand ui`: one screen answering one
+question, *what is waiting on me?*, and the one place in wand a human
+blesses work.
 
-[Commands](commands/) — the reference: every command wand implements, one
-page each, with its flags, its exit codes and what it is for.
+[The covenant](docs/covenant/) — the process contract wand maintains, and
+the reasoning behind every state and rule in it. The covenant file carries
+the parameters; this page carries the *why*, which deliberately does not
+live in the file.
 
-## Versions
-
-These docs are versioned with the tool. This site's root is the latest
-build — it tracks `main` — and every release also publishes a frozen copy
-at `/vX.Y.Z/`, so a repo pinned to wand vX.Y.Z can read the doctrine
-matching its covenant schema. Pick the version in the header.
+[Commands](docs/commands/) — every command wand implements, one page each,
+with its flags, its exit codes and what it is for.

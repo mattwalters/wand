@@ -1,5 +1,7 @@
 ---
 title: The covenant
+weight: 10
+summary: The process contract wand maintains, and the reasoning behind every state and rule in it.
 ---
 
 The covenant is the process contract wand maintains in Linear: the states a

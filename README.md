@@ -317,20 +317,21 @@ re-enter.
 
 ## Docs
 
-The doctrine — the *why* behind every covenant state and rule, which
-deliberately does not live in the covenant file — is at
-[wandcli.com](https://wandcli.com/), along with the command reference:
-every implemented command, one page each, with its flags and its exit
-codes, at [wandcli.com/commands/](https://wandcli.com/commands/).
+Everything is at [wandcli.com/docs/](https://wandcli.com/docs/): the
+doctrine — the *why* behind every covenant state and rule, which
+deliberately does not live in the covenant file — and the command
+reference, every implemented command one page each with its flags and its
+exit codes, at
+[wandcli.com/docs/commands/](https://wandcli.com/docs/commands/).
 
-**The root is the latest build.** `wandcli.com/` is the homepage and
-`wandcli.com/commands/` the current reference, both tracking `main` — which
-is what lets a doc fix ship without cutting a release, and matches this
-repo's rule that docs change with the code in the same PR. Every release
-additionally freezes a copy at `wandcli.com/vX.Y.Z/`, so a repo pinned to
-wand vX.Y.Z reads the doctrine matching its covenant schema; pick the
-version in the site header. `/latest/` is the root build published a second
-time, so links written before this layout still resolve.
+**The root is the latest build.** `wandcli.com/` is the project's homepage
+and `wandcli.com/docs/` the current documentation, both tracking `main` —
+which is what lets a doc fix ship without cutting a release, and matches
+this repo's rule that docs change with the code in the same PR. Every
+release additionally freezes a copy at `wandcli.com/vX.Y.Z/`, so a repo
+pinned to wand vX.Y.Z reads the doctrine matching its covenant schema; pick
+the version in the site header. `/latest/` is the root build published a
+second time, so links written before this layout still resolve.
 
 The site lives in [docs/](docs/) — plain Markdown built by Hugo (a single
 Go binary, keeping with the no-Node rule) with a hand-rolled minimal theme.

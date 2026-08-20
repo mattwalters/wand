@@ -1,15 +1,20 @@
-{{/* The section index — today only /commands/. The entries are derived from
-     the section's own pages rather than curated: a hand-kept index of pages
-     that already exist is a second list to forget to update, and unlike the
-     sidebar this one carries no editorial grouping. Order is each page's
-     weight, which is where the curation lives. */}}
+{{/* Section indexes — /docs/ and /docs/commands/. The entries are derived
+     from the section's own children rather than curated: a hand-kept index
+     of pages that already exist is a second list to forget to update, and
+     unlike the sidebar this one carries no editorial grouping. Order is
+     each entry's weight, which is where the curation lives. Command pages
+     are set in monospace; a sub-section that merely contains them is not. */}}
 {{ define "main" }}
 <h1>{{ .Title }}</h1>
 {{ .Content }}
+{{ with .Pages.ByWeight }}
 <dl class="cmdlist">
-  {{ range .Pages.ByWeight }}
-  <dt><a href="{{ .RelPermalink }}"><code>{{ .Title }}</code></a></dt>
+  {{ range . }}
+  <dt><a href="{{ .RelPermalink }}">
+    {{- if and .Params.cmd (not .IsSection) }}<code>{{ .Title }}</code>{{ else }}{{ .Title }}{{ end -}}
+  </a></dt>
   <dd>{{ .Params.summary }}</dd>
   {{ end }}
 </dl>
+{{ end }}
 {{ end }}

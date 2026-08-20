@@ -1,5 +1,12 @@
 ---
 title: Commands
+weight: 20
+summary: Every command wand implements, one page each, with its flags and its exit codes.
+# Command pages are titled with the command itself, so they are set in the
+# face you type it in — in the rail, in the index and in their own heading.
+# One cascade beats the same flag repeated on thirteen files.
+cascade:
+  cmd: true
 ---
 
 Every command wand implements today, one page each. The pages are written

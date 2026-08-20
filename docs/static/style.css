@@ -67,6 +67,16 @@ header a:not(.brand):hover {
   color: var(--fg);
 }
 
+/* The way into the docs, on every page. .here marks that you are already
+   inside them — the homepage is the only page where you are not. */
+header a.nav {
+  font-size: 0.95rem;
+}
+
+header a.nav.here {
+  color: var(--fg);
+}
+
 .version {
   color: var(--muted);
   font-size: 0.85rem;

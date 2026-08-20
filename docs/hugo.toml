@@ -34,16 +34,20 @@ version = "dev"
 # order are editorial decisions, and a docs site whose nav is alphabetical
 # happenstance reads as unfinished. Every new content page gets an entry —
 # an unlisted page is unreachable by design, not an accident.
+#
+# Every entry lives under /docs. The homepage is the splash and carries no
+# rail; the documentation is one section beneath it, reached from the Docs
+# link the header shows on every page.
 [[menus.main]]
-name = "Home"
-pageRef = "/"
+name = "Overview"
+pageRef = "/docs"
 weight = 10
 [menus.main.params]
 section = "Start"
 
 [[menus.main]]
 name = "The covenant"
-pageRef = "/covenant"
+pageRef = "/docs/covenant"
 weight = 20
 [menus.main.params]
 section = "Doctrine"
@@ -55,91 +59,91 @@ section = "Doctrine"
 # verbs that are only meaningful as a sequence.
 [[menus.main]]
 name = "All commands"
-pageRef = "/commands"
+pageRef = "/docs/commands"
 weight = 100
 [menus.main.params]
 section = "Commands"
 
 [[menus.main]]
 name = "wand init"
-pageRef = "/commands/init"
+pageRef = "/docs/commands/init"
 weight = 110
 [menus.main.params]
 mono = true
 
 [[menus.main]]
 name = "wand doctor"
-pageRef = "/commands/doctor"
+pageRef = "/docs/commands/doctor"
 weight = 120
 [menus.main.params]
 mono = true
 
 [[menus.main]]
 name = "wand guard"
-pageRef = "/commands/guard"
+pageRef = "/docs/commands/guard"
 weight = 130
 [menus.main.params]
 mono = true
 
 [[menus.main]]
 name = "wand queue"
-pageRef = "/commands/queue"
+pageRef = "/docs/commands/queue"
 weight = 140
 [menus.main.params]
 mono = true
 
 [[menus.main]]
 name = "wand ticket"
-pageRef = "/commands/ticket"
+pageRef = "/docs/commands/ticket"
 weight = 150
 [menus.main.params]
 mono = true
 
 [[menus.main]]
 name = "wand claim"
-pageRef = "/commands/claim"
+pageRef = "/docs/commands/claim"
 weight = 160
 [menus.main.params]
 mono = true
 
 [[menus.main]]
 name = "wand handback"
-pageRef = "/commands/handback"
+pageRef = "/docs/commands/handback"
 weight = 170
 [menus.main.params]
 mono = true
 
 [[menus.main]]
 name = "wand abandon"
-pageRef = "/commands/abandon"
+pageRef = "/docs/commands/abandon"
 weight = 180
 [menus.main.params]
 mono = true
 
 [[menus.main]]
 name = "wand file"
-pageRef = "/commands/file"
+pageRef = "/docs/commands/file"
 weight = 190
 [menus.main.params]
 mono = true
 
 [[menus.main]]
 name = "wand scope"
-pageRef = "/commands/scope"
+pageRef = "/docs/commands/scope"
 weight = 195
 [menus.main.params]
 mono = true
 
 [[menus.main]]
 name = "wand ui"
-pageRef = "/commands/ui"
+pageRef = "/docs/commands/ui"
 weight = 200
 [menus.main.params]
 mono = true
 
 [[menus.main]]
 name = "wand version"
-pageRef = "/commands/version"
+pageRef = "/docs/commands/version"
 weight = 210
 [menus.main.params]
 mono = true
