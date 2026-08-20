@@ -1,6 +1,9 @@
 ---
 title: No daemon
-weight: 20
+# Between journal.md (15) and commands/_index.md (20): this page's own
+# .Pages.ByWeight position in the auto-generated /docs/ index (list.html)
+# depends on it, separately from its hand-curated hugo.toml menu weight.
+weight: 17
 summary: The decision that wand runs no resident server, and what would reopen it.
 ---
 
