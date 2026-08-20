@@ -84,6 +84,20 @@ func TestUIFlagContract(t *testing.T) {
 			args: nil,
 			want: "--team-key is required",
 		},
+		// An interactive program is sized by its terminal: Bubble Tea's
+		// first message is the real window size and overwrites anything
+		// passed here. Accepting the flag and then ignoring it is the same
+		// silent-ignore --team-key is refused for.
+		{
+			name: "width without dump",
+			args: []string{"--sample", "--width", "60"},
+			want: "the --width flag only applies with --dump-screen",
+		},
+		{
+			name: "height without dump",
+			args: []string{"--team-key", "WND", "--height", "10"},
+			want: "the --height flag only applies with --dump-screen",
+		},
 	}
 
 	for _, tt := range tests {
@@ -96,5 +110,19 @@ func TestUIFlagContract(t *testing.T) {
 				t.Errorf("error = %q, want it to mention %q", err, tt.want)
 			}
 		})
+	}
+}
+
+// The size flags still have to work where they do apply, or the refusal
+// above would have taken the feature away rather than made it honest.
+func TestDumpScreenHonorsTheSizeFlags(t *testing.T) {
+	out, err := runUI(t, "--dump-screen", "--width", "60")
+	if err != nil {
+		t.Fatalf("ui --dump-screen --width 60: %v", err)
+	}
+	for _, line := range strings.Split(strings.TrimRight(out, "\n"), "\n") {
+		if len([]rune(line)) > 60 {
+			t.Errorf("line is %d wide, want no more than 60: %q", len([]rune(line)), line)
+		}
 	}
 }

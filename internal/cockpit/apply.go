@@ -51,9 +51,25 @@ import (
 //
 // Everything checkable without writing is checked first, so a refusal
 // leaves nothing behind.
-func Apply(ctx context.Context, cl Linear, cov covenant.Covenant, in Intent) error {
+//
+// # Retrying
+//
+// Neither pre-write is undoable, and the screen deliberately keeps a failed
+// judgment on the confirmation so the person can fix it and press enter
+// again. That makes the retry the dangerous path rather than the safe one:
+// running Apply from the top a second time would post the reason twice, and
+// would re-issue a relation Linear has already recorded and now refuses —
+// which would leave the duplicate permanently uncompletable through this
+// screen, the one outcome worse than the failure being retried.
+//
+// So Apply returns the intent it got, with [Progress] marking what landed,
+// and skips a pre-write that is already marked. The caller stores the
+// returned intent and hands that one back on the retry; nothing else is
+// required of it. On the first call the field is zero, which is the same
+// thing as "nothing has been written yet".
+func Apply(ctx context.Context, cl Linear, cov covenant.Covenant, in Intent) (Intent, error) {
 	if ok, why := in.Ready(); !ok {
-		return fmt.Errorf("%s: %s", in.Disp.Name, why)
+		return in, fmt.Errorf("%s: %s", in.Disp.Name, why)
 	}
 
 	// Resolve the destination before anything is written. A board that has
@@ -61,24 +77,28 @@ func Apply(ctx context.Context, cl Linear, cov covenant.Covenant, in Intent) err
 	// the whole act here.
 	stateID, err := resolveState(ctx, cl, cov, in.Issue.TeamID, in.Disp.Status)
 	if err != nil {
-		return err
+		return in, err
 	}
 
-	switch in.Disp.Field {
-	case FieldIdentifier:
-		canonical, err := cl.IssueByIdentifier(ctx, strings.TrimSpace(in.Text))
-		if err != nil {
-			return fmt.Errorf("looking up %s: %w", strings.TrimSpace(in.Text), err)
-		}
-		if canonical.ID == in.Issue.ID {
-			return fmt.Errorf("%s cannot duplicate itself", in.Issue.Identifier)
-		}
-		if err := cl.CreateRelation(ctx, in.Issue.ID, canonical.ID, linear.RelationDuplicate); err != nil {
-			return err
-		}
-	case FieldReason:
-		if err := cl.CreateComment(ctx, in.Issue.ID, strings.TrimSpace(in.Text)); err != nil {
-			return err
+	if !in.Done.PreWritten {
+		switch in.Disp.Field {
+		case FieldIdentifier:
+			canonical, err := cl.IssueByIdentifier(ctx, strings.TrimSpace(in.Text))
+			if err != nil {
+				return in, fmt.Errorf("looking up %s: %w", strings.TrimSpace(in.Text), err)
+			}
+			if canonical.ID == in.Issue.ID {
+				return in, fmt.Errorf("%s cannot duplicate itself", in.Issue.Identifier)
+			}
+			if err := cl.CreateRelation(ctx, in.Issue.ID, canonical.ID, linear.RelationDuplicate); err != nil {
+				return in, err
+			}
+			in.Done.PreWritten = true
+		case FieldReason:
+			if err := cl.CreateComment(ctx, in.Issue.ID, strings.TrimSpace(in.Text)); err != nil {
+				return in, err
+			}
+			in.Done.PreWritten = true
 		}
 	}
 
@@ -94,7 +114,7 @@ func Apply(ctx context.Context, cl Linear, cov covenant.Covenant, in Intent) err
 		none := 0
 		update.Priority = &none
 	}
-	return cl.UpdateIssue(ctx, in.Issue.ID, update)
+	return in, cl.UpdateIssue(ctx, in.Issue.ID, update)
 }
 
 // resolveState turns a covenant status key into the team's workflow state

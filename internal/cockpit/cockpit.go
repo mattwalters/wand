@@ -312,6 +312,22 @@ type Intent struct {
 	Disp     Disposition
 	Priority int    // when Disp.Field is FieldPriority
 	Text     string // the identifier or the reason
+	// Done records which of [Apply]'s writes have already landed. Two of
+	// the dispositions write twice, and the first write is not undoable: a
+	// posted cancellation reason and a duplicate relation both stay put
+	// when the status move that was meant to follow them fails. The screen
+	// is built to let a person retry that failure, so the retry has to know
+	// what it must not do again.
+	Done Progress
+}
+
+// Progress is how far one intent got. Carried on the intent rather than
+// held by the screen because it is a fact about the ticket, not about the
+// session looking at it — [Apply] is what learns it, and [Apply] is what
+// has to honor it on the way back through.
+type Progress struct {
+	// PreWritten is set once the comment or the relation is on the ticket.
+	PreWritten bool
 }
 
 // Ready reports whether the intent may be applied, and when it may not, the

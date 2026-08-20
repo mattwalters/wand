@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -19,18 +20,29 @@ import (
 type fakeBackend struct {
 	applied []cockpit.Intent
 	err     error
+	// preWritten makes Apply fail the way a partial judgment really does:
+	// the comment or the relation landed, the status move did not. It is
+	// what cockpit.Apply reports back through the returned intent.
+	preWritten bool
 
-	reads int
-	snap  cockpit.Snapshot
+	reads   int
+	snap    cockpit.Snapshot
+	readErr error
 }
 
-func (f *fakeBackend) Apply(_ context.Context, in cockpit.Intent) error {
+func (f *fakeBackend) Apply(_ context.Context, in cockpit.Intent) (cockpit.Intent, error) {
 	f.applied = append(f.applied, in)
-	return f.err
+	if f.preWritten {
+		in.Done.PreWritten = true
+	}
+	return in, f.err
 }
 
 func (f *fakeBackend) Read(context.Context) (cockpit.Snapshot, error) {
 	f.reads++
+	if f.readErr != nil {
+		return cockpit.Snapshot{}, f.readErr
+	}
 	return f.snap, nil
 }
 
@@ -458,4 +470,178 @@ func TestSampleBoardScreens(t *testing.T) {
 	}
 	tuitest.AssertScreen(t, "board-sample", sample(), "")
 	tuitest.AssertScreen(t, "bless-read-only", sample(), "t")
+}
+
+// --- refreshing from the detail screen -----------------------------------
+
+// The detail screen holds a copy of the row it was opened on, and refresh
+// works from there. Leaving the copy in place would make the one key a
+// person presses to get current data the key that hides how stale it is —
+// and the disposition keys act on this row, so the stale copy is not merely
+// displayed, it is judged.
+func TestRefreshOnDetailResyncsTheOpenedRow(t *testing.T) {
+	back := &fakeBackend{}
+	m, _ := apply(t, board(t, back), "enter") // open WND-42
+	if m.state != stateDetail {
+		t.Fatalf("state = %v, want the detail screen", m.state)
+	}
+	if got := m.detail.Issue.Title; got == "" {
+		t.Fatal("the detail row has no title to change")
+	}
+
+	// The board comes back with the same ticket, retitled.
+	const retitled = "a title the opened copy has never seen"
+	next := cockpit.Sample()
+	next.Triage = retitle(t, next.Triage, m.detail.Issue.Identifier, retitled)
+	back.snap = next
+
+	m, cmd := apply(t, m, "r")
+	m = run(t, m, cmd)
+
+	if m.state != stateDetail {
+		t.Fatalf("state = %v, want to still be on the detail screen", m.state)
+	}
+	if got := m.detail.Issue.Title; got != retitled {
+		t.Errorf("detail title = %q, want the re-read %q; the screen is showing a pre-refresh copy",
+			got, retitled)
+	}
+}
+
+// retitle copies a queue with one issue's title replaced, found by
+// identifier: the sample's slice order is not the board's display order, and
+// a test that indexed into it would be asserting about a different ticket.
+func retitle(t *testing.T, issues []linear.Issue, identifier, title string) []linear.Issue {
+	t.Helper()
+	out := append([]linear.Issue(nil), issues...)
+	for i := range out {
+		if out[i].Identifier == identifier {
+			out[i].Title = title
+			return out
+		}
+	}
+	t.Fatalf("no issue %s in the queue", identifier)
+	return nil
+}
+
+// without copies a queue with one issue removed, found by identifier.
+func without(t *testing.T, issues []linear.Issue, identifier string) []linear.Issue {
+	t.Helper()
+	var out []linear.Issue
+	for _, issue := range issues {
+		if issue.Identifier != identifier {
+			out = append(out, issue)
+		}
+	}
+	if len(out) == len(issues) {
+		t.Fatalf("no issue %s in the queue", identifier)
+	}
+	return out
+}
+
+// When the opened row is gone from the re-read board there is nothing left
+// to show, and nothing left to judge. Closing without a word would read as
+// the key having quit the screen.
+func TestRefreshOnDetailLeavesWhenTheRowIsGone(t *testing.T) {
+	back := &fakeBackend{}
+	m, _ := apply(t, board(t, back), "enter")
+	gone := m.detail.Issue.Identifier
+
+	next := cockpit.Sample()
+	next.Triage = without(t, next.Triage, gone) // somebody else judged it
+	back.snap = next
+
+	m, cmd := apply(t, m, "r")
+	m = run(t, m, cmd)
+
+	if m.state != stateBoard {
+		t.Errorf("state = %v, want to be back on the board", m.state)
+	}
+	if !strings.Contains(m.flash, gone) {
+		t.Errorf("flash = %q, want it to name %s", m.flash, gone)
+	}
+	if m.flashOK {
+		t.Error("flashOK is true; a row vanishing under you is not good news")
+	}
+}
+
+// A failed refresh reports itself through the flash, and the detail screen
+// has to render it. Without that, refreshing from there is byte-identical
+// before and after — a silent failure that leaves a person reading stale
+// rows believing they just re-read them.
+func TestRefreshFailureIsVisibleOnTheDetailScreen(t *testing.T) {
+	back := &fakeBackend{readErr: errors.New("linear is unreachable")}
+	m, _ := apply(t, board(t, back), "enter")
+	before := m.View().Content
+
+	m, cmd := apply(t, m, "r")
+	m = run(t, m, cmd)
+
+	if m.state != stateDetail {
+		t.Fatalf("state = %v, want to still be on the detail screen", m.state)
+	}
+	after := m.View().Content
+	if after == before {
+		t.Fatal("the detail screen is unchanged after a failed refresh; the failure is invisible")
+	}
+	if !strings.Contains(after, "linear is unreachable") {
+		t.Errorf("the detail screen does not name the failure; screen was:\n%s", after)
+	}
+}
+
+// --- retrying a partly-applied judgment ----------------------------------
+
+// The screen keeps a failed judgment on the confirmation so it can be
+// retried. When the failure came after the pre-write landed, the retry has
+// to carry that fact back to cockpit.Apply, or it posts the same reason a
+// second time.
+func TestRetryCarriesTheProgressOfAFailedJudgment(t *testing.T) {
+	back := &fakeBackend{err: errors.New("linear: refused the issue update"), preWritten: true}
+	m, _ := apply(t, board(t, back), "x") // cancel, with reason
+	m, _ = apply(t, m, "n,o,p,e")         // a reason to post
+	m, cmd := apply(t, m, "enter")
+	m = run(t, m, cmd)
+
+	if m.state != stateConfirm {
+		t.Fatalf("state = %v, want to stay on the confirmation after a failure", m.state)
+	}
+	if !m.pending.Done.PreWritten {
+		t.Fatal("the pending intent lost the progress the failed attempt made; " +
+			"the retry would post the reason twice")
+	}
+	if m.pending.Text != "nope" {
+		t.Errorf("pending text = %q, want the reason that was actually posted", m.pending.Text)
+	}
+
+	// The retry hands the progress back to the backend.
+	back.err = nil
+	m, cmd = apply(t, m, "enter")
+	m = run(t, m, cmd)
+	if len(back.applied) != 2 {
+		t.Fatalf("backend saw %d applies, want 2", len(back.applied))
+	}
+	if !back.applied[1].Done.PreWritten {
+		t.Error("the retry did not tell Apply the reason was already posted")
+	}
+}
+
+// Once the pre-write has landed the field is spent: the text it held is on
+// the ticket, and typing into it would look like an edit that cannot reach
+// anywhere.
+func TestASpentFieldStopsTakingKeystrokes(t *testing.T) {
+	back := &fakeBackend{err: errors.New("refused"), preWritten: true}
+	m, _ := apply(t, board(t, back), "x")
+	m, _ = apply(t, m, "h,i")
+	m, cmd := apply(t, m, "enter")
+	m = run(t, m, cmd)
+
+	if m.typing() {
+		t.Error("the screen still routes keystrokes to a field whose text is already on the ticket")
+	}
+	m, _ = apply(t, m, "z,z,z")
+	if m.intent().Text != "hi" {
+		t.Errorf("text = %q, want the posted reason to be unchanged by later keystrokes", m.intent().Text)
+	}
+	if !strings.Contains(m.View().Content, "already posted") {
+		t.Errorf("the confirmation does not say the reason already landed; screen was:\n%s", m.View().Content)
+	}
 }

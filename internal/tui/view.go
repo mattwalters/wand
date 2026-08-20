@@ -235,6 +235,21 @@ func (m Model) footerView() string {
 	return m.navHelp()
 }
 
+// flashLine is the board's flash, rendered wherever it has to be seen. The
+// detail screen needs it as much as the board does: refresh works from
+// there, and a failed refresh that printed nothing would leave a person
+// reading stale rows believing they had just re-read them.
+func (m Model) flashLine() string {
+	if m.flash == "" {
+		return ""
+	}
+	style := m.theme.Good
+	if !m.flashOK {
+		style = m.theme.Bad
+	}
+	return m.wrap(style, m.flash) + "\n"
+}
+
 func (m Model) navHelp() string {
 	items := []string{"↑/k ↓/j move", "enter open"}
 	if !m.readOnly() {
@@ -318,6 +333,7 @@ func (m Model) detailView() string {
 		b.WriteString("\n\n")
 		b.WriteString(m.indentWrap(m.theme.Muted, noJudgment(cockpit.KindLanes), gutter))
 		b.WriteString("\n")
+		b.WriteString(m.flashLine())
 		b.WriteString(m.theme.Muted.Render(pad(gutter) + "esc back • q quit"))
 		return b.String()
 	}
@@ -361,6 +377,7 @@ func (m Model) detailView() string {
 		b.WriteString(help)
 		b.WriteString("\n")
 	}
+	b.WriteString(m.flashLine())
 	b.WriteString(m.theme.Muted.Render(pad(gutter) + "esc back • q quit"))
 	return b.String()
 }
@@ -384,7 +401,11 @@ func (m Model) descriptionRoom() int {
 		fields++
 	}
 	// title(1) blank(1) fields blank(1) … blank(1) judge(1) help(1)
-	return max(m.height-fields-6, 1)
+	room := m.height - fields - 6
+	if m.flash != "" {
+		room -= countLines(m.flashLine())
+	}
+	return max(room, 1)
 }
 
 func (m Model) field(name, value string) string {
@@ -431,7 +452,12 @@ func (m Model) confirmView() string {
 	b.WriteString("\n")
 	if m.failure != "" {
 		b.WriteString(m.indentWrap(m.theme.Bad, m.failure, gutter+2))
-		b.WriteString("\n\n")
+		b.WriteString("\n")
+		if note := preWriteNote(in); note != "" {
+			b.WriteString(m.indentWrap(m.theme.Warn, note, gutter+2))
+			b.WriteString("\n")
+		}
+		b.WriteString("\n")
 	}
 	b.WriteString(m.confirmHelp(in))
 	return b.String()
@@ -468,7 +494,33 @@ func (m Model) fieldView(in cockpit.Intent) string {
 		if in.Disp.Field == cockpit.FieldReason {
 			label = "reason"
 		}
-		return m.theme.Muted.Render(fmt.Sprintf("%s%-*s", pad(gutter+2), fieldLabelWidth, label)) + m.input.View()
+		value := m.input.View()
+		if in.Done.PreWritten {
+			// Spent: what this field held is already on the ticket, and a
+			// cursor blinking in it would invite an edit that cannot
+			// reach anywhere.
+			value = m.theme.Body.Render(truncate(in.Text, max(m.width-gutter-2-fieldLabelWidth, 10)))
+		}
+		return m.theme.Muted.Render(fmt.Sprintf("%s%-*s", pad(gutter+2), fieldLabelWidth, label)) + value
+	}
+	return ""
+}
+
+// preWriteNote says what a failed judgment already left on the ticket.
+//
+// Without it the honest reading of a failure is "nothing happened", which
+// for these two dispositions is wrong in exactly the direction that gets a
+// cancellation reason posted twice. The sentence is also what makes the
+// frozen field make sense rather than look broken.
+func preWriteNote(in cockpit.Intent) string {
+	if !in.Done.PreWritten {
+		return ""
+	}
+	switch in.Disp.Field {
+	case cockpit.FieldIdentifier:
+		return "The duplicate link is already recorded, and is not written again: enter retries the status move alone."
+	case cockpit.FieldReason:
+		return "The reason is already posted on the ticket, and is not posted again: enter retries the status move alone."
 	}
 	return ""
 }

@@ -118,7 +118,7 @@ func TestApplyPerformsTheTransitionsTheGuardForbids(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cl := newFake()
-			if err := Apply(context.Background(), cl, covenant.Default(), tt.in); err != nil {
+			if _, err := Apply(context.Background(), cl, covenant.Default(), tt.in); err != nil {
 				t.Fatalf("Apply: %v", err)
 			}
 			if last := cl.calls[len(cl.calls)-1]; last != tt.want {
@@ -136,7 +136,7 @@ func TestUnrankedBacklogClearsAnExistingPriority(t *testing.T) {
 	issue.Priority = 1
 
 	cl := newFake()
-	if err := Apply(context.Background(), cl, covenant.Default(),
+	if _, err := Apply(context.Background(), cl, covenant.Default(),
 		Intent{Issue: issue, Disp: ToBacklogUnranked}); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
@@ -150,7 +150,7 @@ func TestUnrankedBacklogClearsAnExistingPriority(t *testing.T) {
 // the reverse leaves a closed ticket nobody can explain.
 func TestCancelCommentsBeforeItCloses(t *testing.T) {
 	cl := newFake()
-	err := Apply(context.Background(), cl, covenant.Default(),
+	_, err := Apply(context.Background(), cl, covenant.Default(),
 		Intent{Issue: subject(), Disp: Cancel, Text: "  superseded by WND-3  "})
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
@@ -170,7 +170,7 @@ func TestCancelCommentsBeforeItCloses(t *testing.T) {
 func TestCancelDoesNotCloseWhenTheCommentFails(t *testing.T) {
 	cl := newFake()
 	cl.failOn = "CreateComment"
-	err := Apply(context.Background(), cl, covenant.Default(),
+	_, err := Apply(context.Background(), cl, covenant.Default(),
 		Intent{Issue: subject(), Disp: Cancel, Text: "obsolete"})
 	if err == nil {
 		t.Fatal("Apply succeeded, want the comment failure to stop it")
@@ -184,7 +184,7 @@ func TestCancelDoesNotCloseWhenTheCommentFails(t *testing.T) {
 // a dead end.
 func TestDuplicateLinksBeforeItCloses(t *testing.T) {
 	cl := newFake()
-	err := Apply(context.Background(), cl, covenant.Default(),
+	_, err := Apply(context.Background(), cl, covenant.Default(),
 		Intent{Issue: subject(), Disp: AsDuplicate, Text: "WND-3"})
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
@@ -202,7 +202,7 @@ func TestDuplicateLinksBeforeItCloses(t *testing.T) {
 
 func TestDuplicateRefusesAnUnknownIssue(t *testing.T) {
 	cl := newFake()
-	err := Apply(context.Background(), cl, covenant.Default(),
+	_, err := Apply(context.Background(), cl, covenant.Default(),
 		Intent{Issue: subject(), Disp: AsDuplicate, Text: "WND-404"})
 	if err == nil {
 		t.Fatal("Apply succeeded, want a refusal for an issue that does not exist")
@@ -234,7 +234,7 @@ func TestApplyChecksBeforeItWrites(t *testing.T) {
 			if tt.prep != nil {
 				tt.prep(cl)
 			}
-			if err := Apply(context.Background(), cl, covenant.Default(), tt.in); err == nil {
+			if _, err := Apply(context.Background(), cl, covenant.Default(), tt.in); err == nil {
 				t.Fatal("Apply succeeded, want a refusal")
 			}
 			for _, call := range cl.calls {
@@ -259,7 +259,7 @@ func TestApplyFollowsACovenantRename(t *testing.T) {
 	cl := newFake()
 	cl.states = append(cl.states, linear.WorkflowState{ID: "st-ready", Name: "Ready", Type: "unstarted"})
 
-	if err := Apply(context.Background(), cl, cov, Intent{Issue: subject(), Disp: BlessTodo}); err != nil {
+	if _, err := Apply(context.Background(), cl, cov, Intent{Issue: subject(), Disp: BlessTodo}); err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
 	if last := cl.calls[len(cl.calls)-1]; !strings.HasSuffix(last, "state=st-ready") {
@@ -274,4 +274,94 @@ func indexOf(calls []string, prefix string) int {
 		}
 	}
 	return -1
+}
+
+// The retry is the dangerous path, not the safe one. Both of these
+// dispositions write twice, the first write is not undoable, and the screen
+// is built to let a person press enter again after a failure. Running Apply
+// from the top a second time would post the same cancellation reason twice,
+// and would re-issue a relation Linear already holds — which it refuses,
+// leaving the duplicate permanently uncompletable through the one screen
+// that can complete it.
+func TestApplyRetryDoesNotRepeatThePreWrite(t *testing.T) {
+	tests := []struct {
+		name string
+		in   Intent
+		// pre is the call the first attempt must make and the retry must
+		// not; move is the status write both attempts make.
+		pre  string
+		move string
+	}{
+		{
+			name: "cancel does not post the reason twice",
+			in:   Intent{Issue: subject(), Disp: Cancel, Text: "superseded by WND-3"},
+			pre:  "CreateComment uuid-WND-9 superseded by WND-3",
+			move: "UpdateIssue uuid-WND-9 state=st-canceled",
+		},
+		{
+			name: "duplicate does not re-issue the relation",
+			in:   Intent{Issue: subject(), Disp: AsDuplicate, Text: "WND-3"},
+			pre:  "CreateRelation uuid-WND-9 duplicate uuid-WND-3",
+			move: "UpdateIssue uuid-WND-9 state=st-duplicate",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// First attempt: the pre-write lands, the status move fails.
+			cl := newFake()
+			cl.failOn = "UpdateIssue"
+			out, err := Apply(context.Background(), cl, covenant.Default(), tt.in)
+			if err == nil {
+				t.Fatal("Apply succeeded; the fake was told to refuse the status move")
+			}
+			if !contains(cl.calls, tt.pre) {
+				t.Fatalf("the first attempt did not make the pre-write %q; calls were %v", tt.pre, cl.calls)
+			}
+			if !out.Done.PreWritten {
+				t.Fatal("Apply reported no progress after the pre-write landed; " +
+					"the retry has no way to know what it must not do again")
+			}
+
+			// The retry, from the returned intent, as the screen does it.
+			cl = newFake()
+			if _, err := Apply(context.Background(), cl, covenant.Default(), out); err != nil {
+				t.Fatalf("the retry failed: %v", err)
+			}
+			if contains(cl.calls, tt.pre) {
+				t.Errorf("the retry repeated the pre-write %q; calls were %v", tt.pre, cl.calls)
+			}
+			if !contains(cl.calls, tt.move) {
+				t.Errorf("the retry did not make the status move %q; calls were %v", tt.move, cl.calls)
+			}
+		})
+	}
+}
+
+// A pre-write that never happened must not be skipped. The progress flag
+// says "already on the ticket", and the failure it guards against is the
+// mirror of the one above: a cancellation that closes the ticket without
+// ever recording why.
+func TestApplyStillPreWritesWhenNothingHasLanded(t *testing.T) {
+	cl := newFake()
+	in := Intent{Issue: subject(), Disp: Cancel, Text: "no longer wanted"}
+	out, err := Apply(context.Background(), cl, covenant.Default(), in)
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	if !contains(cl.calls, "CreateComment uuid-WND-9 no longer wanted") {
+		t.Errorf("the reason was not posted; calls were %v", cl.calls)
+	}
+	if !out.Done.PreWritten {
+		t.Error("a landed pre-write was not recorded on the returned intent")
+	}
+}
+
+func contains(calls []string, want string) bool {
+	for _, c := range calls {
+		if c == want {
+			return true
+		}
+	}
+	return false
 }

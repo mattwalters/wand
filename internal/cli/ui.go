@@ -57,7 +57,20 @@ func newUICmd() *cobra.Command {
 			// refusal: it reads as "this is my board" on a screen that is
 			// nobody's board.
 			if teamKey != "" && (dumpScreen || sample) {
-				return fmt.Errorf("--team-key does not apply with --dump-screen or --sample; both render the built-in sample board and read no team")
+				return fmt.Errorf("the --team-key flag does not apply with --dump-screen or --sample; both render the built-in sample board and read no team")
+			}
+			// Same rule, other direction. An interactive program is sized
+			// by the terminal it is attached to: Bubble Tea's first message
+			// is the real window size, which overwrites anything passed
+			// here. A flag that is quietly overruled reads as "this is the
+			// width I asked for" on a screen that is whatever width the
+			// window happens to be.
+			if !dumpScreen {
+				for _, name := range []string{"width", "height"} {
+					if cmd.Flags().Changed(name) {
+						return fmt.Errorf("the --%s flag only applies with --dump-screen; an interactive board is sized by the terminal it runs in", name)
+					}
+				}
 			}
 			if dumpScreen {
 				return dumpCockpit(cmd, script, width, height)
@@ -177,7 +190,7 @@ func (b *cockpitBackend) Read(ctx context.Context) (cockpit.Snapshot, error) {
 	return cockpit.Read(ctx, b.cl, b.runs, b.cov, b.teamKey)
 }
 
-func (b *cockpitBackend) Apply(ctx context.Context, in cockpit.Intent) error {
+func (b *cockpitBackend) Apply(ctx context.Context, in cockpit.Intent) (cockpit.Intent, error) {
 	ctx, cancel := context.WithTimeout(ctx, apiTimeout)
 	defer cancel()
 	return cockpit.Apply(ctx, b.cl, b.cov, in)

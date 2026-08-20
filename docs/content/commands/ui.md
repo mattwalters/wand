@@ -65,6 +65,14 @@ refilled you would not notice.
 it is the pool, and browsing a pool is Linear's job, done better there. The
 cockpit shows what has *stopped*, not what exists.
 
+`enter` opens the row under the cursor; `r` re-reads the whole board. The
+two compose: refreshing while a row is open re-resolves that row against
+what came back, so the key you pressed to get current data cannot be the
+key that hides how stale it is. If the row is gone from the re-read board —
+somebody else judged it — the screen returns to the board and says so
+rather than closing without a word. A refresh that *fails* says that too,
+on whichever screen you were on.
+
 ## Blessing
 
 Promoting a ticket to **Todo** or **Scoping** is the transition
@@ -117,6 +125,15 @@ status write is what ends the ticket's visibility, so anything a reader will
 later need has to already be on it. A crash between the two leaves an open
 ticket carrying its own argument for closure, which a person can finish; the
 reverse leaves a closed ticket nobody can explain.
+
+When the status move fails after that first write has landed, the
+confirmation stays up so you can press `enter` again — and the retry does
+**not** repeat the write that already succeeded. The screen says so, and the
+field it came from goes read-only, because the text is on the ticket and
+editing it could no longer reach anywhere. Retrying from the top would post
+the same cancellation reason twice, and would re-issue a relation Linear
+already holds and now refuses, which would leave the duplicate permanently
+uncompletable through the only screen that can complete it.
 
 Every status is named by what it *means*, so a covenant that renames `todo`
 to `Ready` gets a screen that says `→ Ready`.
@@ -180,19 +197,26 @@ reason on it.
 | `--sample` | off | Open the built-in read-only sample board instead of reading Linear. |
 | `--dump-screen` | off | Render the sample board to plain text and print it. |
 | `--script KEYS` | — | Comma-separated keys to apply before rendering. Requires `--dump-screen`. |
-| `--width N` | `80` | Terminal width to render at. |
-| `--height N` | `24` | Terminal height to render at. |
+| `--width N` | `80` | Terminal width to render at. Requires `--dump-screen`. |
+| `--height N` | `24` | Terminal height to render at. Requires `--dump-screen`. |
 
 The size flags are explicit rather than read from the ambient terminal: a
 screen whose width depends on whoever ran it is a screen no two people can
 compare.
+
+They apply to `--dump-screen` only, and passing either one without it is an
+error rather than a silent no-op. An interactive board is sized by the
+terminal it runs in — the program's first message is the real window size,
+which overrules anything given here — so accepting the flag and then
+ignoring it would say "this is the width I asked for" on a screen that is
+whatever width the window happens to be.
 
 ## Exit codes
 
 | Code | Meaning |
 |---|---|
 | `0` | The cockpit exited cleanly, or the screen was printed. |
-| `1` | A missing `--team-key`, an unreachable Linear, an unparseable `--script`, `--script` without `--dump-screen`, or a failure in the program itself. |
+| `1` | A missing `--team-key`, an unreachable Linear, an unparseable `--script`, `--script` or `--width`/`--height` without `--dump-screen`, or a failure in the program itself. |
 
 The board is read *before* the alternate screen opens, deliberately: a
 Linear failure is then an ordinary error on stderr rather than a message

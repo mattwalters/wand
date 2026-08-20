@@ -38,8 +38,10 @@ import (
 type Backend interface {
 	// Read fetches the board again.
 	Read(ctx context.Context) (cockpit.Snapshot, error)
-	// Apply performs one judgment.
-	Apply(ctx context.Context, in cockpit.Intent) error
+	// Apply performs one judgment, and returns the intent with whatever
+	// landed marked on it — see cockpit.Progress. A failed judgment is
+	// retried from the returned value, never from the original.
+	Apply(ctx context.Context, in cockpit.Intent) (cockpit.Intent, error)
 }
 
 // Config is what New needs. Snapshot is passed in already read rather than
@@ -165,14 +167,17 @@ func (m Model) subject() (cockpit.Row, bool) {
 // typing reports whether keystrokes belong to the text input rather than to
 // the app. Only the confirm screen's free-text fields type.
 func (m Model) typing() bool {
-	return m.state == stateConfirm && m.pending.Disp.Field != cockpit.FieldPriority &&
+	return m.state == stateConfirm && !m.pending.Done.PreWritten &&
+		m.pending.Disp.Field != cockpit.FieldPriority &&
 		m.pending.Disp.Field != cockpit.FieldNone
 }
 
 // Init implements tea.Model.
 func (m Model) Init() tea.Cmd { return nil }
 
-// appliedMsg carries the result of one judgment.
+// appliedMsg carries the result of one judgment: the intent as cockpit.Apply
+// left it, so a failure that happened after a pre-write lands comes back
+// carrying that fact rather than losing it.
 type appliedMsg struct {
 	intent cockpit.Intent
 	err    error
@@ -197,7 +202,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Stay on the confirmation. The commonest refusal is a
 			// mistyped identifier, and a screen that threw the text away
 			// on the way to reporting that would be worse than useless.
+			//
+			// The returned intent replaces the pending one, so a retry
+			// carries the progress the failed attempt made. Without this
+			// the retry would post the reason a second time — see
+			// cockpit.Apply's Retrying section.
+			m.pending = msg.intent
 			m.failure = msg.err.Error()
+			if m.pending.Done.PreWritten {
+				// The field is spent: the text it held is already on the
+				// ticket, and editing it now would change nothing while
+				// looking like it changed something.
+				m.input.Blur()
+			}
 			return m, nil
 		}
 		m.snap = withoutIssue(m.snap, msg.intent.Issue.ID, msg.intent.Issue.Identifier)
@@ -218,6 +235,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.board = cockpit.Build(m.snap)
 		m.clampCursor()
 		m.flash, m.flashOK = "", false
+		m.resyncDetail()
 		return m, nil
 
 	case tea.KeyPressMsg:
@@ -410,6 +428,55 @@ func (m *Model) clampCursor() {
 	m.cursor = min(max(m.cursor, 0), n-1)
 }
 
+// resyncDetail re-resolves the opened row against a board that has just
+// been re-read.
+//
+// A refresh is reachable from the detail screen, and the row it is showing
+// is a copy taken when the row was opened. Leaving that copy in place would
+// make the one key a person pressed to get current data the key that hides
+// how stale it is — and the disposition keys act on this row, so the stale
+// copy is not merely displayed, it is judged. When the row is gone from the
+// board entirely, the detail screen has nothing left to show and says so on
+// the way back rather than closing without explanation.
+func (m *Model) resyncDetail() {
+	if m.state != stateDetail {
+		return
+	}
+	want := rowKey(m.detail)
+	for _, row := range m.rows() {
+		if rowKey(row) == want {
+			m.detail = row
+			return
+		}
+	}
+	m.state = stateBoard
+	m.flash, m.flashOK = rowGone(m.detail)+" is no longer waiting on you.", false
+}
+
+// rowKey is a row's identity across a re-read: the issue it names, or the
+// run behind a lane. Not the cursor index, which is a position and belongs
+// to the board rather than to the row.
+func rowKey(r cockpit.Row) string {
+	if r.IsLane() {
+		return "lane:" + r.Lane.RunID
+	}
+	if r.Issue.ID != "" {
+		return "issue:" + r.Issue.ID
+	}
+	return "issue:" + r.Issue.Identifier
+}
+
+// rowGone names a row for the sentence saying it left the board.
+func rowGone(r cockpit.Row) string {
+	if r.IsLane() {
+		if r.Lane.Ticket != "" {
+			return "the " + string(r.Lane.Kind) + " lane on " + r.Lane.Ticket
+		}
+		return "run " + r.Lane.RunID
+	}
+	return r.Issue.Identifier
+}
+
 // applied is the sentence the board flashes after a judgment lands. It
 // names the destination, because the row vanishing is not by itself an
 // answer to what happened to it.
@@ -467,7 +534,8 @@ func withoutIssue(s cockpit.Snapshot, id, identifier string) cockpit.Snapshot {
 
 func applyCmd(b Backend, in cockpit.Intent) tea.Cmd {
 	return func() tea.Msg {
-		return appliedMsg{intent: in, err: b.Apply(context.Background(), in)}
+		out, err := b.Apply(context.Background(), in)
+		return appliedMsg{intent: out, err: err}
 	}
 }
 
