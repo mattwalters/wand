@@ -141,6 +141,29 @@ covenant, terminal success is reached only on positive evidence;
 exhaustion is a hand-back that says so. A cap set to zero is refused
 outright, because a cap of nothing is a request to loop forever.
 
+## Toggles
+
+Two optional stages of the scope orchestrator are the covenant's to switch,
+because whether they run is a property of a team's process rather than of
+one operator's afternoon:
+
+- `toggles.scope_interview` (on by default) allows `wand scope
+  --interactive` to grill a human over its draft before writing anything.
+  The toggle and the flag answer different questions — the toggle says
+  whether this repo's lifecycle has an interview at all, the flag says
+  whether this invocation has a human to hold one with — so passing the flag
+  against a covenant that turned the stage off is refused rather than
+  quietly resolved.
+- `toggles.scope_critic` (off by default) inserts a cold critic between the
+  draft and the interview: a fresh session prompted to attack the draft,
+  whose objections are validated like any other handoff. It is off by
+  default because it spends a whole extra model call per scope and, unlike
+  the rest of this covenant, is not yet a rule the reference system has
+  finished paying for.
+
+Both stages are separate cold processes for the same reason the reviser is:
+a session that has just argued for a plan defends it.
+
 ## What belongs in the covenant file
 
 The file is checked in, and it carries parameters only. The test for

@@ -53,7 +53,14 @@ type Caps struct {
 
 // Toggles switch the lifecycle's optional stages.
 type Toggles struct {
+	// ScopeInterview allows `wand scope --interactive` to grill a human
+	// over its draft before writing anything.
 	ScopeInterview bool
+	// ScopeCritic runs a cold critic over the draft scope before the
+	// interview. Off by default: it costs a whole extra model call per
+	// scope, and unlike the rest of this covenant it is not a rule the
+	// reference system has finished paying for.
+	ScopeCritic bool
 }
 
 // Commands are the three pluggable commands the lifecycle shells out to.
@@ -136,6 +143,34 @@ func Default() Covenant {
 		},
 		Toggles: Toggles{
 			ScopeInterview: true,
+			ScopeCritic:    false,
 		},
 	}
+}
+
+// estimateScales are the values Linear's issueEstimationType accepts, mapped
+// to the points each offers — zero excluded, because Linear's zero is "no
+// estimate" rather than a size, and a scope whose estimate is "none" has not
+// estimated. "notUsed" is a known scale with no points: a team that does not
+// estimate is configured, not broken.
+//
+// These are Linear's base scales. Its extended-estimates setting adds larger
+// values to each, and the covenant does not carry that flag yet — a team
+// running extended estimates will see `wand scope` refuse the extra values
+// until it does.
+var estimateScales = map[string][]int{
+	"notUsed":     nil,
+	"exponential": {1, 2, 4, 8, 16},
+	"fibonacci":   {1, 2, 3, 5, 8},
+	"linear":      {1, 2, 3, 4, 5},
+	"tShirt":      {1, 2, 3, 4, 5},
+}
+
+// EstimateValues returns the point values this covenant's estimate scale
+// offers, in order, or nil when the team does not estimate. Code that writes
+// an estimate validates against this rather than trusting the number it was
+// handed: Linear silently adjusts an off-scale estimate to fit, so an
+// unchecked write lands a number nobody chose.
+func (c Covenant) EstimateValues() []int {
+	return estimateScales[c.IssueEstimationType]
 }

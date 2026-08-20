@@ -58,6 +58,12 @@ type IssueUpdate struct {
 	AssigneeID  string  // user UUID; "" leaves the assignee alone
 	Unassign    bool    // true sends an explicit null: omitting the field would leave the assignee in place
 	Description *string // nil leaves the description alone
+	// Estimate is the issue's size in points. A pointer because zero is a
+	// value Linear accepts ("no estimate"), so it cannot double as "leave
+	// this alone". The caller checks the number against the covenant's
+	// scale first — Linear adjusts an off-scale estimate to fit rather
+	// than refusing it, and a silently adjusted number is one nobody chose.
+	Estimate *int
 }
 
 // UpdateIssue applies one IssueUpdate in a single mutation. Fields that must
@@ -80,6 +86,9 @@ func (c *Client) UpdateIssue(ctx context.Context, issueID string, u IssueUpdate)
 	}
 	if u.Description != nil {
 		input["description"] = *u.Description
+	}
+	if u.Estimate != nil {
+		input["estimate"] = *u.Estimate
 	}
 	if len(input) == 0 {
 		return fmt.Errorf("linear: an issue update with nothing to change")
