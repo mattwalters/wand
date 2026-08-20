@@ -15,9 +15,10 @@ install: brew install mattwalters/wand/wand
 ## What it is
 
 ```console
-$ wand ui --team-key WND
+$ wand ui --sample
 
  wand cockpit · WND                                             6 waiting on you
+  sample board — reads no Linear team, and writes none
 
   Triage  2 to judge
 › WND-42  doctor prints an empty drift section on a clean board              Low
@@ -40,6 +41,9 @@ $ wand ui --team-key WND
 One screen answering one question — *what is waiting on me?* — and the one
 place in wand where a human blesses work. Everything on it is a decision an
 agent is not allowed to make on its own.
+
+That is the built-in sample board: no Linear key, no setup, nothing
+written. `wand ui --team-key WND` shows your team's.
 
 > **Status: early.** `init` bootstraps a Linear team to the covenant and
 > installs the guard hook, `guard` enforces the covenant's authorization
