@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Documentation · wand</title>
+  <link rel="stylesheet" href="../style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="../">wand</a>
+    
+    <a class="nav here" href="../docs/">Docs</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/mattwalters/wand">GitHub</a>
+    <span class="version">
+      latest
+      <select id="version-picker" hidden aria-label="Documentation version"></select>
+    </span>
+  </header>
+  
+  <div class="wrap">
+    
+    <nav class="sidenav">
+      
+      
+      <h5>Start</h5>
+      
+      
+      
+      
+      
+      <a href="../docs/" class="active" aria-current="page">Overview</a>
+      
+      <h5>Doctrine</h5>
+      
+      
+      
+      
+      
+      <a href="../docs/covenant/">The covenant</a>
+      
+      <h5>Commands</h5>
+      
+      
+      
+      
+      
+      <a href="../docs/commands/">All commands</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../docs/commands/init/" class="mono">wand init</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../docs/commands/doctor/" class="mono">wand doctor</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../docs/commands/guard/" class="mono">wand guard</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../docs/commands/queue/" class="mono">wand queue</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../docs/commands/ticket/" class="mono">wand ticket</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../docs/commands/claim/" class="mono">wand claim</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../docs/commands/handback/" class="mono">wand handback</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../docs/commands/abandon/" class="mono">wand abandon</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../docs/commands/file/" class="mono">wand file</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../docs/commands/scope/" class="mono">wand scope</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../docs/commands/run/" class="mono">wand run</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../docs/commands/ui/" class="mono">wand ui</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../docs/commands/version/" class="mono">wand version</a>
+      
+    </nav>
+    
+    <main>
+      
+<h1>Documentation</h1>
+<p>wand wires a repository to a <a href="https://linear.app">Linear</a> team and runs an
+opinionated software development lifecycle through it. These pages are the
+two halves of that: the <strong>doctrine</strong> — what the lifecycle is and why each
+rule in it exists — and the <strong>reference</strong> — what each command does, flag by
+flag and exit code by exit code.</p>
+<p>Read the covenant first if you are deciding whether wand&rsquo;s opinion is one
+you want; read the command reference if you have already decided and need
+to know what a verb does.</p>
+<p>These docs are versioned with the tool. This site&rsquo;s root is the latest
+build and tracks <code>main</code>; every release also publishes a frozen copy at
+<code>/vX.Y.Z/</code>, so a repo pinned to wand vX.Y.Z can read the doctrine matching
+its covenant schema. Pick the version in the header.</p>
+
+
+<dl class="cmdlist">
+  
+  <dt><a href="../docs/covenant/">The covenant</a></dt>
+  <dd>The process contract wand maintains, and the reasoning behind every state and rule in it.</dd>
+  
+  <dt><a href="../docs/commands/">Commands</a></dt>
+  <dd>Every command wand implements, one page each, with its flags and its exit codes.</dd>
+  
+</dl>
+
+
+    </main>
+    
+    
+    
+  </div>
+  <script>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    (function () {
+      var root = new URL("..", document.querySelector('link[rel="stylesheet"]').href);
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          var picker = document.getElementById("version-picker");
+          ["latest"].concat(versions).forEach(function (v) {
+            var option = document.createElement("option");
+            option.value = v;
+            option.textContent = v;
+            option.selected = v === "latest";
+            picker.appendChild(option);
+          });
+          picker.addEventListener("change", function () {
+            window.location.href = new URL(picker.value + "/", root);
+          });
+          picker.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wand run · wand</title>
+  <link rel="stylesheet" href="../../../style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="../../../">wand</a>
+    
+    <a class="nav here" href="../../../docs/">Docs</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/mattwalters/wand">GitHub</a>
+    <span class="version">
+      latest
+      <select id="version-picker" hidden aria-label="Documentation version"></select>
+    </span>
+  </header>
+  
+  <div class="wrap">
+    
+    <nav class="sidenav">
+      
+      
+      <h5>Start</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/">Overview</a>
+      
+      <h5>Doctrine</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/covenant/">The covenant</a>
+      
+      <h5>Commands</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/">All commands</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/init/" class="mono">wand init</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/doctor/" class="mono">wand doctor</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/guard/" class="mono">wand guard</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/queue/" class="mono">wand queue</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/ticket/" class="mono">wand ticket</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/claim/" class="mono">wand claim</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/handback/" class="mono">wand handback</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/abandon/" class="mono">wand abandon</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/file/" class="mono">wand file</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/scope/" class="mono">wand scope</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/run/" class="mono active" aria-current="page">wand run</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/ui/" class="mono">wand ui</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/version/" class="mono">wand version</a>
+      
+    </nav>
+    
+    <main>
+      
+
+<h1 class="cmd">wand run</h1>
+<p><code>run</code> is the core orchestrator: one process owning one blessed ticket from
+claim to a terminal state, spawning a cold worker per phase. Workers do the
+work and are mute; the orchestrator makes <strong>every</strong> Linear and GitHub
+write.</p>
+<h2 id="synopsis">Synopsis</h2>
+<pre tabindex="0"><code>wand run &lt;identifier&gt; [--harness &lt;name&gt;] [--model &lt;m&gt;] [--effort &lt;e&gt;]
+</code></pre><h2 id="what-it-does">What it does</h2>
+<p><code>run</code> claims the ticket exactly as <a href="../claim/"><code>wand claim</code></a> does — in
+Todo, not <code>human-only</code>, no unresolved blockers, one write — then opens a
+run in the journal and works the loop in a run-private git worktree, on the
+branch Linear names for the ticket, started from the remote-tracking ref of
+the repository&rsquo;s default branch (<code>origin/main</code>, not a local <code>main</code> that may
+be stale or absent):</p>
+<ol>
+<li><strong>implement</strong> — a cold worker gets the whole ticket (description and
+comments) and commits its work in the worktree.</li>
+<li><strong>CI</strong> — the orchestrator runs the covenant&rsquo;s verify command. Every
+failure spawns a cold <strong>fix-CI</strong> worker, up to <code>caps.ci_attempts</code>
+failures across the whole run.</li>
+<li>Verify green, the orchestrator pushes and <strong>opens the PR</strong> — titled
+<code>[&lt;identifier&gt;] …</code> at open, repaired at convergence, with the ticket
+referenced in the body as a gloss (identifier, title, link), never a
+bare id. Conventions the orchestrator can make true are made true in
+code, not remembered by agents.</li>
+<li><strong>review</strong> — a cold reviewer reads the branch against the ticket and
+returns a verdict. Findings without a concrete failure scenario are
+dropped in code before anything downstream sees them.</li>
+<li><strong>revise</strong> — surviving findings go to a cold reviser, verify runs
+again, the branch is pushed again, and a fresh reviewer takes the next
+round, up to <code>caps.review_rounds</code> rounds.</li>
+</ol>
+<p>Workers never write Linear or GitHub — they cannot: their environment is
+stripped of every credential, which the isolation conformance suite proves
+per harness. They commit; the orchestrator pushes, opens and titles the PR,
+comments, labels and moves the ticket.</p>
+<h2 id="the-three-terminal-states">The three terminal states</h2>
+<p>Every run ends in exactly one, journaled by the run journal:</p>
+<p><strong>Converged</strong> — the reviewer approved <em>on positive evidence</em> (its handoff
+must state what it verified), and no human review thread on the PR stands
+unresolved. A thread a revision has outdated still counts as unresolved —
+outdated is not answered — and standing threads hand the run back instead
+of converging over them. On convergence the orchestrator posts the summary
+to the ticket, adds the <code>ready-for-human</code> label, moves the ticket to
+In Review, and removes the now-clean worktree. The PR is a human&rsquo;s to
+merge.</p>
+<p><strong>Handed back</strong> — a human owns the next move. The reason is posted as a
+comment <strong>first</strong>, then the ticket moves to Needs Input — in that order,
+always, so a failure between the two never leaves a Needs Input ticket
+that asks nothing. Hand-backs happen when:</p>
+<ul>
+<li>a worker reports itself blocked — the comment quotes the worker&rsquo;s own
+account verbatim, never a canned guess inferred from the phase;</li>
+<li>the fix-CI cap runs out — the comment says so and quotes the last
+failure;</li>
+<li>the review-round cap runs out — the comment quotes the final round&rsquo;s
+findings whole. Convergence only ever happens on positive evidence,
+never on the exhaustion of a counter: a cap that mislabels a real
+final-round finding as &ldquo;a disagreement&rdquo; hands work back unattempted.</li>
+</ul>
+<p><strong>Parked</strong> — the run stopped without deciding: an interrupt (the signal is
+the recorded reason), a worker that left no parseable handoff, a dirty
+tree, a worker timeout. A reviewer that produces no parseable handoff
+<strong>parks</strong> rather than converges — anything else would turn every reviewer
+crash into a clean pass. Parking writes only the journal, deliberately, so
+it is reachable even when Linear itself is what failed. The worktree is
+preserved for inspection.</p>
+<p>A later run of the same ticket resumes its branch: a preserved worktree
+that is clean (everything committed on the branch) is removed and replaced;
+one holding uncommitted work makes the new run refuse, naming the old
+worktree&rsquo;s path — work at risk is a human&rsquo;s call, never collateral of a
+resume. Only wand&rsquo;s own worktrees, though. If the branch is checked out
+somewhere you made — your own <code>git worktree</code>, or the repository itself —
+the run refuses and names it rather than removing it: <code>git worktree remove</code>
+declines uncommitted <em>tracked</em> work and nothing else, so a clean checkout
+would go quietly and take its ignored files (<code>.env</code>, build caches) with
+it.</p>
+<h2 id="what-the-handoff-carries-back">What the handoff carries back</h2>
+<p>Beyond its status, a worker&rsquo;s handoff can carry <strong>description
+corrections</strong> — exact ticket wording its work disproved — and <strong>plan
+deviations</strong>. The orchestrator applies corrections to the ticket (quoting
+the old wording in a comment first, in the same act) and carries deviations
+into the PR body, the terminal comment — converged or handed back alike —
+and the run journal. One writer per ticket, and deviations reach the ticket
+instead of dying in a worker&rsquo;s transcript. A deviation reported by a revise
+worker arrives after the PR body was written, so the hand-back and the
+journal are what carry it; nothing about a run&rsquo;s ending is allowed to be
+the place its account gets dropped.</p>
+<h2 id="flags">Flags</h2>
+<table>
+	<thead>
+			<tr>
+					<th>Flag</th>
+					<th>Meaning</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>--harness</code></td>
+					<td>Worker harness: <code>claude-code</code> (default) or <code>codex</code>.</td>
+			</tr>
+			<tr>
+					<td><code>--model</code></td>
+					<td>Model for every worker. Default: the harness&rsquo;s default.</td>
+			</tr>
+			<tr>
+					<td><code>--effort</code></td>
+					<td>Reasoning effort for every worker. Default: the harness&rsquo;s default.</td>
+			</tr>
+	</tbody>
+</table>
+<h2 id="exit-codes">Exit codes</h2>
+<p>The codes are a contract a scheduler can read:</p>
+<table>
+	<thead>
+			<tr>
+					<th>Code</th>
+					<th>Meaning</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>0</code></td>
+					<td>Converged: In Review, <code>ready-for-human</code>, PR open.</td>
+			</tr>
+			<tr>
+					<td><code>1</code></td>
+					<td>The run never started — refused claim, missing configuration, no journal. Nothing to sweep.</td>
+			</tr>
+			<tr>
+					<td><code>2</code></td>
+					<td>Handed back: Needs Input, with the reason posted as a comment.</td>
+			</tr>
+			<tr>
+					<td><code>3</code></td>
+					<td>Parked: the journal has the reason; the worktree is preserved.</td>
+			</tr>
+	</tbody>
+</table>
+<p>Exit 1 keeps its &ldquo;nothing to sweep&rdquo; promise even when the failure lands
+after the claim: a run whose journal will not open hands the ticket
+straight back (Needs Input, with the store failure as the comment) before
+exiting.</p>
+<h2 id="requirements">Requirements</h2>
+<ul>
+<li><code>LINEAR_API_KEY</code> in the environment.</li>
+<li>An authenticated <code>gh</code> (the orchestrator pushes and opens the PR).</li>
+<li><code>commands.verify</code> in <a href="../../covenant/"><code>wand.toml</code></a> — <code>run</code> refuses to
+start without it, because it cannot tell green from red.</li>
+<li>Run from inside the repository the ticket is about.</li>
+</ul>
+<p>The caps come from the covenant: <code>caps.review_rounds</code>, <code>caps.ci_attempts</code>
+and <code>caps.worker_timeout_minutes</code>, with the stock values applying absent a
+covenant file.</p>
+<h2 id="examples">Examples</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand run WND-42
+</span></span></code></pre></div><pre tabindex="0"><code>claimed WND-42: In Progress, assigned to Ada Lovelace
+run WND-42-20260819T120000Z journaling to ~/.local/state/wand/runs/WND-42-20260819T120000Z
+worktree …/tree on branch ada/wnd-42-adapter-codex (base main)
+phase implement round 1: spawning worker (claude-code)
+verify: make check
+verify: green
+opened PR https://github.com/you/repo/pull/7
+phase review round 1: spawning worker (claude-code)
+run WND-42-20260819T120000Z ended: converged — reviewer approved on round 1; PR … is ready for a human
+</code></pre><h2 id="see-also">See also</h2>
+<p><a href="../claim/"><code>wand claim</code></a> is the claim this command starts with;
+<a href="../handback/"><code>wand handback</code></a> is the ordering rule its hand-backs reuse;
+<a href="../queue/"><code>wand queue</code></a> is where the next identifier comes from.</p>
+
+
+    </main>
+    
+    
+    
+    <nav class="toc">
+      <h5>On this page</h5>
+      <nav id="TableOfContents">
+  <ul>
+    <li><a href="#synopsis">Synopsis</a></li>
+    <li><a href="#what-it-does">What it does</a></li>
+    <li><a href="#the-three-terminal-states">The three terminal states</a></li>
+    <li><a href="#what-the-handoff-carries-back">What the handoff carries back</a></li>
+    <li><a href="#flags">Flags</a></li>
+    <li><a href="#exit-codes">Exit codes</a></li>
+    <li><a href="#requirements">Requirements</a></li>
+    <li><a href="#examples">Examples</a></li>
+    <li><a href="#see-also">See also</a></li>
+  </ul>
+</nav>
+    </nav>
+    
+  </div>
+  <script>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    (function () {
+      var root = new URL("..", document.querySelector('link[rel="stylesheet"]').href);
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          var picker = document.getElementById("version-picker");
+          ["latest"].concat(versions).forEach(function (v) {
+            var option = document.createElement("option");
+            option.value = v;
+            option.textContent = v;
+            option.selected = v === "latest";
+            picker.appendChild(option);
+          });
+          picker.addEventListener("change", function () {
+            window.location.href = new URL(picker.value + "/", root);
+          });
+          picker.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>

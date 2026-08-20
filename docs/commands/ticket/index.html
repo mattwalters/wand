@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wand ticket · wand</title>
+  <link rel="stylesheet" href="../../../style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="../../../">wand</a>
+    
+    <a class="nav here" href="../../../docs/">Docs</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/mattwalters/wand">GitHub</a>
+    <span class="version">
+      latest
+      <select id="version-picker" hidden aria-label="Documentation version"></select>
+    </span>
+  </header>
+  
+  <div class="wrap">
+    
+    <nav class="sidenav">
+      
+      
+      <h5>Start</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/">Overview</a>
+      
+      <h5>Doctrine</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/covenant/">The covenant</a>
+      
+      <h5>Commands</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/">All commands</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/init/" class="mono">wand init</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/doctor/" class="mono">wand doctor</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/guard/" class="mono">wand guard</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/queue/" class="mono">wand queue</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/ticket/" class="mono active" aria-current="page">wand ticket</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/claim/" class="mono">wand claim</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/handback/" class="mono">wand handback</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/abandon/" class="mono">wand abandon</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/file/" class="mono">wand file</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/scope/" class="mono">wand scope</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/run/" class="mono">wand run</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/ui/" class="mono">wand ui</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/version/" class="mono">wand version</a>
+      
+    </nav>
+    
+    <main>
+      
+
+<h1 class="cmd">wand ticket</h1>
+<p><code>ticket</code> renders one issue for someone who knows nothing about it — a
+worker being prompted, or a human catching up on a ticket they last saw
+three weeks ago.</p>
+<h2 id="synopsis">Synopsis</h2>
+<pre tabindex="0"><code>wand ticket &lt;identifier&gt;
+</code></pre><h2 id="what-it-does">What it does</h2>
+<p>Prints a header block (status, priority, assignee, labels, blockers,
+created date, URL), then the description <strong>whole</strong>, then every comment
+oldest-first.</p>
+<p>The description is never truncated. It is the ticket; a summarized ticket
+is a different ticket, and the reader has no way to know what was cut.</p>
+<p>Comments are held to a per-comment budget of 2000 characters rather than a
+whole-ticket one. The reason is the shape of a real conversation: a parked
+ticket usually ends with a short answer from a human, and a whole-ticket
+budget spent on the long analysis at the top would crowd out precisely the
+part that unblocks the reader. Every page of comments is fetched, not just
+the first.</p>
+<p>A cut is never silent. A truncated comment ends with
+<code>[comment truncated: N of M chars shown]</code>, so a cold reader knows to open
+Linear rather than assume they saw everything.</p>
+<p>Ordering is by creation time with the comment id as a tiebreak, sorted by
+wand rather than taken from the API&rsquo;s connection order — the reading order
+of a conversation is not an API detail.</p>
+<h2 id="flags">Flags</h2>
+<p>None. The identifier is a positional argument, and exactly one is
+required.</p>
+<h2 id="exit-codes">Exit codes</h2>
+<table>
+	<thead>
+			<tr>
+					<th>Code</th>
+					<th>Meaning</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>0</code></td>
+					<td>The ticket was printed.</td>
+			</tr>
+			<tr>
+					<td><code>1</code></td>
+					<td>It could not be: no <code>LINEAR_API_KEY</code>, no such identifier, or an API failure.</td>
+			</tr>
+	</tbody>
+</table>
+<h2 id="examples">Examples</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand ticket WND-42
+</span></span></code></pre></div><pre tabindex="0"><code>WND-42  Adapter: codex
+
+status:    In Progress
+priority:  Medium
+assignee:  Ada Lovelace
+labels:    adapter
+blocked:   by WND-8 (Done)
+created:   2026-08-04
+url:       https://linear.app/acme/issue/WND-42/adapter-codex
+
+Add a worker adapter for codex, conforming to the isolation suite ...
+
+comments (1):
+
+--- Ada Lovelace, 2026-08-11 09:22 ---
+The isolation flags differ from the Claude Code adapter&#39;s; see the
+conformance run in the linked PR.
+</code></pre><p>Feed one to a worker as its whole briefing:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand ticket WND-42 <span class="p">|</span> my-worker --prompt-stdin
+</span></span></code></pre></div>
+
+    </main>
+    
+    
+    
+    <nav class="toc">
+      <h5>On this page</h5>
+      <nav id="TableOfContents">
+  <ul>
+    <li><a href="#synopsis">Synopsis</a></li>
+    <li><a href="#what-it-does">What it does</a></li>
+    <li><a href="#flags">Flags</a></li>
+    <li><a href="#exit-codes">Exit codes</a></li>
+    <li><a href="#examples">Examples</a></li>
+  </ul>
+</nav>
+    </nav>
+    
+  </div>
+  <script>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    (function () {
+      var root = new URL("..", document.querySelector('link[rel="stylesheet"]').href);
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          var picker = document.getElementById("version-picker");
+          ["latest"].concat(versions).forEach(function (v) {
+            var option = document.createElement("option");
+            option.value = v;
+            option.textContent = v;
+            option.selected = v === "latest";
+            picker.appendChild(option);
+          });
+          picker.addEventListener("change", function () {
+            window.location.href = new URL(picker.value + "/", root);
+          });
+          picker.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>

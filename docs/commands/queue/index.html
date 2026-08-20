@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wand queue · wand</title>
+  <link rel="stylesheet" href="../../../style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="../../../">wand</a>
+    
+    <a class="nav here" href="../../../docs/">Docs</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/mattwalters/wand">GitHub</a>
+    <span class="version">
+      latest
+      <select id="version-picker" hidden aria-label="Documentation version"></select>
+    </span>
+  </header>
+  
+  <div class="wrap">
+    
+    <nav class="sidenav">
+      
+      
+      <h5>Start</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/">Overview</a>
+      
+      <h5>Doctrine</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/covenant/">The covenant</a>
+      
+      <h5>Commands</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/">All commands</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/init/" class="mono">wand init</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/doctor/" class="mono">wand doctor</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/guard/" class="mono">wand guard</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/queue/" class="mono active" aria-current="page">wand queue</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/ticket/" class="mono">wand ticket</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/claim/" class="mono">wand claim</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/handback/" class="mono">wand handback</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/abandon/" class="mono">wand abandon</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/file/" class="mono">wand file</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/scope/" class="mono">wand scope</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/run/" class="mono">wand run</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/ui/" class="mono">wand ui</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/version/" class="mono">wand version</a>
+      
+    </nav>
+    
+    <main>
+      
+
+<h1 class="cmd">wand queue</h1>
+<p><code>queue</code> answers one question: what should be picked up next. It prints the
+team&rsquo;s Todo issues in start order, with the ones an agent may not start
+separated out and labelled with the reason.</p>
+<h2 id="synopsis">Synopsis</h2>
+<pre tabindex="0"><code>wand queue --team-key KEY
+</code></pre><h2 id="what-it-does">What it does</h2>
+<h3 id="the-order">The order</h3>
+<p>Priority ascending, so Urgent leads and <strong>No priority sorts last</strong> — Linear
+stores &ldquo;no priority&rdquo; as <code>0</code>, and a naive ascending sort would rank
+unranked work above everything. Within a priority, oldest first: work that
+has waited longest goes first. Identifier is the final tiebreak, so two
+readers looking at the same board at the same moment agree on what is next.</p>
+<h3 id="the-vetting">The vetting</h3>
+<p>An issue is printed under <code>skipped:</code> when an agent may not start it:</p>
+<ul>
+<li><strong>labeled <code>human-only</code></strong> — reserved for a person, whatever its rank;</li>
+<li><strong>blocked by an issue that is not completed or canceled.</strong> A <em>started</em>
+blocker still blocks. &ldquo;It&rsquo;s already In Progress&rdquo; is precisely the race
+the blocked-by relation exists to prevent.</li>
+</ul>
+<p>Skipped issues are printed, never dropped. A queue that quietly comes up
+short reads exactly like a queue in order, and the reader has no way to
+tell that three things were hidden from them.</p>
+<p>An empty Todo prints <code>Todo is empty: nothing for you right now.</code> and exits
+<code>0</code>. Nothing to do is not an error.</p>
+<h2 id="flags">Flags</h2>
+<table>
+	<thead>
+			<tr>
+					<th>Flag</th>
+					<th>Description</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>--team-key KEY</code></td>
+					<td>The Linear team key, e.g. <code>WND</code>. <strong>Required.</strong></td>
+			</tr>
+	</tbody>
+</table>
+<h2 id="exit-codes">Exit codes</h2>
+<table>
+	<thead>
+			<tr>
+					<th>Code</th>
+					<th>Meaning</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>0</code></td>
+					<td>The queue was read and printed — <strong>including when it is empty</strong>, and when every issue in it was vetted out.</td>
+			</tr>
+			<tr>
+					<td><code>1</code></td>
+					<td>The queue could not be read: no <code>LINEAR_API_KEY</code>, no <code>--team-key</code>, a broken <code>wand.toml</code>, or an API failure.</td>
+			</tr>
+	</tbody>
+</table>
+<p>Do not script <code>wand queue</code> as if a non-zero exit meant &ldquo;nothing to do&rdquo;.
+Read the output.</p>
+<h2 id="examples">Examples</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand queue --team-key WND
+</span></span></code></pre></div><pre tabindex="0"><code>WND-31  Urgent       Guard: uuid state values pass unchecked
+WND-24  Medium       Docs: command reference pages for every implemented command
+WND-19  No priority  Adapter: codex
+
+skipped:
+WND-28  labeled human-only
+WND-30  blocked by WND-28 (In Progress)
+</code></pre><p>Then take the top of the list:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand claim WND-31
+</span></span></code></pre></div><h2 id="see-also">See also</h2>
+<p><a href="../ticket/"><code>wand ticket</code></a> prints one of these whole, for a reader with no
+context. <a href="../claim/"><code>wand claim</code></a> vets an issue exactly as <code>queue</code> does,
+then takes it.</p>
+
+
+    </main>
+    
+    
+    
+    <nav class="toc">
+      <h5>On this page</h5>
+      <nav id="TableOfContents">
+  <ul>
+    <li><a href="#synopsis">Synopsis</a></li>
+    <li><a href="#what-it-does">What it does</a>
+      <ul>
+        <li><a href="#the-order">The order</a></li>
+        <li><a href="#the-vetting">The vetting</a></li>
+      </ul>
+    </li>
+    <li><a href="#flags">Flags</a></li>
+    <li><a href="#exit-codes">Exit codes</a></li>
+    <li><a href="#examples">Examples</a></li>
+    <li><a href="#see-also">See also</a></li>
+  </ul>
+</nav>
+    </nav>
+    
+  </div>
+  <script>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    (function () {
+      var root = new URL("..", document.querySelector('link[rel="stylesheet"]').href);
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          var picker = document.getElementById("version-picker");
+          ["latest"].concat(versions).forEach(function (v) {
+            var option = document.createElement("option");
+            option.value = v;
+            option.textContent = v;
+            option.selected = v === "latest";
+            picker.appendChild(option);
+          });
+          picker.addEventListener("change", function () {
+            window.location.href = new URL(picker.value + "/", root);
+          });
+          picker.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>

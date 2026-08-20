@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wand file · wand</title>
+  <link rel="stylesheet" href="../../../style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="../../../">wand</a>
+    
+    <a class="nav here" href="../../../docs/">Docs</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/mattwalters/wand">GitHub</a>
+    <span class="version">
+      latest
+      <select id="version-picker" hidden aria-label="Documentation version"></select>
+    </span>
+  </header>
+  
+  <div class="wrap">
+    
+    <nav class="sidenav">
+      
+      
+      <h5>Start</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/">Overview</a>
+      
+      <h5>Doctrine</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/covenant/">The covenant</a>
+      
+      <h5>Commands</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/">All commands</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/init/" class="mono">wand init</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/doctor/" class="mono">wand doctor</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/guard/" class="mono">wand guard</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/queue/" class="mono">wand queue</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/ticket/" class="mono">wand ticket</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/claim/" class="mono">wand claim</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/handback/" class="mono">wand handback</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/abandon/" class="mono">wand abandon</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/file/" class="mono active" aria-current="page">wand file</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/scope/" class="mono">wand scope</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/run/" class="mono">wand run</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/ui/" class="mono">wand ui</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/version/" class="mono">wand version</a>
+      
+    </nav>
+    
+    <main>
+      
+
+<h1 class="cmd">wand file</h1>
+<p><code>file</code> is how a session records something it found that is not its ticket.
+It searches for near-duplicates first, then files into Triage with the
+<code>agent-filed</code> label.</p>
+<h2 id="synopsis">Synopsis</h2>
+<pre tabindex="0"><code>wand file &lt;title&gt; --team-key KEY [-d DESCRIPTION] [--force]
+</code></pre><h2 id="what-it-does">What it does</h2>
+<p><strong>The search comes first, and it can stop the whole command.</strong> If the
+search finds candidates, nothing is filed: the candidates are printed with
+their statuses, and the command fails. Read them, then either comment on
+the issue that already exists or re-run with <code>--force</code>.</p>
+<p>Search-first is the rule because a duplicate filed is a duplicate a human
+must later notice, judge and close. The cheap moment to catch it is before
+it exists.</p>
+<p>Past the search, the issue lands with:</p>
+<ul>
+<li>status <strong>Triage</strong> — not Backlog, not Todo;</li>
+<li>the <strong><code>agent-filed</code></strong> label, so a human can see at a glance where their
+triage queue came from;</li>
+<li><strong>no priority</strong> and <strong>no assignee</strong>.</li>
+</ul>
+<p>Ranking work and owning it are part of blessing it, and an agent never
+promotes what it filed. That is not just convention here —
+<a href="../guard/"><code>wand guard</code></a> blocks the write.</p>
+<h2 id="flags">Flags</h2>
+<table>
+	<thead>
+			<tr>
+					<th>Flag</th>
+					<th>Description</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>--team-key KEY</code></td>
+					<td>The Linear team key, e.g. <code>WND</code>. <strong>Required.</strong></td>
+			</tr>
+			<tr>
+					<td><code>-d</code>, <code>--description TEXT</code></td>
+					<td>The finding: what you saw, where, and why it matters.</td>
+			</tr>
+			<tr>
+					<td><code>--force</code></td>
+					<td>File even though the search found candidates.</td>
+			</tr>
+	</tbody>
+</table>
+<p>The title is a positional argument, and exactly one is required.</p>
+<h2 id="exit-codes">Exit codes</h2>
+<table>
+	<thead>
+			<tr>
+					<th>Code</th>
+					<th>Meaning</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>0</code></td>
+					<td>Filed. The identifier and URL are on stdout.</td>
+			</tr>
+			<tr>
+					<td><code>1</code></td>
+					<td>Not filed. <strong>This includes the duplicate refusal</strong>, which is the expected outcome often enough to be worth scripting for — the candidates are on stdout, the refusal on stderr. Also covers a missing <code>--team-key</code>, an empty title, no team with that key, and API failures.</td>
+			</tr>
+	</tbody>
+</table>
+<h2 id="examples">Examples</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand file <span class="s2">&#34;Guard: uuid state values pass unchecked&#34;</span> <span class="se">\
+</span></span></span><span class="line"><span class="cl">  --team-key WND <span class="se">\
+</span></span></span><span class="line"><span class="cl">  -d <span class="s2">&#34;CheckState matches names and types but not ids, so a
+</span></span></span><span class="line"><span class="cl"><span class="s2">      model that looks up the uuid first gets a forbidden
+</span></span></span><span class="line"><span class="cl"><span class="s2">      write through. Known gap in the package doc.&#34;</span>
+</span></span></code></pre></div><pre tabindex="0"><code>filed WND-51 into Triage (agent-filed): Guard: uuid state values pass unchecked
+url:   https://linear.app/acme/issue/WND-51/guard-uuid-state-values-pass-unchecked
+</code></pre><p>The search finding something:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand file <span class="s2">&#34;Guard: uuid state values pass unchecked&#34;</span> --team-key WND
+</span></span></code></pre></div><pre tabindex="0"><code>the search found existing issues near that title:
+  WND-31  Backlog      Guard: raw uuid state values are not matched
+</code></pre><p>and, on stderr, the refusal that makes the exit non-zero:</p>
+<pre tabindex="0"><code>  ERROR
+
+  Not filed: rule these out first — comment on the existing issue, or
+  re-run with --force if this is genuinely new work.
+</code></pre><h2 id="see-also">See also</h2>
+<p><a href="../abandon/"><code>wand abandon</code></a> when the thing you found undoes the ticket
+you are on, rather than being separate work.</p>
+
+
+    </main>
+    
+    
+    
+    <nav class="toc">
+      <h5>On this page</h5>
+      <nav id="TableOfContents">
+  <ul>
+    <li><a href="#synopsis">Synopsis</a></li>
+    <li><a href="#what-it-does">What it does</a></li>
+    <li><a href="#flags">Flags</a></li>
+    <li><a href="#exit-codes">Exit codes</a></li>
+    <li><a href="#examples">Examples</a></li>
+    <li><a href="#see-also">See also</a></li>
+  </ul>
+</nav>
+    </nav>
+    
+  </div>
+  <script>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    (function () {
+      var root = new URL("..", document.querySelector('link[rel="stylesheet"]').href);
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          var picker = document.getElementById("version-picker");
+          ["latest"].concat(versions).forEach(function (v) {
+            var option = document.createElement("option");
+            option.value = v;
+            option.textContent = v;
+            option.selected = v === "latest";
+            picker.appendChild(option);
+          });
+          picker.addEventListener("change", function () {
+            window.location.href = new URL(picker.value + "/", root);
+          });
+          picker.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>

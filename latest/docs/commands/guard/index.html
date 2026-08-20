@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wand guard · wand</title>
+  <link rel="stylesheet" href="../../../style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="../../../">wand</a>
+    
+    <a class="nav here" href="../../../docs/">Docs</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/mattwalters/wand">GitHub</a>
+    <span class="version">
+      latest
+      <select id="version-picker" hidden aria-label="Documentation version"></select>
+    </span>
+  </header>
+  
+  <div class="wrap">
+    
+    <nav class="sidenav">
+      
+      
+      <h5>Start</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/">Overview</a>
+      
+      <h5>Doctrine</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/covenant/">The covenant</a>
+      
+      <h5>Commands</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/">All commands</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/init/" class="mono">wand init</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/doctor/" class="mono">wand doctor</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/guard/" class="mono active" aria-current="page">wand guard</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/queue/" class="mono">wand queue</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/ticket/" class="mono">wand ticket</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/claim/" class="mono">wand claim</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/handback/" class="mono">wand handback</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/abandon/" class="mono">wand abandon</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/file/" class="mono">wand file</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/scope/" class="mono">wand scope</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/run/" class="mono">wand run</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/ui/" class="mono">wand ui</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/version/" class="mono">wand version</a>
+      
+    </nav>
+    
+    <main>
+      
+
+<h1 class="cmd">wand guard</h1>
+<p><code>guard</code> is the enforcement point of the covenant&rsquo;s authorization rules. It
+runs as a <code>PreToolUse</code> hook: the harness hands it a pending tool call as
+JSON on stdin, and its exit code decides whether that call happens.</p>
+<p>You do not normally run it by hand. <a href="../init/"><code>wand init</code></a> installs the
+hook entry that routes Linear <code>save_issue</code> calls here.</p>
+<h2 id="synopsis">Synopsis</h2>
+<pre tabindex="0"><code>wand guard &lt; tool-call.json
+</code></pre><h2 id="what-it-does">What it does</h2>
+<p>The lifecycle&rsquo;s prose already says an agent never promotes a ticket to Todo
+and never closes one. Prose is advisory. In the production system wand is
+extracted from, that rule was written down in two places and a run still
+landed a ticket in Todo — a correctly written instruction that is only
+sometimes followed looks, from the outside, exactly like one that was never
+written. So the rule is a program instead.</p>
+<p><code>guard</code> reads the pending call, and blocks it when <strong>all</strong> of these hold:</p>
+<ul>
+<li>the tool name matches <code>mcp__.*__save_issue</code> — any Linear MCP connector,
+because the connector id changes when Linear is reconnected;</li>
+<li>the call sets a <code>state</code>;</li>
+<li>that state is one only a human may set.</li>
+</ul>
+<h3 id="the-forbidden-states">The forbidden states</h3>
+<table>
+	<thead>
+			<tr>
+					<th>Blocked</th>
+					<th>Why</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>Todo</code>, <code>To do</code></td>
+					<td>Todo blesses work — the gate between &ldquo;written down&rdquo; and &ldquo;a bot may act on this unattended&rdquo;.</td>
+			</tr>
+			<tr>
+					<td><code>Scoping</code></td>
+					<td>The same blessing one rung lower: a ticket in Scoping is one a dispatcher may spend a scout on unattended.</td>
+			</tr>
+			<tr>
+					<td><code>Done</code>, <code>Canceled</code>, <code>Cancelled</code>, <code>Duplicate</code></td>
+					<td>Closing a ticket is a human&rsquo;s call, however obsolete the ticket looks.</td>
+			</tr>
+	</tbody>
+</table>
+<p>Matching is on the trimmed, whitespace-collapsed, lowercased value, and
+covers Linear&rsquo;s state <em>types</em> as well as its names: <code>completed</code> and
+<code>canceled</code> block, and <code>unstarted</code> blocks with a message asking the caller
+to name the status instead, since it covers Todo, Needs Input and Scoping
+alike.</p>
+<p>Every status an agent legitimately sets passes: <strong>In Progress</strong>, <strong>In
+Review</strong>, <strong>Needs Input</strong>, <strong>Backlog</strong>, <strong>Triage</strong>. So does every write
+that is not a status move — assigning, relabelling, editing a description.
+A guard that blocked ordinary work would be routed around within a day.</p>
+<p>Note the direction. Moving a ticket <em>into</em> Scoping is a promotion and is
+refused; moving one <em>out</em> of Scoping to Needs Input is what every scope
+ends with, and it is allowed. The guard sees only the destination.</p>
+<h3 id="the-block-message-is-most-of-the-value">The block message is most of the value</h3>
+<p>A blocked agent that is not told where to go next improvises, which is how
+tickets reach Todo in the first place. Each refusal names the correct
+alternative with its verb — <a href="../handback/"><code>wand handback</code></a> for a question,
+<a href="../abandon/"><code>wand abandon</code></a> for a ticket the evidence undoes — because
+those encode orderings a raw status write skips.</p>
+<h3 id="known-gap">Known gap</h3>
+<p>Linear&rsquo;s <code>state</code> parameter accepts &ldquo;a state type, name, or ID&rdquo;. Names and
+types are matched; a raw UUID is not. The ids are per-workspace, and
+hardcoding them would rot silently the first time a status is recreated.
+In practice a model writes <code>state: &quot;Todo&quot;</code>, not a uuid it would have to
+look up first.</p>
+<h2 id="flags">Flags</h2>
+<p>None.</p>
+<h2 id="exit-codes">Exit codes</h2>
+<p>The exit code is the entire hook protocol, and it is pinned by a test in
+<code>e2e/</code> that drives the compiled binary the way the harness does.</p>
+<table>
+	<thead>
+			<tr>
+					<th>Code</th>
+					<th>Meaning</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>2</code></td>
+					<td><strong>Blocked.</strong> The reason is on stderr, and the harness shows it to the agent.</td>
+			</tr>
+			<tr>
+					<td><code>0</code></td>
+					<td>Allowed.</td>
+			</tr>
+	</tbody>
+</table>
+<p>Any exit code other than <code>2</code> allows the call — that is the harness&rsquo;s rule,
+not wand&rsquo;s.</p>
+<p><strong><code>guard</code> fails open, deliberately.</strong> Input that does not decode — garbage,
+empty stdin, a <code>tool_input</code> that is not an object — exits <code>0</code>. A broken
+guard must never wedge a session. The cost of that choice is that a
+corrupted hook silently protects nothing, which is why the matcher is loose
+and why <a href="../doctor/"><code>wand doctor</code></a> exists.</p>
+<h2 id="examples">Examples</h2>
+<p>The hook entry <code>wand init</code> writes into <code>.claude/settings.json</code>:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-json" data-lang="json"><span class="line"><span class="cl"><span class="p">{</span>
+</span></span><span class="line"><span class="cl">  <span class="nt">&#34;hooks&#34;</span><span class="p">:</span> <span class="p">{</span>
+</span></span><span class="line"><span class="cl">    <span class="nt">&#34;PreToolUse&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">      <span class="p">{</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;matcher&#34;</span><span class="p">:</span> <span class="s2">&#34;mcp__.*__save_issue&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">        <span class="nt">&#34;hooks&#34;</span><span class="p">:</span> <span class="p">[</span>
+</span></span><span class="line"><span class="cl">          <span class="p">{</span>
+</span></span><span class="line"><span class="cl">            <span class="nt">&#34;type&#34;</span><span class="p">:</span> <span class="s2">&#34;command&#34;</span><span class="p">,</span>
+</span></span><span class="line"><span class="cl">            <span class="nt">&#34;command&#34;</span><span class="p">:</span> <span class="s2">&#34;wand guard&#34;</span>
+</span></span><span class="line"><span class="cl">          <span class="p">}</span>
+</span></span><span class="line"><span class="cl">        <span class="p">]</span>
+</span></span><span class="line"><span class="cl">      <span class="p">}</span>
+</span></span><span class="line"><span class="cl">    <span class="p">]</span>
+</span></span><span class="line"><span class="cl">  <span class="p">}</span>
+</span></span><span class="line"><span class="cl"><span class="p">}</span>
+</span></span></code></pre></div><p>Check a verdict by hand:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="nb">echo</span> <span class="s1">&#39;{&#34;tool_name&#34;:&#34;mcp__linear__save_issue&#34;,&#34;tool_input&#34;:{&#34;id&#34;:&#34;WND-1&#34;,&#34;state&#34;:&#34;Todo&#34;}}&#39;</span> <span class="se">\
+</span></span></span><span class="line"><span class="cl">  <span class="p">|</span> wand guard<span class="p">;</span> <span class="nb">echo</span> <span class="s2">&#34;exit </span><span class="nv">$?</span><span class="s2">&#34;</span>
+</span></span></code></pre></div><pre tabindex="0"><code>Blocked by wand guard
+
+Moving a ticket to **Todo** is the human&#39;s call. ...
+exit 2
+</code></pre><p>An allowed write:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="nb">echo</span> <span class="s1">&#39;{&#34;tool_name&#34;:&#34;mcp__linear__save_issue&#34;,&#34;tool_input&#34;:{&#34;id&#34;:&#34;WND-1&#34;,&#34;state&#34;:&#34;In Review&#34;}}&#39;</span> <span class="se">\
+</span></span></span><span class="line"><span class="cl">  <span class="p">|</span> wand guard<span class="p">;</span> <span class="nb">echo</span> <span class="s2">&#34;exit </span><span class="nv">$?</span><span class="s2">&#34;</span>
+</span></span></code></pre></div><pre tabindex="0"><code>exit 0
+</code></pre>
+
+    </main>
+    
+    
+    
+    <nav class="toc">
+      <h5>On this page</h5>
+      <nav id="TableOfContents">
+  <ul>
+    <li><a href="#synopsis">Synopsis</a></li>
+    <li><a href="#what-it-does">What it does</a>
+      <ul>
+        <li><a href="#the-forbidden-states">The forbidden states</a></li>
+        <li><a href="#the-block-message-is-most-of-the-value">The block message is most of the value</a></li>
+        <li><a href="#known-gap">Known gap</a></li>
+      </ul>
+    </li>
+    <li><a href="#flags">Flags</a></li>
+    <li><a href="#exit-codes">Exit codes</a></li>
+    <li><a href="#examples">Examples</a></li>
+  </ul>
+</nav>
+    </nav>
+    
+  </div>
+  <script>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    (function () {
+      var root = new URL("..", document.querySelector('link[rel="stylesheet"]').href);
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          var picker = document.getElementById("version-picker");
+          ["latest"].concat(versions).forEach(function (v) {
+            var option = document.createElement("option");
+            option.value = v;
+            option.textContent = v;
+            option.selected = v === "latest";
+            picker.appendChild(option);
+          });
+          picker.addEventListener("change", function () {
+            window.location.href = new URL(picker.value + "/", root);
+          });
+          picker.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>

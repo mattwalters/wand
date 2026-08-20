@@ -1,5 +1,176 @@
 <!DOCTYPE html>
-<meta charset="utf-8">
-<meta http-equiv="refresh" content="0; url=./latest/">
-<title>wand</title>
-<a href="./latest/">wand documentation</a>
+<html lang="en">
+<head>
+	<meta name="generator" content="Hugo 0.165.0">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wand</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="./">wand</a>
+    
+    <a class="nav" href="./docs/">Docs</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/mattwalters/wand">GitHub</a>
+    <span class="version">
+      latest
+      <select id="version-picker" hidden aria-label="Documentation version"></select>
+    </span>
+  </header>
+  
+  <div class="wrap wrap-home">
+    
+    <main>
+      
+
+<section class="hero">
+  <div class="bleed">
+    <h1 class="wordmark">wand</h1>
+    <p class="tagline">An agent toolkit for repositories.</p>
+    <div class="lede">wand sets up and maintains a repo&rsquo;s agent machinery — its covenant, and
+the blessing path work travels along. It wires a repository to a
+<a href="https://linear.app">Linear</a> team and runs an opinionated lifecycle
+through it, built for the reality that much of the work in a repo is now
+done by coding agents — and that the dangerous part of agent work is not
+the code. It is the authorization: what a bot may start, what it may
+close, and what only a human may decide.</div>
+    
+    <div class="hero-install">
+      <pre><code>brew install mattwalters/wand/wand</code></pre>
+      <a href="#install">Other ways to install</a>
+    </div>
+    
+  </div>
+</section>
+
+
+
+  
+
+
+<nav class="pagenav">
+  <div class="bleed">
+    <a href="#what-it-is">What it is</a><a href="#install">Install</a><a href="#start-here">Start here</a>
+  </div>
+</nav>
+
+<div class="bleed prose">
+  <h2 id="what-it-is">What it is</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-console" data-lang="console"><span class="line"><span class="cl"><span class="gp">$</span> wand ui --sample
+</span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="go"> wand cockpit · WND                                             6 waiting on you
+</span></span></span><span class="line"><span class="cl"><span class="go">  sample board — reads no Linear team, and writes none
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="go">  Triage  2 to judge
+</span></span></span><span class="line"><span class="cl"><span class="go">› WND-42  doctor prints an empty drift section on a clean board              Low
+</span></span></span><span class="line"><span class="cl"><span class="go">  WND-41  guard: a raw state UUID is not matched
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="go">  Needs Input  1 to answer
+</span></span></span><span class="line"><span class="cl"><span class="go">  WND-38  Second harness adapter: which one?                                High
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="go">  Ready for human  1 to look at
+</span></span></span><span class="line"><span class="cl"><span class="go">  WND-35  Run journal and lease store                                  In Review
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="go">  Lanes  2 to resolve
+</span></span></span><span class="line"><span class="cl"><span class="go">  stuck    WND-36  held by pid 48213 on studio.local, which is gone; the run …
+</span></span></span><span class="line"><span class="cl"><span class="go">  parked   WND-33  the worktree was dirty at handoff; refusing to park noise …
+</span></span></span><span class="line"><span class="cl"><span class="err">
+</span></span></span><span class="line"><span class="cl"><span class="go">  judge  t ✦Todo  s ✦Scoping  b Backlog  u unranked  d duplicate  x cancel
+</span></span></span><span class="line"><span class="cl"><span class="go">  ↑/k ↓/j move • enter open • q quit
+</span></span></span></code></pre></div><p>One screen answering one question — <em>what is waiting on me?</em> — and the one
+place in wand where a human blesses work. Everything on it is a decision an
+agent is not allowed to make on its own.</p>
+<p>That is the built-in sample board: no Linear key, no setup, nothing
+written. <code>wand ui --team-key WND</code> shows your team&rsquo;s.</p>
+<blockquote>
+<p><strong>Status: early.</strong> <code>init</code> bootstraps a Linear team to the covenant and
+installs the guard hook, <code>guard</code> enforces the covenant&rsquo;s authorization
+rules, <code>queue</code> and <code>ticket</code> are the read layer, <code>doctor</code> reports drift,
+and <code>scope</code> and <code>run</code> are the first two orchestrators. <code>dispatch</code>, the
+last one, is not built yet.</p>
+</blockquote>
+<p><strong>A covenant, not a config file.</strong> The state graph — Triage → Backlog →
+Scoping → Todo → Needs Input → In Progress → In Review → Done — is wand&rsquo;s
+opinion, gofmt-style. A checked-in <code>wand.toml</code> carries the <em>parameters</em> of
+the machine — status names, caps, commands — never its shape.
+<a href="docs/covenant/">The covenant</a> is the reasoning behind every state in it.</p>
+<p><strong>A guard that outranks the agent.</strong> Promoting to Todo blesses building,
+promoting to Scoping blesses research, and Done, Canceled and Duplicate
+close a ticket. Those are a human&rsquo;s call, so
+<a href="docs/commands/guard/"><code>wand guard</code></a> refuses them — as a harness hook, on the
+tool call, before the write happens.</p>
+<p><strong>Verbs instead of raw API calls.</strong> <a href="docs/commands/claim/"><code>claim</code></a>,
+<a href="docs/commands/handback/"><code>handback</code></a>, <a href="docs/commands/abandon/"><code>abandon</code></a> and
+<a href="docs/commands/file/"><code>file</code></a> each encode an ordering rule that used to live in
+prose, where it was followed only sometimes: the question is posted before
+the ticket parks on it, the evidence before the demotion, the duplicate
+search before the filing.</p>
+<p><strong>Orchestrators that hand back.</strong> <a href="docs/commands/scope/"><code>wand scope</code></a> sends
+a cold, read-only scout over one ticket and writes a plan plus the argued
+options a human blesses it on — ending at Needs Input, never at Todo.
+<a href="docs/commands/run/"><code>wand run</code></a> takes a ticket a human <em>has</em> blessed and
+drives it through implement → CI → review → revise. Neither ever blesses
+its own work.</p>
+<h2 id="install">Install</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">brew install mattwalters/wand/wand
+</span></span></code></pre></div><p>Or with Go:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">go install github.com/mattwalters/wand@latest
+</span></span></code></pre></div><p>That puts <code>wand</code> in <code>$(go env GOPATH)/bin</code>, which needs to be on your
+<code>PATH</code>. Prebuilt binaries for macOS, Linux and Windows are on the
+<a href="https://github.com/mattwalters/wand/releases">releases page</a>.</p>
+<h2 id="start-here">Start here</h2>
+<p><a href="docs/">The documentation</a> — the doctrine and the reference, versioned with
+the tool. It is also the Docs link in the header, on every page.</p>
+<p><a href="docs/commands/ui/">The cockpit</a> — <code>wand ui</code>: one screen answering one
+question, <em>what is waiting on me?</em>, and the one place in wand a human
+blesses work.</p>
+<p><a href="docs/covenant/">The covenant</a> — the process contract wand maintains, and
+the reasoning behind every state and rule in it. The covenant file carries
+the parameters; this page carries the <em>why</em>, which deliberately does not
+live in the file.</p>
+<p><a href="docs/commands/">Commands</a> — every command wand implements, one page each,
+with its flags, its exit codes and what it is for.</p>
+
+</div>
+
+    </main>
+    
+    
+    
+  </div>
+  <script>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    (function () {
+      var root = new URL("..", document.querySelector('link[rel="stylesheet"]').href);
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          var picker = document.getElementById("version-picker");
+          ["latest"].concat(versions).forEach(function (v) {
+            var option = document.createElement("option");
+            option.value = v;
+            option.textContent = v;
+            option.selected = v === "latest";
+            picker.appendChild(option);
+          });
+          picker.addEventListener("change", function () {
+            window.location.href = new URL(picker.value + "/", root);
+          });
+          picker.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>
