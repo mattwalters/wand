@@ -39,6 +39,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -88,6 +89,25 @@ type Spec struct {
 	// harness. Empty means the harness's default.
 	Model  string
 	Effort string
+
+	// Out, if set, receives a periodic heartbeat line while the worker is
+	// outstanding — "<Label>: Nm elapsed, Mm left" — so a slow phase and a
+	// wedged one are distinguishable from outside. Nil means no heartbeat,
+	// which is why every existing Spec literal keeps compiling unchanged.
+	// This is narration only, never read back by Run or anything else.
+	Out io.Writer
+
+	// Label names the phase in the heartbeat line ("implement round 1").
+	// Unused when Out is nil.
+	Label string
+
+	// HeartbeatInterval is how often the heartbeat writes. Zero means the
+	// package default (heartbeatInterval).
+	HeartbeatInterval time.Duration
+
+	// Clock is the heartbeat's clock. Nil means time.Now — tests set it so
+	// heartbeat timing is reproducible, matching journal.Store.Now.
+	Clock func() time.Time
 }
 
 // Paths in a Spec must be absolute: the worker resolves a relative path
@@ -316,7 +336,9 @@ func Run(ctx context.Context, a Adapter, spec Spec) (Result, error) {
 	SetupProcessGroup(cmd)
 	cmd.WaitDelay = WaitDelay
 
+	stopHeartbeat := startHeartbeat(runCtx, spec)
 	runErr := cmd.Run()
+	stopHeartbeat()
 
 	res := Result{ExitCode: -1, Output: out.String()}
 	if cmd.ProcessState != nil {
@@ -347,6 +369,66 @@ func Run(ctx context.Context, a Adapter, spec Spec) (Result, error) {
 		return res, fmt.Errorf("worker: %s exited %d without a usable handoff: %w", a.Name(), res.ExitCode, herr)
 	}
 	return res, nil
+}
+
+// heartbeatInterval is the default period between heartbeat lines, used
+// when Spec.HeartbeatInterval is zero.
+const heartbeatInterval = 60 * time.Second
+
+// startHeartbeat starts (unless spec.Out is nil) a goroutine that writes a
+// periodic "<Label>: Nm elapsed, Mm left" line to spec.Out while ctx is
+// live, and returns a function that stops the goroutine and blocks until it
+// has exited. The caller must call the returned function before returning
+// from Run, so nothing writes to spec.Out after Run has handed control back
+// — a heartbeat racing the caller's own use of the same writer is exactly
+// the bug this exists to avoid.
+func startHeartbeat(ctx context.Context, spec Spec) func() {
+	if spec.Out == nil {
+		return func() {}
+	}
+	interval := spec.HeartbeatInterval
+	if interval <= 0 {
+		interval = heartbeatInterval
+	}
+	clock := spec.Clock
+	if clock == nil {
+		clock = time.Now
+	}
+	start := clock()
+
+	done := make(chan struct{})
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-done:
+				return
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				fmt.Fprint(spec.Out, heartbeatLine(spec.Label, spec.Timeout, clock().Sub(start)))
+			}
+		}
+	}()
+	return func() {
+		close(done)
+		<-stopped
+	}
+}
+
+// heartbeatLine renders one heartbeat line: elapsed since the worker
+// started, and what remains of the timeout budget, clamped at zero so an
+// elapsed run past its deadline (which Run then kills) never prints a
+// negative remainder in the sliver before the kill lands.
+func heartbeatLine(label string, timeout, elapsed time.Duration) string {
+	remaining := timeout - elapsed
+	if remaining < 0 {
+		remaining = 0
+	}
+	return fmt.Sprintf("%s: %dm elapsed, %dm left\n", label, int64(elapsed/time.Minute), int64(remaining/time.Minute))
 }
 
 // WaitDelay bounds how long a Run waits, after the child exits or the kill

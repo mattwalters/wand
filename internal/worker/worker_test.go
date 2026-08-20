@@ -1,10 +1,13 @@
 package worker_test
 
 import (
+	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -297,4 +300,136 @@ func (a *binAdapter) Name() string { return "bin" }
 
 func (a *binAdapter) Invocation(spec worker.Spec, prompt string, environ []string) (worker.Invocation, error) {
 	return worker.Invocation{Argv: []string{a.bin}, Env: environ, Dir: spec.Dir, Stdin: prompt}, nil
+}
+
+// counterClock returns a deterministic, ever-advancing clock: each call
+// advances by step, starting at base. Real time never enters the heartbeat
+// arithmetic, so the test does not depend on wall-clock scheduling for its
+// expected values — only for how many ticks land, which the tests treat as
+// "at least a few," never "exactly N."
+func counterClock(base time.Time, step time.Duration) func() time.Time {
+	n := 0
+	return func() time.Time {
+		t := base.Add(time.Duration(n) * step)
+		n++
+		return t
+	}
+}
+
+var heartbeatLineRE = regexp.MustCompile(`^(.+): (\d+)m elapsed, (\d+)m left$`)
+
+func TestRunHeartbeatWritesToOut(t *testing.T) {
+	spec := specFor(t)
+	spec.Timeout = 30 * time.Minute
+	spec.HeartbeatInterval = 2 * time.Millisecond
+	spec.Label = "implement round 1"
+	var buf bytes.Buffer
+	spec.Out = &buf
+	spec.Clock = counterClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), 6*time.Minute)
+
+	// Long enough, at a 2ms interval, to all but guarantee several ticks
+	// land, without depending on exactly how many.
+	if _, err := worker.Run(context.Background(), &shAdapter{script: `sleep 0.05; printf '{}' > "$HANDOFF"`}, spec); err != nil {
+		t.Fatal(err)
+	}
+
+	lines := splitLines(buf.String())
+	if len(lines) < 2 {
+		t.Fatalf("got %d heartbeat lines, want at least 2:\n%s", len(lines), buf.String())
+	}
+	prevElapsed := 0
+	for i, line := range lines {
+		m := heartbeatLineRE.FindStringSubmatch(line)
+		if m == nil {
+			t.Fatalf("line %d = %q, does not match the heartbeat format", i, line)
+		}
+		if m[1] != spec.Label {
+			t.Errorf("line %d label = %q, want %q", i, m[1], spec.Label)
+		}
+		var elapsed, remaining int
+		fmt.Sscanf(m[2], "%d", &elapsed)
+		fmt.Sscanf(m[3], "%d", &remaining)
+		if elapsed <= prevElapsed {
+			t.Errorf("line %d elapsed = %d, want > previous %d (clock must advance each tick)", i, elapsed, prevElapsed)
+		}
+		prevElapsed = elapsed
+		wantRemaining := 30 - elapsed
+		if wantRemaining < 0 {
+			wantRemaining = 0
+		}
+		if remaining != wantRemaining {
+			t.Errorf("line %d = %q, remaining = %d, want %d (timeout 30m - elapsed, clamped at 0)", i, line, remaining, wantRemaining)
+		}
+	}
+
+	// The first two ticks land on the clean numbers the counter clock
+	// guarantees, regardless of exactly how many ticks eventually fire.
+	if lines[0] != "implement round 1: 6m elapsed, 24m left" {
+		t.Errorf("first line = %q, want %q", lines[0], "implement round 1: 6m elapsed, 24m left")
+	}
+	if lines[1] != "implement round 1: 12m elapsed, 18m left" {
+		t.Errorf("second line = %q, want %q", lines[1], "implement round 1: 12m elapsed, 18m left")
+	}
+
+	// Nothing must write to spec.Out after Run has handed control back to
+	// its caller — the goroutine must already be joined.
+	after := buf.String()
+	time.Sleep(20 * time.Millisecond)
+	if buf.String() != after {
+		t.Errorf("heartbeat wrote after Run returned: before sleep %q, after %q", after, buf.String())
+	}
+}
+
+func TestRunHeartbeatNilOutIsANoop(t *testing.T) {
+	// Every existing Spec literal in the codebase leaves Out unset; nil must
+	// stay a safe no-op rather than a panic or a required field.
+	spec := specFor(t)
+	spec.HeartbeatInterval = time.Millisecond
+	res, err := worker.Run(context.Background(), &shAdapter{script: `sleep 0.02; printf '{}' > "$HANDOFF"`}, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Handoff == nil {
+		t.Fatal("Handoff = nil")
+	}
+}
+
+func TestRunTimeoutHeartbeatStopsCleanly(t *testing.T) {
+	// Run under `go test -race`: a heartbeat that keeps ticking (and
+	// writing) after the timeout kills the child, instead of stopping when
+	// Run returns, would race the read of buf below.
+	spec := specFor(t)
+	spec.Timeout = 50 * time.Millisecond
+	spec.HeartbeatInterval = 2 * time.Millisecond
+	var buf bytes.Buffer
+	spec.Out = &buf
+	spec.Label = "revise round 1"
+	spec.Clock = counterClock(time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), time.Minute)
+
+	res, err := worker.Run(context.Background(), &shAdapter{script: "sleep 10"}, spec)
+	if err == nil {
+		t.Fatal("Run reported success for a timed-out worker")
+	}
+	if !res.TimedOut {
+		t.Errorf("TimedOut = false, want true")
+	}
+
+	after := buf.String()
+	if after == "" {
+		t.Fatal("no heartbeat lines were written before the timeout")
+	}
+	time.Sleep(20 * time.Millisecond)
+	if buf.String() != after {
+		t.Errorf("heartbeat wrote after Run returned from a timeout: before sleep %q, after %q", after, buf.String())
+	}
+}
+
+func splitLines(s string) []string {
+	var out []string
+	for _, l := range strings.Split(strings.TrimRight(s, "\n"), "\n") {
+		if l != "" {
+			out = append(out, l)
+		}
+	}
+	return out
 }

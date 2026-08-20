@@ -432,6 +432,8 @@ func (s *scoping) work(ctx context.Context, phase string, round int, rules []str
 		Timeout:     s.d.Cov.Caps.WorkerTimeout,
 		Model:       s.d.Model,
 		Effort:      s.d.Effort,
+		Out:         s.d.Out,
+		Label:       fmt.Sprintf("%s round %d", phase, round),
 	}
 	res, err := s.d.Workers.Run(ctx, spec)
 	detail := phaseDetail{
