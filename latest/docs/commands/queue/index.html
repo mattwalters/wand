@@ -194,7 +194,7 @@ tell that three things were hidden from them.</p>
 	<tbody>
 			<tr>
 					<td><code>--team-key KEY</code></td>
-					<td>The Linear team key, e.g. <code>WND</code>. <strong>Required.</strong></td>
+					<td>The Linear team key, e.g. <code>WND</code>. Falls back to <code>[team] key</code> in the nearest <code>wand.toml</code>; required if neither is set.</td>
 			</tr>
 	</tbody>
 </table>
@@ -213,7 +213,7 @@ tell that three things were hidden from them.</p>
 			</tr>
 			<tr>
 					<td><code>1</code></td>
-					<td>The queue could not be read: no <code>LINEAR_API_KEY</code>, no <code>--team-key</code>, a broken <code>wand.toml</code>, or an API failure.</td>
+					<td>The queue could not be read: no <code>LINEAR_API_KEY</code>, no resolvable team key (neither <code>--team-key</code> nor <code>[team] key</code> in <code>wand.toml</code>), a broken <code>wand.toml</code>, or an API failure.</td>
 			</tr>
 	</tbody>
 </table>

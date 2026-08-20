@@ -207,7 +207,7 @@ outstanding. &ldquo;Installed&rdquo; and &ldquo;done&rdquo; mean observed.</p>
 	<tbody>
 			<tr>
 					<td><code>--team-key KEY</code></td>
-					<td>The Linear team key, e.g. <code>WAND</code>. <strong>Required.</strong></td>
+					<td>The Linear team key, e.g. <code>WAND</code>. Falls back to <code>[team] key</code> in <code>wand.toml</code>, so a re-run needs it only the first time — a fresh bootstrap with neither set must still pass it.</td>
 			</tr>
 			<tr>
 					<td><code>--team-name NAME</code></td>
@@ -234,7 +234,7 @@ outstanding. &ldquo;Installed&rdquo; and &ldquo;done&rdquo; mean observed.</p>
 			</tr>
 			<tr>
 					<td><code>1</code></td>
-					<td>Anything went wrong: no <code>LINEAR_API_KEY</code>, no <code>--team-key</code>, an API failure, a broken <code>wand.toml</code>, or a post-apply verification that still found work outstanding.</td>
+					<td>Anything went wrong: no <code>LINEAR_API_KEY</code>, no resolvable team key (neither <code>--team-key</code> nor <code>[team] key</code> in <code>wand.toml</code>), an API failure, a broken <code>wand.toml</code>, or a post-apply verification that still found work outstanding.</td>
 			</tr>
 	</tbody>
 </table>

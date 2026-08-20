@@ -187,7 +187,7 @@ that said so would be a doctor teams learn to ignore.</p>
 	<tbody>
 			<tr>
 					<td><code>--team-key KEY</code></td>
-					<td>The Linear team key, e.g. <code>WAND</code>. <strong>Required.</strong></td>
+					<td>The Linear team key, e.g. <code>WAND</code>. Falls back to <code>[team] key</code> in the nearest <code>wand.toml</code>; required if neither is set.</td>
 			</tr>
 	</tbody>
 </table>
@@ -213,7 +213,7 @@ from what is written here.</p>
 			</tr>
 			<tr>
 					<td><code>2</code></td>
-					<td>The check could not run: no <code>LINEAR_API_KEY</code>, no <code>--team-key</code>, no team with that key, a broken <code>wand.toml</code>, or an API failure. The reason is on stderr.</td>
+					<td>The check could not run: no <code>LINEAR_API_KEY</code>, no resolvable team key (neither <code>--team-key</code> nor <code>[team] key</code> in <code>wand.toml</code>), no team with that key, a broken <code>wand.toml</code>, or an API failure. The reason is on stderr.</td>
 			</tr>
 	</tbody>
 </table>

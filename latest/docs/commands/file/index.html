@@ -192,7 +192,7 @@ promotes what it filed. That is not just convention here —
 	<tbody>
 			<tr>
 					<td><code>--team-key KEY</code></td>
-					<td>The Linear team key, e.g. <code>WND</code>. <strong>Required.</strong></td>
+					<td>The Linear team key, e.g. <code>WND</code>. Falls back to <code>[team] key</code> in the nearest <code>wand.toml</code>; required if neither is set.</td>
 			</tr>
 			<tr>
 					<td><code>-d</code>, <code>--description TEXT</code></td>
@@ -220,7 +220,7 @@ promotes what it filed. That is not just convention here —
 			</tr>
 			<tr>
 					<td><code>1</code></td>
-					<td>Not filed. <strong>This includes the duplicate refusal</strong>, which is the expected outcome often enough to be worth scripting for — the candidates are on stdout, the refusal on stderr. Also covers a missing <code>--team-key</code>, an empty title, no team with that key, and API failures.</td>
+					<td>Not filed. <strong>This includes the duplicate refusal</strong>, which is the expected outcome often enough to be worth scripting for — the candidates are on stdout, the refusal on stderr. Also covers no resolvable team key (neither <code>--team-key</code> nor <code>[team] key</code> in <code>wand.toml</code>), an empty title, no team with that key, and API failures.</td>
 			</tr>
 	</tbody>
 </table>

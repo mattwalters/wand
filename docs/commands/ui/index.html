@@ -361,7 +361,7 @@ reason on it.</p>
 			<tr>
 					<td><code>--team-key KEY</code></td>
 					<td>—</td>
-					<td>Linear team key. Required unless <code>--sample</code> or <code>--dump-screen</code>.</td>
+					<td>Linear team key. Falls back to <code>[team] key</code> in the nearest <code>wand.toml</code>. Not read at all, and an error if passed, with <code>--sample</code> or <code>--dump-screen</code>; required (from a flag or a file) otherwise.</td>
 			</tr>
 			<tr>
 					<td><code>--sample</code></td>
@@ -414,7 +414,7 @@ whatever width the window happens to be.</p>
 			</tr>
 			<tr>
 					<td><code>1</code></td>
-					<td>A missing <code>--team-key</code>, an unreachable Linear, an unparseable <code>--script</code>, <code>--script</code> or <code>--width</code>/<code>--height</code> without <code>--dump-screen</code>, or a failure in the program itself.</td>
+					<td>No resolvable team key (neither <code>--team-key</code> nor <code>[team] key</code> in <code>wand.toml</code>), an unreachable Linear, an unparseable <code>--script</code>, <code>--script</code> or <code>--width</code>/<code>--height</code> without <code>--dump-screen</code>, or a failure in the program itself.</td>
 			</tr>
 	</tbody>
 </table>
