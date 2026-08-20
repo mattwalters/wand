@@ -1,13 +1,40 @@
 {{ define "main" }}
 {{/* The site root is the latest build, so this page is the project's front
      door and the first page of the manual at once — there is no second,
-     unversioned marketing site to keep in sync with it. The hero's words
-     live in content/_index.md's front matter; only their arrangement is
-     here. Everything below the hero is ordinary Markdown. */}}
+     unversioned marketing site to keep in sync with it. It is the one page
+     that runs without the rails (see baseof.html), so it carries its own
+     navigation: a row of its section headings, standing in for the "on this
+     page" rail the shell would otherwise supply. The hero's words live in
+     content/_index.md's front matter; only their arrangement is here. */}}
 <section class="hero">
-  <h1 class="wordmark">{{ .Title }}</h1>
-  <p class="tagline">{{ .Params.tagline }}</p>
-  {{ with .Params.lede }}<div class="lede">{{ . | markdownify }}</div>{{ end }}
+  <div class="bleed">
+    <h1 class="wordmark">{{ .Title }}</h1>
+    <p class="tagline">{{ .Params.tagline }}</p>
+    {{ with .Params.lede }}<div class="lede">{{ . | markdownify }}</div>{{ end }}
+    {{ with .Params.install }}
+    <div class="hero-install">
+      <pre><code>{{ . }}</code></pre>
+      <a href="#install">Other ways to install</a>
+    </div>
+    {{ end }}
+  </div>
 </section>
-{{ .Content }}
+{{/* The page's own h2s. This content starts at h2 — the only h1 is the
+     wordmark, which lives in the hero above rather than in the Markdown —
+     and Hugo nests headings under a synthetic level-0 root when it finds no
+     h1 to hang them on. Unwrap that root, then list what is under it. */}}
+{{ $headings := .Fragments.Headings }}
+{{ if and (eq (len $headings) 1) (eq (index $headings 0).Level 0) }}
+  {{ $headings = (index $headings 0).Headings }}
+{{ end }}
+{{ with $headings }}
+<nav class="pagenav">
+  <div class="bleed">
+    {{ range . }}<a href="#{{ .ID }}">{{ .Title }}</a>{{ end }}
+  </div>
+</nav>
+{{ end }}
+<div class="bleed prose">
+  {{ .Content }}
+</div>
 {{ end }}

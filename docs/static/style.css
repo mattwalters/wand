@@ -223,33 +223,51 @@ main {
   }
 }
 
-/* ---- the homepage hero ----
-   The site root is the latest build, so the front door lives inside the
-   same shell as the manual: the hero is a block at the top of the content
-   column, not a separate full-width layout with its own rails to maintain. */
+/* ---- the homepage ----
+   The one page without rails: the shell's grid is switched off (.wrap-home)
+   so the hero and the section-link row can run the full width of the
+   window, and the reading column is re-established inside them by .bleed.
+   Everything here is scoped to .home so the manual is untouched. */
+
+.wrap-home {
+  display: block;
+  max-width: none;
+  padding: 0;
+}
+
+.wrap-home main {
+  padding: 0 0 5rem;
+}
+
+/* The reading column, restated inside each full-width band. */
+.bleed {
+  max-width: 52rem;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
 
 .hero {
-  margin-bottom: 2.6rem;
-  padding-bottom: 2rem;
+  padding: 5rem 0 3.5rem;
   border-bottom: 1px solid var(--rule);
 }
 
 .hero .wordmark {
   margin: 0;
-  font-size: 3.4rem;
+  font-size: 4rem;
   font-weight: 700;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.035em;
 }
 
 .hero .tagline {
-  margin: 0.5rem 0 0;
-  font-size: 1.35rem;
-  line-height: 1.35;
+  margin: 0.4rem 0 0;
+  font-size: 1.5rem;
+  line-height: 1.3;
   color: var(--fg);
 }
 
 .hero .lede {
-  margin-top: 1.2rem;
+  margin-top: 1.4rem;
+  font-size: 1.05rem;
   color: var(--muted);
 }
 
@@ -257,13 +275,67 @@ main {
   margin: 0;
 }
 
+.hero-install {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1.25rem;
+  margin-top: 2rem;
+}
+
+.hero-install pre {
+  margin: 0;
+}
+
+.hero-install a {
+  font-size: 0.9rem;
+}
+
+/* The section links, standing in for the "on this page" rail the homepage
+   does without. Derived from the page's own h2s, so a new section appears
+   here by existing. */
+.pagenav {
+  border-bottom: 1px solid var(--rule);
+}
+
+.pagenav .bleed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1.5rem;
+  padding-top: 0.85rem;
+  padding-bottom: 0.85rem;
+}
+
+.pagenav a {
+  color: var(--muted);
+  font-size: 0.9rem;
+  text-decoration: none;
+}
+
+.pagenav a:hover {
+  color: var(--fg);
+}
+
+.prose {
+  padding-top: 1rem;
+}
+
+/* Anchored jumps from the section-link row must clear the sticky header. */
+.prose h2 {
+  scroll-margin-top: calc(var(--header-h) + 1rem);
+}
+
 @media (max-width: 60rem) {
+  .hero {
+    padding: 3rem 0 2.5rem;
+  }
+
   .hero .wordmark {
-    font-size: 2.6rem;
+    font-size: 2.8rem;
   }
 
   .hero .tagline {
-    font-size: 1.15rem;
+    font-size: 1.2rem;
   }
 }
 

@@ -9,22 +9,10 @@ lede: |
   done by coding agents — and that the dangerous part of agent work is not
   the code. It is the authorization: what a bot may start, what it may
   close, and what only a human may decide.
+install: brew install mattwalters/wand/wand
 ---
 
-## Install
-
-```bash
-brew install mattwalters/wand/wand
-```
-
-Or with Go:
-
-```bash
-go install github.com/mattwalters/wand@latest
-```
-
-Prebuilt binaries for macOS, Linux and Windows are on the
-[releases page](https://github.com/mattwalters/wand/releases). Then:
+## What it is
 
 ```console
 $ wand ui
@@ -47,8 +35,6 @@ $ wand ui
 > installs the guard hook, `guard` enforces the covenant's authorization
 > rules, `queue` and `ticket` are the read layer, `doctor` reports drift,
 > and `scope` is the first orchestrator. `covenant` and `bless` are stubs.
-
-## What it is
 
 **A covenant, not a config file.** The state graph — Triage → Backlog →
 Scoping → Todo → Needs Input → In Progress → In Review → Done — is wand's
@@ -73,6 +59,22 @@ search before the filing.
 cold, read-only scout over one ticket and writes a plan plus the argued
 options a human blesses it on — ending at Needs Input, never at Todo. An
 agent does not bless its own plan.
+
+## Install
+
+```bash
+brew install mattwalters/wand/wand
+```
+
+Or with Go:
+
+```bash
+go install github.com/mattwalters/wand@latest
+```
+
+That puts `wand` in `$(go env GOPATH)/bin`, which needs to be on your
+`PATH`. Prebuilt binaries for macOS, Linux and Windows are on the
+[releases page](https://github.com/mattwalters/wand/releases).
 
 ## Start here
 
