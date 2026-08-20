@@ -163,8 +163,8 @@
 repository works next and runs it through whichever of those two
 orchestrators the ticket belongs to.</p>
 <h2 id="synopsis">Synopsis</h2>
-<pre tabindex="0"><code>wand dispatch --team-key &lt;key&gt; [--harness &lt;name&gt;] [--model &lt;m&gt;] [--effort &lt;e&gt;]
-wand dispatch --team-key &lt;key&gt; --watch [--interval &lt;duration&gt;] [...]
+<pre tabindex="0"><code>wand dispatch [--team-key &lt;key&gt;] [--harness &lt;name&gt;] [--model &lt;m&gt;] [--effort &lt;e&gt;]
+wand dispatch [--team-key &lt;key&gt;] --watch [--interval &lt;duration&gt;] [...]
 </code></pre><h2 id="what-it-does">What it does</h2>
 <p>The Todo gate lives here, deliberately, and not in <code>run</code> or <code>scope</code>
 themselves: a human typing <code>wand run WND-9</code> has already made the decision
@@ -264,7 +264,7 @@ each pass it dispatches is a detached child, not this process&rsquo;s own exit.<
 	<tbody>
 			<tr>
 					<td><code>--team-key</code></td>
-					<td>Linear team key, e.g. <code>WND</code>. Required.</td>
+					<td>Linear team key, e.g. <code>WND</code>. Falls back to <code>[team] key</code> in the nearest <code>wand.toml</code> — since dispatch is run from inside the repository, that is normally where it comes from, and the flag is only for running against another team.</td>
 			</tr>
 			<tr>
 					<td><code>--harness</code></td>
@@ -291,7 +291,8 @@ each pass it dispatches is a detached child, not this process&rsquo;s own exit.<
 <h2 id="requirements">Requirements</h2>
 <p>Same as <code>wand run</code> and <code>wand scope</code>: <code>LINEAR_API_KEY</code>, an authenticated
 <code>gh</code>, <code>commands.verify</code> in <a href="../../covenant/"><code>wand.toml</code></a>, run from inside
-the repository.</p>
+the repository — which is also where the team key comes from, unless
+<code>--team-key</code> overrides it.</p>
 <p><code>caps.lanes</code> in the covenant sets how many <code>wand run</code> loops this repository
 runs at once (default <code>1</code>); a Scoping ticket never counts against it.</p>
 <h2 id="see-also">See also</h2>

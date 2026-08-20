@@ -164,7 +164,7 @@ terminal state, and each terminal state is where its own responsibility
 stops; three things can still become true of a ticket afterward, and
 nothing else in wand watches for them.</p>
 <h2 id="synopsis">Synopsis</h2>
-<pre tabindex="0"><code>wand sweep --team-key &lt;key&gt;
+<pre tabindex="0"><code>wand sweep [--team-key &lt;key&gt;]
 </code></pre><h2 id="what-it-acts-on">What it acts on</h2>
 <p>One pass ranks every candidate it finds and writes against at most one —
 the highest-ranked whose preflight does not refuse it:</p>
@@ -197,15 +197,32 @@ behind them at all</strong> — not even a dead one. There is nothing there to
 reap: no lease to prove dead, no run to reopen. &ldquo;Looks stuck&rdquo; and &ldquo;is
 stuck&rdquo; are different claims, and only a person can tell which this is, so
 sweep prints it and moves on.</p>
+<h2 id="flags">Flags</h2>
+<table>
+	<thead>
+			<tr>
+					<th>Flag</th>
+					<th>Meaning</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>--team-key KEY</code></td>
+					<td>The Linear team key, e.g. <code>WND</code>. Falls back to <code>[team] key</code> in the nearest <code>wand.toml</code> — since sweep is run from inside the repository, that is normally where it comes from, and the flag is only for running against another team.</td>
+			</tr>
+	</tbody>
+</table>
 <h2 id="exit-codes">Exit codes</h2>
 <p><code>sweep</code> exits <code>0</code> on a completed pass — whether or not it found anything
 to act on — and <code>1</code> on a failure that stopped the pass before it could
-finish reading or acting, with the reason on stderr.</p>
+finish reading or acting, with the reason on stderr — including no
+resolvable team key (neither <code>--team-key</code> nor <code>[team] key</code> in <code>wand.toml</code>).</p>
 <h2 id="requirements">Requirements</h2>
 <p><code>LINEAR_API_KEY</code> and an authenticated <code>gh</code> (sweep reads a converged
 ticket&rsquo;s PR the same way <code>wand run</code>&rsquo;s own convergence check does — the
 checkout it is run from, since a converged run already removed its own
-worktree). Run it from inside the repository.</p>
+worktree). Run it from inside the repository, which is also where the team
+key comes from unless <code>--team-key</code> overrides it.</p>
 <h2 id="see-also">See also</h2>
 <p><a href="../dispatch/"><code>wand dispatch</code></a> is the selector that runs a ticket in the
 first place; <a href="../run/"><code>wand run</code></a> is where the re-review and
@@ -225,6 +242,7 @@ topology, created by <a href="../init/"><code>wand init</code></a> like <code>re
     <li><a href="#synopsis">Synopsis</a></li>
     <li><a href="#what-it-acts-on">What it acts on</a></li>
     <li><a href="#what-it-reports-and-never-acts-on">What it reports, and never acts on</a></li>
+    <li><a href="#flags">Flags</a></li>
     <li><a href="#exit-codes">Exit codes</a></li>
     <li><a href="#requirements">Requirements</a></li>
     <li><a href="#see-also">See also</a></li>
