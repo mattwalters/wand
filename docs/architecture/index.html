@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>No daemon · wand</title>
+  <link rel="stylesheet" href="../../style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="../../">wand</a>
+    
+    <a class="nav here" href="../../docs/">Docs</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/mattwalters/wand">GitHub</a>
+    <span class="version">
+      latest
+      <select id="version-picker" hidden aria-label="Documentation version"></select>
+    </span>
+  </header>
+  
+  <div class="wrap">
+    
+    <nav class="sidenav">
+      
+      
+      <h5>Start</h5>
+      
+      
+      
+      
+      
+      <a href="../../docs/">Overview</a>
+      
+      <h5>Doctrine</h5>
+      
+      
+      
+      
+      
+      <a href="../../docs/covenant/">The covenant</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/architecture/" class="active" aria-current="page">No daemon</a>
+      
+      <h5>Commands</h5>
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/">All commands</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/init/" class="mono">wand init</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/doctor/" class="mono">wand doctor</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/guard/" class="mono">wand guard</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/queue/" class="mono">wand queue</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/ticket/" class="mono">wand ticket</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/claim/" class="mono">wand claim</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/handback/" class="mono">wand handback</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/abandon/" class="mono">wand abandon</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/file/" class="mono">wand file</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/scope/" class="mono">wand scope</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/run/" class="mono">wand run</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/ui/" class="mono">wand ui</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/version/" class="mono">wand version</a>
+      
+    </nav>
+    
+    <main>
+      
+
+<h1>No daemon</h1>
+<p>wand runs no resident server. There is no daemon listening on a socket, no
+process that has to be started once and kept alive for the system to work.
+Durability, multi-client attach and scheduling all fall out of the
+crash-only journal instead; &ldquo;managed mode&rdquo; is the UI spawning <strong>detached</strong>
+dispatch children, never a server dispatching on its own clock; and
+multiple UIs or dispatchers on one machine are arbitrated by the dispatch
+lock. The shared state between them all is the filesystem journal plus
+Linear itself — nothing else.</p>
+<p>This was argued once, deliberately, and this page exists so a future
+session that wants a server for some feature finds the argument instead of
+re-having it from nothing. The daemon question will recur — every
+process-manager feature invites it.</p>
+<h2 id="what-a-daemon-would-buy-and-what-the-journal-buys-instead">What a daemon would buy, and what the journal buys instead</h2>
+<p>A resident server is the obvious way to get three things: durability
+across crashes, several clients sharing one view of the world, and
+scheduling — something deciding when the next unit of work runs. wand gets
+all three from the crash-only journal (<code>internal/journal</code>), and the
+decision not to build a daemon holds only because that substitution is
+real:</p>
+<ul>
+<li><strong>Durability.</strong> A record announces a transition before it happens, never
+after: <code>Run.StartPhase</code> writes and syncs before the phase runs, so a
+crash mid-phase leaves a journal a resume can read, not a ticket stuck
+In Progress with nothing to explain it. A daemon buys durability by
+staying up; the journal buys it by making every write outlive the
+process that made it, which holds even if nothing is running at all.</li>
+<li><strong>Who holds a run, and whether they&rsquo;re still alive.</strong> A lease
+(<code>internal/journal/lease.go</code>) records who and where; the proof that they
+are still running is a separate OS-released file lock, not the lease
+itself. Liveness is three-valued — Unknown, Alive, Dead — and a sweeper
+may act only on Dead, never on a guess. A lease written on another host
+reads Unknown forever. A daemon would answer the same question with a
+heartbeat, which is weaker: a heartbeat can go stale while its process is
+fine, or keep beating past a hang.</li>
+<li><strong>Recovery.</strong> <code>internal/sweep</code> acts on at most one candidate per pass —
+ranked, and vetted the way dispatch picks a winner — and the only
+verdict it may act on is a lease&rsquo;s liveness reading Dead. There is no
+daemon reconciling state in the background; sweep is a cold pass invoked
+the same way any other verb is, touching only what the journal already
+proved dead.</li>
+<li><strong>Resume.</strong> A run re-enters through the journal&rsquo;s own replay — a pure
+function from records to state, no I/O, nothing live to ask. Whatever
+restarts a run gets back exactly where the journal says it was, because
+that is the only place it was ever recorded.</li>
+<li><strong>Multi-client attach and scheduling.</strong> These are the two that most
+invite &ldquo;just run a server.&rdquo; Several UIs or dispatchers on one machine
+are arbitrated by the dispatch lock (<code>internal/dispatch/lock.go</code>) — one
+mkdir-based lock per repository, proven dead by a liveness probe on this
+host, deliberately not the journal&rsquo;s own flock: a lock directory is
+something a person can <code>ls</code> and remove by hand, the way a scheduler&rsquo;s
+own idiom (wrapping a cron job in <code>flock(1)</code>) is, and that command does
+not ship on macOS. Scheduling is <code>--watch</code> polling and spawning detached
+children (see Managed mode, below) — no listener, nothing that has to be
+kept alive by anything but the OS&rsquo;s own process table.</li>
+</ul>
+<p>Against all of that, what a daemon would cost: a socket protocol to define
+and version, a lifecycle to manage (start, stop, restart-on-crash, who is
+responsible for that), version skew between a long-lived server and
+whatever CLI invocations talk to it, and an auth story for anything that
+isn&rsquo;t strictly local. None of that is impossible to build. It is the
+failure mode of building infrastructure the system does not yet need,
+before the need is real — and every one of the guarantees above already
+exists without it.</p>
+<h2 id="managed-mode">Managed mode</h2>
+<p>&ldquo;Managed mode&rdquo; is the shape scheduling takes without a daemon: the UI
+spawning detached dispatch children, rather than a server dispatching on
+its own clock. <code>wand dispatch --watch</code> already does the spawning half —
+each tick that finds capacity spawns the winner as a detached process that
+survives the watcher, so several lanes can be in flight at once without
+anything staying resident between ticks except the OS&rsquo;s own process table.</p>
+<p>What doesn&rsquo;t exist yet: the UI is not itself what spawns <code>--watch</code> or a
+dispatch child today — <code>--watch</code> is invoked from the CLI directly, by a
+person. Managed mode, the cockpit spawning and supervising detached
+dispatch children, is the shape this decision commits to, not a shipped
+feature. When it is built it inherits the same constraint: whatever it
+spawns must be detached, surviving the process that spawned it — a UI that
+had to stay open for a dispatch loop to keep running would already be most
+of the daemon this decision rejects.</p>
+<h2 id="what-would-reopen-this">What would reopen this</h2>
+<p>The decision is &ldquo;not now, and here is what &rsquo;now&rsquo; would look like.&rdquo; Any of
+the following is a reason to come back to this page and re-derive the
+trade-off, not a reason to quietly build around it:</p>
+<ul>
+<li><strong>Push-based Linear webhooks replacing polling.</strong> A webhook needs
+something listening for the push, which means a long-lived process by
+definition — the one requirement this decision exists to avoid.</li>
+<li><strong>A web or remote UI.</strong> Everything above — the dispatch lock, a lease&rsquo;s
+host field, sweep&rsquo;s single-machine reach — assumes the UI and the run it
+is arbitrating are on the same machine. A remote UI breaks that
+assumption at the root.</li>
+<li><strong>Multi-machine orchestration.</strong> The dispatch lock and leases are
+per-machine by construction; Linear status transitions are the only
+cross-machine signal, and they give coarse arbitration at best. There is
+a real race window between a dispatcher vetting a winner and the later,
+separate write that claims it by flipping its Linear status — a second
+machine reading the same board in between sees no reason not to pick the
+same ticket.</li>
+<li><strong>Shared team analytics.</strong> <a href="../journal/">The run ledger</a> lives per-run,
+per-machine, with no aggregation across runs today, let alone across a
+team&rsquo;s laptops. Anything wanting a team-wide view fragments across
+machines until something aggregates it, and that something is exactly
+the kind of long-lived shared service this decision defers.</li>
+</ul>
+<p>None of these are hypothetical forever — they are the specific shapes of
+work that would make &ldquo;no daemon&rdquo; the wrong call. Until one of them is
+real, the journal plus Linear is the whole system of record, and it does
+not need anything else to hold it up.</p>
+
+
+    </main>
+    
+    
+    
+    <nav class="toc">
+      <h5>On this page</h5>
+      <nav id="TableOfContents">
+  <ul>
+    <li><a href="#what-a-daemon-would-buy-and-what-the-journal-buys-instead">What a daemon would buy, and what the journal buys instead</a></li>
+    <li><a href="#managed-mode">Managed mode</a></li>
+    <li><a href="#what-would-reopen-this">What would reopen this</a></li>
+  </ul>
+</nav>
+    </nav>
+    
+  </div>
+  <script>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    (function () {
+      var root = new URL("..", document.querySelector('link[rel="stylesheet"]').href);
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          var picker = document.getElementById("version-picker");
+          ["latest"].concat(versions).forEach(function (v) {
+            var option = document.createElement("option");
+            option.value = v;
+            option.textContent = v;
+            option.selected = v === "latest";
+            picker.appendChild(option);
+          });
+          picker.addEventListener("change", function () {
+            window.location.href = new URL(picker.value + "/", root);
+          });
+          picker.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>
