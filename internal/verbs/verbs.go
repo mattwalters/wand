@@ -59,12 +59,13 @@ type Linear interface {
 	SearchIssues(ctx context.Context, teamKey, term string) ([]linear.Issue, error)
 }
 
-// resolveState turns a covenant status key into the team's workflow state
+// ResolveState turns a covenant status key into the team's workflow state
 // UUID, passing the display name through the guard on the way. The guard
 // check is belt over braces — no verb here writes a forbidden status — but
 // it keeps the promise that every wand write path calls the one verdict
-// function, covenant renames included.
-func resolveState(ctx context.Context, cl Linear, cov covenant.Covenant, teamID, key string) (string, error) {
+// function, covenant renames included. Exported for the orchestrators,
+// which write statuses of their own and must go through the same gate.
+func ResolveState(ctx context.Context, cl Linear, cov covenant.Covenant, teamID, key string) (string, error) {
 	name := cov.StatusName(key)
 	if name == "" {
 		return "", fmt.Errorf("the covenant has no %q status; this is a wand bug", key)
@@ -127,7 +128,7 @@ func Claim(ctx context.Context, cl Linear, cov covenant.Covenant, identifier str
 	if err != nil {
 		return Claimed{}, err
 	}
-	stateID, err := resolveState(ctx, cl, cov, issue.TeamID, "in_progress")
+	stateID, err := ResolveState(ctx, cl, cov, issue.TeamID, "in_progress")
 	if err != nil {
 		return Claimed{}, err
 	}
@@ -162,11 +163,11 @@ func Handback(ctx context.Context, cl Linear, cov covenant.Covenant, identifier,
 	if err := refuseIfClosed(issue, "handback"); err != nil {
 		return linear.Issue{}, err
 	}
-	// Resolve the target before the comment: resolveState is a pure read, so
+	// Resolve the target before the comment: ResolveState is a pure read, so
 	// running it first means a drifted board or a guard refusal stops the
 	// verb with nothing written — a failure after the comment would make a
 	// repaired re-run post the question twice.
-	stateID, err := resolveState(ctx, cl, cov, issue.TeamID, "needs_input")
+	stateID, err := ResolveState(ctx, cl, cov, issue.TeamID, "needs_input")
 	if err != nil {
 		return linear.Issue{}, err
 	}
@@ -254,7 +255,7 @@ func Abandon(ctx context.Context, cl Linear, cov covenant.Covenant, identifier, 
 	// correction lands "in the same action", so every failure that can be
 	// checked without writing must come first — a comment followed by a
 	// refusal would record a correction that never happened.
-	stateID, err := resolveState(ctx, cl, cov, issue.TeamID, "backlog")
+	stateID, err := ResolveState(ctx, cl, cov, issue.TeamID, "backlog")
 	if err != nil {
 		return linear.Issue{}, err
 	}
@@ -316,7 +317,7 @@ func File(ctx context.Context, cl Linear, cov covenant.Covenant, req FileRequest
 	if err != nil {
 		return FileResult{}, err
 	}
-	stateID, err := resolveState(ctx, cl, cov, team.ID, "triage")
+	stateID, err := ResolveState(ctx, cl, cov, team.ID, "triage")
 	if err != nil {
 		return FileResult{}, err
 	}

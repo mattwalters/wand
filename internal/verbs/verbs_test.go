@@ -259,7 +259,7 @@ func TestHandbackAndAbandonRefuseClosedTickets(t *testing.T) {
 // comment: a failure after it would leave a comment promising a correction
 // that never happened, and a repaired re-run would post the question twice.
 func TestHandbackAndAbandonResolveTheStateBeforeCommenting(t *testing.T) {
-	f := &fake{issue: todoIssue()} // no states: every resolveState fails as drift
+	f := &fake{issue: todoIssue()} // no states: every ResolveState fails as drift
 	if _, err := Handback(context.Background(), f, covenant.Default(), "WND-6", "a question"); err == nil {
 		t.Fatal("want the drift surfaced")
 	}

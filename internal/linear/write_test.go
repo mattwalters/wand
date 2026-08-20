@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -76,5 +77,46 @@ func TestUpdateIssueRefusesAnEmptyUpdate(t *testing.T) {
 	c := &Client{APIKey: "k", Endpoint: "http://127.0.0.1:0"}
 	if err := c.UpdateIssue(context.Background(), "uuid-1", IssueUpdate{}); err == nil {
 		t.Fatal("an update with nothing to change must refuse before the network")
+	}
+}
+
+// AddLabel goes through issueAddLabel, not issueUpdate's full-set labelIds:
+// adding one label must not race another writer's label changes by
+// replacing the whole set.
+func TestAddLabelUsesTheAddMutation(t *testing.T) {
+	var query string
+	var vars map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Query     string         `json:"query"`
+			Variables map[string]any `json:"variables"`
+		}
+		json.NewDecoder(r.Body).Decode(&req)
+		query, vars = req.Query, req.Variables
+		w.Write([]byte(`{"data":{"issueAddLabel":{"success":true}}}`))
+	}))
+	defer srv.Close()
+
+	c := &Client{APIKey: "k", Endpoint: srv.URL}
+	if err := c.AddLabel(context.Background(), "issue-1", "label-1"); err != nil {
+		t.Fatalf("addLabel: %v", err)
+	}
+	if !strings.Contains(query, "issueAddLabel") {
+		t.Errorf("mutation does not use issueAddLabel:\n%s", query)
+	}
+	if vars["id"] != "issue-1" || vars["labelId"] != "label-1" {
+		t.Errorf("variables %v", vars)
+	}
+}
+
+func TestAddLabelSurfacesRefusal(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"data":{"issueAddLabel":{"success":false}}}`))
+	}))
+	defer srv.Close()
+
+	c := &Client{APIKey: "k", Endpoint: srv.URL}
+	if err := c.AddLabel(context.Background(), "issue-1", "label-1"); err == nil {
+		t.Fatal("a refused label add reported success")
 	}
 }

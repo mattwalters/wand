@@ -26,7 +26,8 @@ to find it, so a verb run from a subdirectory sees the same covenant as one
 run at the root. Run the first three from the repo root.
 
 **Exit codes.** Unless a page says otherwise, a command exits `0` on
-success and `1` on any failure, with the reason on stderr. Three commands
+success and `1` on any failure, with the reason on stderr. Four commands
 say otherwise, and each of their codes is a contract something else depends
-on: `guard` (the harness hook), `doctor` (CI), and `file` (a refusal to
-file a duplicate is a failure, on purpose).
+on: `guard` (the harness hook), `doctor` (CI), `file` (a refusal to
+file a duplicate is a failure, on purpose), and `run` (a scheduler reads
+converged, handed-back and parked apart).
