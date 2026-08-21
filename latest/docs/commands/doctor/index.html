@@ -184,6 +184,16 @@ diffs them against the covenant, and reports the drift. It writes nothing —
 plus the checks a plan cannot express: team settings like triage and the
 estimate scale, which are properties of the team rather than actions
 against it.</p>
+<p><code>doctor</code> also makes one filesystem check, alongside its Linear diff: each
+harness shim <code>init</code> writes (<code>.claude/settings.json</code>, <code>.codex/hooks.json</code>)
+that is present and already matches what <code>init</code> would write, but is not
+tracked by git, is reported as drift — a shim generated but never
+committed protects only the checkout it ran in, which is exactly the
+<a href="../init/"><code>wand init</code></a> doc&rsquo;s warning made concrete. This check is purely
+local; it runs before the Linear API is ever called, and if it cannot be
+answered (no git, or the working directory is not a repository), that is
+reported as exit <code>2</code>, the same as any other could-not-check, taking
+precedence over whatever the Linear diff would have said.</p>
 <p>Findings print one per line, prefixed <code>drift:</code>, followed by a count. A
 clean team prints one line and nothing else.</p>
 <h3 id="what-is-not-drift">What is not drift</h3>
@@ -209,8 +219,12 @@ that said so would be a doctor teams learn to ignore.</p>
 </table>
 <h2 id="exit-codes">Exit codes</h2>
 <p>The three codes are the point of this command — it is built to be a CI
-step, and the codes are pinned by a test in <code>e2e/</code> so they cannot drift
-from what is written here.</p>
+step. The precondition half of <code>2</code> (no <code>LINEAR_API_KEY</code>, no resolvable
+team key) is pinned by a test in <code>e2e/</code> against the compiled binary; <code>0</code>,
+<code>1</code>, and the rest of <code>2</code> — the Linear diff, the repo-local shim check, and
+how the two combine — need a live or faked Linear team to exercise, so
+they are pinned in-process in <code>internal/doctor</code> instead, the tier that
+tier can&rsquo;t reach.</p>
 <table>
 	<thead>
 			<tr>
@@ -221,15 +235,15 @@ from what is written here.</p>
 	<tbody>
 			<tr>
 					<td><code>0</code></td>
-					<td>The team satisfies the covenant.</td>
+					<td>The team satisfies the covenant, and every installed shim is tracked by git.</td>
 			</tr>
 			<tr>
 					<td><code>1</code></td>
-					<td>Drift found. The findings are on stdout.</td>
+					<td>Drift found: in the Linear diff, or an installed-but-untracked shim, or both. The findings are on stdout.</td>
 			</tr>
 			<tr>
 					<td><code>2</code></td>
-					<td>The check could not run: no <code>LINEAR_API_KEY</code>, no resolvable team key (neither <code>--team-key</code> nor <code>[team] key</code> in <code>wand.toml</code>), no team with that key, a broken <code>wand.toml</code>, or an API failure. The reason is on stderr.</td>
+					<td>A check could not run: no <code>LINEAR_API_KEY</code>, no resolvable team key (neither <code>--team-key</code> nor <code>[team] key</code> in <code>wand.toml</code>), no team with that key, a broken <code>wand.toml</code>, an API failure, or the repo-local shim check itself failing (no git, or the working directory is not a git repository). The reason is on stderr.</td>
 			</tr>
 	</tbody>
 </table>

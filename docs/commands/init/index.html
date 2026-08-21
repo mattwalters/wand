@@ -182,25 +182,41 @@ routes the repo&rsquo;s agent sessions through <a href="../guard/"><code>wand gu
 </code></pre><h2 id="what-it-does">What it does</h2>
 <p>Four things, in this order:</p>
 <ol>
-<li><strong>Loads the covenant.</strong> A checked-in <code>wand.toml</code> in the working
+<li>
+<p><strong>Loads the covenant.</strong> A checked-in <code>wand.toml</code> in the working
 directory parameterizes it; absent one, the stock covenant applies.
 Which one was used is printed, because a run that silently fell back to
-defaults looks exactly like one that read your file.</li>
-<li><strong>Installs the guard hook</strong>, into <code>.claude/settings.json</code>. This comes
-first because it is the only purely local step: from here on, this
-repo&rsquo;s own sessions are under the guard, even if the Linear half fails.
-The entry routes tool calls matching <code>mcp__.*__save_issue</code> to
-<code>wand guard</code>. The matcher is loose in the middle on purpose — the Linear
-MCP server&rsquo;s connector id changes when Linear is reconnected, and a
-matcher pinned to today&rsquo;s id would go dead silently, which for a guard
-means allowing everything with no sign of it. Existing settings are
-merged, not clobbered; every key <code>init</code> does not need to touch survives.</li>
-<li><strong>Creates or adopts the team.</strong> A team with the given key already in the
-workspace is adopted, not duplicated.</li>
-<li><strong>Plans and applies the difference</strong> between the team and the covenant:
+defaults looks exactly like one that read your file.</p>
+</li>
+<li>
+<p><strong>Installs the guard hook</strong>, into <code>.claude/settings.json</code> and
+<code>.codex/hooks.json</code>. This comes first because it is the only purely
+local step: from here on, this repo&rsquo;s own sessions are under the guard,
+even if the Linear half fails. The entry routes tool calls matching
+<code>mcp__.*__save_issue</code> to <code>wand guard</code>. The matcher is loose in the
+middle on purpose — the Linear MCP server&rsquo;s connector id changes when
+Linear is reconnected, and a matcher pinned to today&rsquo;s id would go dead
+silently, which for a guard means allowing everything with no sign of
+it. Existing settings are merged, not clobbered; every key <code>init</code> does
+not need to touch survives.</p>
+<p>Both files are repo artifacts, not local machine state: they must be
+committed for the guard to protect anyone besides whoever ran <code>init</code>.
+<code>init</code> says so — a line ending <code>commit this file</code> after writing a shim,
+or after finding one already installed but not yet tracked by git — but
+it does not stage or commit anything itself; that stays yours to do.
+<a href="../doctor/"><code>wand doctor</code></a> also reports an installed-but-untracked shim
+as drift, so a checked-out clone missing the commit does not go quiet.</p>
+</li>
+<li>
+<p><strong>Creates or adopts the team.</strong> A team with the given key already in the
+workspace is adopted, not duplicated.</p>
+</li>
+<li>
+<p><strong>Plans and applies the difference</strong> between the team and the covenant:
 the workflow statuses, the labels, the PR automations, the team
 settings. Every decision is made in the plan, which <code>--dry-run</code> prints
-without writing.</li>
+without writing.</p>
+</li>
 </ol>
 <p><code>init</code> is idempotent. A team already at the covenant plans no writes and
 says so. Run it again after a covenant change to bring the board along.</p>
