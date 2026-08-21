@@ -71,6 +71,61 @@ docs/                the versioned docs site: Hugo, hand-rolled theme. The root 
 shipped binary depend on it, and that shared path is what makes the dump and
 the goldens identical.
 
+## Who calls whom
+
+The layout above lists the packages; this is how they compose. `dispatch`
+is the only thing that starts an orchestrator — it ranks and vets Todo and
+To Plan, picks one winner, and spawns it through `run` or `plan`. Every
+write either orchestrator makes, and every write attempt a harness's own
+tool call makes through its PreToolUse hook, is checked by the same
+`guard` verdict function — the guard sits in front of every write path but
+one. `sweep` runs after an orchestrator has already exited, acting on what
+it left behind. `ui` (the cockpit) is a reader over Linear and the journal
+that also holds the one write path deliberately wired around the guard,
+because it fires only on a human's own keystroke, never on an unattended
+agent.
+
+```text
+                     human (Linear: Todo / To Plan)
+                          │
+                          ▼
+                     wand dispatch     rank + vet, pick one winner, spawn it
+                          │
+               ┌──────────┴──────────┐
+               ▼                     ▼
+           wand run              wand plan
+       (implement → CI →     (scout → critic →
+        review → revise)      interview → write)
+               │                     │
+               └──────────┬──────────┘
+                          ▼
+                     wand guard       the one verdict function — every
+                          │           orchestrator write, and the harness's
+                          ▼           own PreToolUse hook, calls this before
+                   Linear / GitHub    a write lands
+
+    wand sweep      acts on what run/plan left behind: re-review labels,
+                     unresolved PR threads, dead leases — ranked, one
+                     action per pass, through the guard like every other
+                     write
+
+    wand ui          reads Linear + the journal, read-only, except
+    (the cockpit)     Apply() — the one write path that skips the guard,
+                      because it runs only on a human's own keystroke,
+                      never unattended
+```
+
+Every rule in that picture lives in exactly one of four tiers — being
+honest about which tier a rule occupies is itself a rule (see PLAN.md,
+"How rules are enforced," for the reasoning):
+
+| Tier | Mechanism | Example |
+|---|---|---|
+| Structural | The violation cannot be expressed | Workers have no credentials; reviewer coldness is a process boundary |
+| Code gate | The attempt is refused with a reason | Status verdicts, queue vetting, handoff validation |
+| Harness hook | The agent's tool call is intercepted | `wand guard` behind a generated PreToolUse shim |
+| Prose | Written down, hoped for, audited | Description-pairing doctrine, reference glosses |
+
 ## The four test tiers
 
 | Tier | Where | What it catches |
