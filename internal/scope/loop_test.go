@@ -28,10 +28,12 @@ type board struct {
 	estimate    *int
 	stateID     string
 	comments    []string
+	labels      []string
 
 	failComment  bool
 	failEstimate bool
 	failState    bool
+	failLabel    bool
 }
 
 func (b *board) log(call string) { b.calls = append(b.calls, call) }
@@ -53,12 +55,41 @@ func (b *board) TeamStates(ctx context.Context, teamID string) ([]linear.Workflo
 }
 
 func (b *board) CreateComment(ctx context.Context, issueID, body string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if b.failComment {
 		return fmt.Errorf("linear is down")
 	}
-	b.log("comment")
+	// The park report is a write about the run, not about the scope. It is
+	// logged apart so the many "a park writes nothing to the ticket" tests
+	// can keep asserting what they have always meant — that no *scope*
+	// reached the ticket — now that a park also explains itself there.
+	if strings.HasPrefix(body, parkedCommentPrefix) {
+		b.log("park:comment")
+	} else {
+		b.log("comment")
+	}
 	b.comments = append(b.comments, body)
 	return nil
+}
+
+// parkedCommentPrefix is how verbs.ParkedComment opens. Asserted in
+// TestAParkIsReportedOnTheTicket, so a reworded report fails there loudly
+// rather than quietly reclassifying every write in this file.
+const parkedCommentPrefix = "**This run parked.**"
+
+// deliverables is everything the scout wrote as scope — plan, options,
+// estimate, status — with the park report filtered out.
+func (b *board) deliverables() []string {
+	var out []string
+	for _, c := range b.calls {
+		if strings.HasPrefix(c, "park:") {
+			continue
+		}
+		out = append(out, c)
+	}
+	return out
 }
 
 func (b *board) UpdateIssue(ctx context.Context, issueID string, u linear.IssueUpdate) error {
@@ -100,7 +131,18 @@ func (b *board) TeamByKey(ctx context.Context, key string) (linear.Team, error) 
 	return linear.Team{ID: "team", Key: key}, nil
 }
 func (b *board) LabelByName(ctx context.Context, name string) (linear.Label, bool, error) {
-	return linear.Label{ID: "label", Name: name}, true, nil
+	return linear.Label{ID: "label-" + name, Name: name}, true, nil
+}
+func (b *board) AddLabel(ctx context.Context, issueID, labelID string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if b.failLabel {
+		return fmt.Errorf("linear is down")
+	}
+	b.log("park:label")
+	b.labels = append(b.labels, labelID)
+	return nil
 }
 func (b *board) CreateIssue(ctx context.Context, in linear.IssueCreate) (linear.Issue, error) {
 	return linear.Issue{}, fmt.Errorf("a scope files nothing")
@@ -340,8 +382,8 @@ func TestAnInvalidHandoffWritesNothing(t *testing.T) {
 	if out.Kind != journal.Parked {
 		t.Fatalf("outcome = %s (%s), want parked", out.Kind, out.Reason)
 	}
-	if len(h.board.calls) != 0 {
-		t.Fatalf("the ticket was written to anyway: %v", h.board.calls)
+	if len(h.board.deliverables()) != 0 {
+		t.Fatalf("the ticket was written to anyway: %v", h.board.deliverables())
 	}
 	if !strings.Contains(out.Reason, "not one of the approaches") {
 		t.Errorf("the park does not say what was wrong with the handoff: %s", out.Reason)
@@ -357,8 +399,8 @@ func TestAWorkerFailureParks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if out.Kind != journal.Parked || len(h.board.calls) != 0 {
-		t.Fatalf("outcome = %s, writes = %v; want a park with nothing written", out.Kind, h.board.calls)
+	if out.Kind != journal.Parked || len(h.board.deliverables()) != 0 {
+		t.Fatalf("outcome = %s, writes = %v; want a park with no scope written", out.Kind, h.board.deliverables())
 	}
 	if out.ExitCode() != scope.ExitParked {
 		t.Errorf("exit code = %d, want %d", out.ExitCode(), scope.ExitParked)
@@ -411,8 +453,8 @@ func TestAWorkerThatTouchesTheCheckoutParks(t *testing.T) {
 	if out.Kind != journal.Parked {
 		t.Fatalf("outcome = %s (%s), want parked", out.Kind, out.Reason)
 	}
-	if len(h.board.calls) != 0 {
-		t.Fatalf("the ticket was written to anyway: %v", h.board.calls)
+	if len(h.board.deliverables()) != 0 {
+		t.Fatalf("the ticket was written to anyway: %v", h.board.deliverables())
 	}
 	if !strings.Contains(out.Reason, "changed the repository") {
 		t.Errorf("the park does not say what happened: %s", out.Reason)
@@ -503,7 +545,7 @@ func TestASecondScopeOfOneTicketRefuses(t *testing.T) {
 		t.Errorf("error = %v", err)
 	}
 	if len(h.board.calls) != 0 {
-		t.Errorf("the refused scope wrote to the ticket: %v", h.board.calls)
+		t.Errorf("the refused scope wrote to the ticket: %v", h.board.deliverables())
 	}
 }
 
@@ -700,8 +742,8 @@ func TestAnUnusableRevisionParksRatherThanKeepingTheDraft(t *testing.T) {
 	if out.Kind != journal.Parked {
 		t.Fatalf("outcome = %s (%s), want parked", out.Kind, out.Reason)
 	}
-	if len(h.board.calls) != 0 {
-		t.Fatalf("the draft was written over the human's objection: %v", h.board.calls)
+	if len(h.board.deliverables()) != 0 {
+		t.Fatalf("the draft was written over the human's objection: %v", h.board.deliverables())
 	}
 }
 
@@ -825,7 +867,77 @@ func TestAnInterruptParksWithItsOwnReason(t *testing.T) {
 	if out.Kind != journal.Parked || !strings.Contains(out.Reason, "interrupted by terminated") {
 		t.Fatalf("outcome = %s (%s), want a park quoting the signal", out.Kind, out.Reason)
 	}
-	if len(h.board.calls) != 0 {
-		t.Errorf("an interrupted run still wrote to the ticket: %v", h.board.calls)
+	if len(h.board.deliverables()) != 0 {
+		t.Errorf("an interrupted run still wrote a scope to the ticket: %v", h.board.deliverables())
+	}
+}
+
+// WND-69. Seventeen of the twenty-four parks in the reference journal were
+// scopes rejected at the handoff gate, and every one of them left the
+// ticket exactly as it found it — sitting in Scoping with no sign a run had
+// ever happened, so the next dispatch pass picked it up and paid for the
+// same failure again.
+func TestAParkIsReportedOnTheTicket(t *testing.T) {
+	h := newHarness(t, workerResult{err: fmt.Errorf("claude: exited 1 without a usable handoff")})
+
+	out, err := h.run(t)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if out.Kind != journal.Parked {
+		t.Fatalf("outcome = %s (%s), want parked", out.Kind, out.Reason)
+	}
+	if got := strings.Join(h.board.calls, ","); got != "park:comment,park:label" {
+		t.Fatalf("board calls = %q, want the park report", got)
+	}
+	if c := h.board.comments[0]; !strings.Contains(c, "without a usable handoff") {
+		t.Errorf("the report does not quote the reason:\n%s", c)
+	}
+	// A scope never owns its ticket's status, so the mark has to be a
+	// label — the ticket stays in Scoping, where a human put it.
+	if h.board.stateID != "" {
+		t.Errorf("a parked scope moved the ticket's status to %q", h.board.stateID)
+	}
+}
+
+// The interrupt is the most common park there is, and it arrives as a
+// canceled context — the very one every Linear call would ride. The report
+// runs on a context that outlives it, so a run being torn down still gets
+// to say why.
+func TestAnInterruptStillReportsThePark(t *testing.T) {
+	h := newHarness(t, workerResult{handoff: draftHandoff()})
+	ctx, cancel := context.WithCancelCause(context.Background())
+	cancel(fmt.Errorf("interrupted by terminated"))
+
+	out, err := scope.Execute(ctx, h.deps, h.store, "WND-9")
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if out.Kind != journal.Parked {
+		t.Fatalf("outcome = %s (%s), want parked", out.Kind, out.Reason)
+	}
+	if got := strings.Join(h.board.calls, ","); got != "park:comment,park:label" {
+		t.Fatalf("an interrupted run could not report its park: calls = %q", got)
+	}
+	if c := h.board.comments[0]; !strings.Contains(c, "interrupted by terminated") {
+		t.Errorf("the report does not name the signal:\n%s", c)
+	}
+}
+
+// The journal is the ending; the ticket gets a courtesy copy. A board that
+// refuses it must not turn one park into two.
+func TestAParkThatCannotReachLinearIsStillOnePark(t *testing.T) {
+	h := newHarness(t, workerResult{err: fmt.Errorf("claude: exited 1 without a usable handoff")})
+	h.board.failComment = true
+
+	out, err := h.run(t)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if out.Kind != journal.Parked || !strings.Contains(out.Reason, "without a usable handoff") {
+		t.Fatalf("outcome = %s (%s), want the park to survive a refused report", out.Kind, out.Reason)
+	}
+	if len(h.board.labels) != 0 {
+		t.Errorf("the label went on without an explanation beside it: %v", h.board.labels)
 	}
 }

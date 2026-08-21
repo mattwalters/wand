@@ -708,11 +708,18 @@ func (l *loop) handback(ctx context.Context, comment, reason string) *Outcome {
 	return &Outcome{Kind: journal.HandedBack, Reason: reason, PRURL: l.prURL}
 }
 
-// park ends the run without deciding, journal-only: reachable even when
-// Linear is what broke. When the context is what killed the operation, the
-// interrupt's own sentence wins — "interrupted by SIGTERM" explains a run;
-// "Post …: context canceled" does not — and the choice lives here, in the
-// one function every ending path calls, so no call site can forget it.
+// park ends the run without deciding. When the context is what killed the
+// operation, the interrupt's own sentence wins — "interrupted by SIGTERM"
+// explains a run; "Post …: context canceled" does not — and the choice
+// lives here, in the one function every ending path calls, so no call site
+// can forget it.
+//
+// The journal is written first and is the run's real ending: it is
+// reachable even when Linear is what broke, which is the case for half the
+// park sites in this file. [verbs.ReportPark] then puts the same sentence
+// on the ticket, best-effort — it cannot fail this function and cannot
+// re-enter it, because a park that parked on its own report would recurse
+// exactly when Linear is already failing.
 func (l *loop) park(ctx context.Context, reason string) *Outcome {
 	if ctx.Err() != nil {
 		reason = context.Cause(ctx).Error()
@@ -720,6 +727,7 @@ func (l *loop) park(ctx context.Context, reason string) *Outcome {
 	if err := l.r.Parked(reason); err != nil {
 		fmt.Fprintf(l.d.Out, "journal: %v\n", err)
 	}
+	verbs.ReportPark(ctx, l.d.Board, l.d.Out, l.issue.ID, reason)
 	return &Outcome{Kind: journal.Parked, Reason: reason, PRURL: l.prURL}
 }
 

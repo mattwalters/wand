@@ -348,8 +348,13 @@ is a contract a scheduler can read:
   Convergence never happens by exhaustion; a spent cap is a hand-back that
   quotes the final round's findings whole.
 - **parked** (exit 3) — stopped without deciding (interrupt, unparseable
-  handoff, dirty tree), journal-only so it works even when Linear is down,
-  worktree preserved. A reviewer that leaves no parseable handoff parks
+  handoff, dirty tree); worktree preserved. The journal is written first
+  and is the run's real ending, so a park is reachable even when Linear is
+  what failed; the ticket then gets the same sentence as a comment and the
+  `parked` label, best-effort. A park keeps the ticket's place in the
+  lifecycle — it reports that the machine stopped, not that the work was
+  judged — so clearing the label is all it takes to let `wand dispatch`
+  pick it up again. A reviewer that leaves no parseable handoff parks
   rather than converges: anything else turns reviewer crashes into clean
   passes.
 

@@ -231,7 +231,7 @@ func tailOf(s string) string {
 func (s *scoping) run(ctx context.Context) Outcome {
 	comments, err := s.d.Board.IssueComments(ctx, s.issue.ID)
 	if err != nil {
-		return *s.parkCtx(ctx, fmt.Sprintf("could not read the ticket's comments: %v", err))
+		return *s.park(ctx, fmt.Sprintf("could not read the ticket's comments: %v", err))
 	}
 	s.ticketText = ticket.Render(s.issue, comments)
 
@@ -240,7 +240,7 @@ func (s *scoping) run(ctx context.Context) Outcome {
 	// uncommitted work is fine, a worker's is not.
 	before, err := s.d.Tree.Status(ctx, s.d.Repo)
 	if err != nil {
-		return *s.parkCtx(ctx, fmt.Sprintf("could not read the repository's state: %v", err))
+		return *s.park(ctx, fmt.Sprintf("could not read the repository's state: %v", err))
 	}
 	s.treeBefore = before
 
@@ -324,7 +324,7 @@ func (s *scoping) draft(ctx context.Context) (Draft, *Outcome) {
 func (s *scoping) parse(ctx context.Context, raw json.RawMessage, phase string) (Draft, *Outcome) {
 	draft, err := ParseDraft(raw, s.d.Cov)
 	if err != nil {
-		return Draft{}, s.park(fmt.Sprintf("the %s's handoff is unusable, so nothing was written to the ticket: %v", phase, err))
+		return Draft{}, s.park(ctx, fmt.Sprintf("the %s's handoff is unusable, so nothing was written to the ticket: %v", phase, err))
 	}
 	s.note(phase+" handoff", draft)
 	if out := s.requireUntouched(ctx, phase); out != nil {
@@ -342,7 +342,7 @@ func (s *scoping) critique(ctx context.Context, draft Draft) (Draft, *Outcome) {
 	}
 	critique, err := ParseCritique(res.Handoff)
 	if err != nil {
-		return draft, s.park(fmt.Sprintf("the critic's handoff is unusable: %v — a draft nobody could attack is not thereby sound, so nothing was written", err))
+		return draft, s.park(ctx, fmt.Sprintf("the critic's handoff is unusable: %v — a draft nobody could attack is not thereby sound, so nothing was written", err))
 	}
 	s.note("critique", critique)
 	if out := s.requireUntouched(ctx, "critic"); out != nil {
@@ -368,7 +368,7 @@ func (s *scoping) interview(ctx context.Context, draft Draft) (Draft, *Outcome) 
 	s.prov.Interview = true
 	answers, err := Interview(s.d.In, s.d.Out, Questions(draft))
 	if err != nil {
-		return draft, s.park(fmt.Sprintf("the interview could not be held: %v", err))
+		return draft, s.park(ctx, fmt.Sprintf("the interview could not be held: %v", err))
 	}
 	s.note("interview", answers)
 	s.prov.Answers = len(answers)
@@ -414,29 +414,29 @@ func (s *scoping) write(ctx context.Context, draft Draft) Outcome {
 	// in.
 	stateID, err := verbs.ResolveState(ctx, s.d.Board, s.d.Cov, s.issue.TeamID, "scoped")
 	if err != nil {
-		return *s.parkCtx(ctx, fmt.Sprintf("could not resolve the %s status: %v", s.d.Cov.StatusName("scoped"), err))
+		return *s.park(ctx, fmt.Sprintf("could not resolve the %s status: %v", s.d.Cov.StatusName("scoped"), err))
 	}
 
 	if _, _, err := s.d.Board.UpsertSection(ctx, s.issue.ID, s.issue.Description, PlanSectionID, PlanMarkdown(draft)); err != nil {
-		return *s.parkCtx(ctx, fmt.Sprintf("the plan could not be written into the description: %v", err))
+		return *s.park(ctx, fmt.Sprintf("the plan could not be written into the description: %v", err))
 	}
 	fmt.Fprintln(s.d.Out, "wrote the plan into the ticket's description")
 
 	comment := OptionsComment(draft, s.d.Cov.IssueEstimationType, s.d.Cov.StatusName("scoped"), s.prov)
 	if err := s.d.Board.CreateComment(ctx, s.issue.ID, comment); err != nil {
-		return *s.parkCtx(ctx, fmt.Sprintf("the plan is in the description, but the options comment failed: %v — the ticket is still in %s, carrying a plan nothing argues for", err, s.issue.State.Name))
+		return *s.park(ctx, fmt.Sprintf("the plan is in the description, but the options comment failed: %v — the ticket is still in %s, carrying a plan nothing argues for", err, s.issue.State.Name))
 	}
 	fmt.Fprintln(s.d.Out, "posted the options comment")
 
 	if draft.Estimate != nil {
 		if err := s.d.Board.UpdateIssue(ctx, s.issue.ID, linear.IssueUpdate{Estimate: draft.Estimate}); err != nil {
-			return *s.parkCtx(ctx, fmt.Sprintf("the plan and the options are on the ticket, but the estimate failed: %v", err))
+			return *s.park(ctx, fmt.Sprintf("the plan and the options are on the ticket, but the estimate failed: %v", err))
 		}
 		fmt.Fprintf(s.d.Out, "set the estimate to %d\n", *draft.Estimate)
 	}
 
 	if err := s.d.Board.UpdateIssue(ctx, s.issue.ID, linear.IssueUpdate{StateID: stateID}); err != nil {
-		return *s.parkCtx(ctx, fmt.Sprintf("every deliverable is on the ticket, but the move to %s failed: %v — the scope is readable, it just is not on anyone's desk", s.d.Cov.StatusName("scoped"), err))
+		return *s.park(ctx, fmt.Sprintf("every deliverable is on the ticket, but the move to %s failed: %v — the scope is readable, it just is not on anyone's desk", s.d.Cov.StatusName("scoped"), err))
 	}
 
 	reason := fmt.Sprintf("scoped: %s recommended, plan and options on the ticket, %s for a human to judge",
@@ -454,7 +454,7 @@ func (s *scoping) work(ctx context.Context, phase string, round int, rules []str
 	fmt.Fprintf(s.d.Out, "phase %s: spawning a cold worker (%s)\n", phase, s.d.Harness)
 	if err := s.r.StartPhase(phase, round); err != nil {
 		// An unjournaled phase must not run; that is the journal's one rule.
-		return worker.Result{}, s.park(fmt.Sprintf("could not journal phase %s: %v", phase, err))
+		return worker.Result{}, s.park(ctx, fmt.Sprintf("could not journal phase %s: %v", phase, err))
 	}
 	spec := worker.Spec{
 		Mode:        phase + " (read-only research; no worktree, no branch, no CI)",
@@ -490,13 +490,17 @@ func (s *scoping) work(ctx context.Context, phase string, round int, rules []str
 		detail.OutputTail = tailOf(res.Output)
 	}
 	if jerr := s.r.EndPhase(detail); jerr != nil {
-		return res, s.park(fmt.Sprintf("could not journal the end of phase %s: %v", phase, jerr))
+		return res, s.park(ctx, fmt.Sprintf("could not journal the end of phase %s: %v", phase, jerr))
 	}
 	if ctx.Err() != nil {
-		return res, s.park(context.Cause(ctx).Error())
+		// Load-bearing even though park re-derives the same sentence: a
+		// worker that returned cleanly just as the cancel landed has a nil
+		// err, and falling through would report success for a run the
+		// operator already stopped.
+		return res, s.park(ctx, context.Cause(ctx).Error())
 	}
 	if err != nil {
-		return res, s.park(fmt.Sprintf("the %s worker failed: %v", phase, err))
+		return res, s.park(ctx, fmt.Sprintf("the %s worker failed: %v", phase, err))
 	}
 	return res, nil
 }
@@ -526,10 +530,10 @@ func (s *scoping) heartbeat(phase string, round int) func() {
 func (s *scoping) requireUntouched(ctx context.Context, phase string) *Outcome {
 	after, err := s.d.Tree.Status(ctx, s.d.Repo)
 	if err != nil {
-		return s.park(fmt.Sprintf("could not check the repository after the %s ran: %v", phase, err))
+		return s.park(ctx, fmt.Sprintf("could not check the repository after the %s ran: %v", phase, err))
 	}
 	if after != s.treeBefore {
-		return s.park(fmt.Sprintf(
+		return s.park(ctx, fmt.Sprintf(
 			"the %s changed the repository it was told only to read; %s is your checkout, not a workspace this run owns, so nothing was written to the ticket and the change is left for you to look at (`git status` in %s). The %s's handoff is in this run's journal",
 			phase, s.d.Repo, s.d.Repo, phase))
 	}
@@ -541,7 +545,7 @@ func (s *scoping) requireUntouched(ctx context.Context, phase string) *Outcome {
 // carrying both what it wanted to say and why it could not.
 func (s *scoping) handback(ctx context.Context, comment, reason string) *Outcome {
 	if _, err := verbs.Handback(ctx, s.d.Board, s.d.Cov, s.issue.Identifier, comment); err != nil {
-		return s.parkCtx(ctx, fmt.Sprintf("hand-back failed: %v (the run was handing back because: %s)", err, reason))
+		return s.park(ctx, fmt.Sprintf("hand-back failed: %v (the run was handing back because: %s)", err, reason))
 	}
 	if err := s.r.HandedBack(reason); err != nil {
 		fmt.Fprintf(s.d.Out, "journal: %v\n", err)
@@ -549,23 +553,28 @@ func (s *scoping) handback(ctx context.Context, comment, reason string) *Outcome
 	return &Outcome{Kind: journal.HandedBack, Reason: reason}
 }
 
-// park ends the run without deciding, journal-only: reachable even when
-// Linear is what broke.
-func (s *scoping) park(reason string) *Outcome {
+// park ends the run without deciding, preferring the interrupt's own
+// sentence when the context is what killed the operation — "interrupted by
+// SIGTERM" explains a run; "Post …: context canceled" does not.
+//
+// One function rather than the park/parkCtx pair this used to be, and the
+// same shape as run's: every ending path now carries the context, so no
+// call site can pick the variant that forgets to tell the ticket.
+//
+// The journal is written first and is the run's real ending: it is
+// reachable even when Linear is what broke, which is what most of the park
+// sites here are. [verbs.ReportPark] then puts the same sentence on the
+// ticket, best-effort — it cannot fail this function and cannot re-enter
+// it.
+func (s *scoping) park(ctx context.Context, reason string) *Outcome {
+	if ctx.Err() != nil {
+		reason = context.Cause(ctx).Error()
+	}
 	if err := s.r.Parked(reason); err != nil {
 		fmt.Fprintf(s.d.Out, "journal: %v\n", err)
 	}
+	verbs.ReportPark(ctx, s.d.Board, s.d.Out, s.issue.ID, reason)
 	return &Outcome{Kind: journal.Parked, Reason: reason}
-}
-
-// parkCtx parks, preferring the interrupt's own sentence when the context
-// is what killed the operation — "interrupted by SIGTERM" explains a run;
-// "Post …: context canceled" does not.
-func (s *scoping) parkCtx(ctx context.Context, reason string) *Outcome {
-	if ctx.Err() != nil {
-		return s.park(context.Cause(ctx).Error())
-	}
-	return s.park(reason)
 }
 
 // note journals something worth reading later; failing to write one is

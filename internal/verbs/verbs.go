@@ -1,5 +1,6 @@
 // Package verbs implements the single-writer lifecycle actions an
-// interactive session performs: claim, handback, abandon, file.
+// interactive session performs: claim, handback, abandon, file, and the
+// one an orchestrator performs on its way out, report-park.
 //
 // Each verb encodes an ordering rule the reference system carried as prose —
 // and prose ordering is remembered ordering, which is to say sometimes
@@ -19,6 +20,9 @@
 //   - file searches for near-duplicates before filing, and files into
 //     Triage with the agent-filed label and no priority. An agent never
 //     promotes what it filed.
+//   - report-park posts the reason before adding the parked label, so a
+//     failure between the two leaves a ticket that explains itself rather
+//     than one marked stopped for reasons nobody can read.
 //
 // Every status this package writes passes through guard.CheckState first —
 // the same verdict function behind the hook — so wand's own write path
@@ -31,7 +35,9 @@ package verbs
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
+	"time"
 
 	"github.com/mattwalters/wand/internal/covenant"
 	"github.com/mattwalters/wand/internal/guard"
@@ -188,6 +194,113 @@ func Handback(ctx context.Context, cl Linear, cov covenant.Covenant, identifier,
 		return linear.Issue{}, err
 	}
 	return issue, nil
+}
+
+// ParkedLabel marks a ticket whose run stopped without deciding. Like the
+// other three, it is covenant topology, not a parameter (see
+// covenant.Default).
+//
+// A label rather than a status is the whole point. A park is not a
+// judgment about the work, it is a report that the machine stopped —
+// often for a reason that has nothing to do with the ticket, like a host
+// that slept mid-phase. Demoting to Backlog on those would revoke a
+// human's blessing over an infrastructure hiccup, and Needs Input means
+// only "answer me" (WND-54). So the ticket keeps its place in the
+// lifecycle and gains a mark anyone can see and query.
+const ParkedLabel = "parked"
+
+// Parker is the slice of the client [ReportPark] writes through. Its own
+// interface, narrower than [Linear] and wider in one direction — AddLabel
+// is not a verb the others need — so a caller does not have to grow its
+// interface to reach this one. Same reasoning as [StateResolver].
+type Parker interface {
+	CreateComment(ctx context.Context, issueID, body string) error
+	LabelByName(ctx context.Context, name string) (linear.Label, bool, error)
+	AddLabel(ctx context.Context, issueID, labelID string) error
+}
+
+// ReportPark tells the ticket what the journal already knows: this run
+// stopped without deciding, and here is why.
+//
+// It exists because parking was for a long time the one terminal outcome
+// that wrote nothing to Linear. Converging comments and labels and moves
+// to In Review; handing back comments and moves to Needs Input; parking
+// journaled a sentence to a file on the operator's machine and left the
+// ticket In Progress, assigned, with nothing on it — a ticket that looks
+// worked and is not, which is the state nothing drains and no one can
+// explain.
+//
+// Two properties make this safe to call from a failure path, and both are
+// the reason it returns nothing:
+//
+//   - **Best-effort, never fatal.** Every failure here is written to out
+//     and swallowed. The caller has already journaled the park; the
+//     journal is the system of record and this is the courtesy copy. A
+//     report that failed must never become a second ending, and above all
+//     must never re-enter the caller's park — half of run's park sites
+//     are Linear failures, so a park that parked on its own report would
+//     recurse exactly when Linear is what broke.
+//
+//   - **It outlives the cancellation that caused it.** The most common
+//     park is an interrupt, which arrives as a canceled context — the
+//     very context every Linear call would be made on. Reporting on it
+//     would fail every time, so the writes run on [context.WithoutCancel]
+//     under their own short deadline. A run being torn down still gets to
+//     say why, and still cannot hang doing it.
+//
+// Comment before label, matching [Handback]'s ordering rule: if the label
+// fails the ticket still carries the explanation, which is the half a
+// human actually needs. The reverse leaves a ticket marked parked with
+// nothing saying why — the same shape as a Needs Input ticket that asks
+// no question.
+func ReportPark(ctx context.Context, cl Parker, out io.Writer, issueID, reason string) {
+	if cl == nil || issueID == "" {
+		return
+	}
+	if out == nil {
+		out = io.Discard
+	}
+
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), reportParkTimeout)
+	defer cancel()
+
+	if err := cl.CreateComment(ctx, issueID, ParkedComment(reason)); err != nil {
+		fmt.Fprintf(out, "note: the run parked, but saying so on the ticket failed: %v\n", err)
+		return
+	}
+	label, found, err := cl.LabelByName(ctx, ParkedLabel)
+	if err != nil {
+		fmt.Fprintf(out, "note: the park is on the ticket, but resolving the %q label failed: %v\n", ParkedLabel, err)
+		return
+	}
+	if !found {
+		fmt.Fprintf(out, "note: no %q label anywhere in the workspace; run `wand init` to bring the team to the covenant\n", ParkedLabel)
+		return
+	}
+	if err := cl.AddLabel(ctx, issueID, label.ID); err != nil {
+		fmt.Fprintf(out, "note: the park is on the ticket, but labeling it %q failed: %v\n", ParkedLabel, err)
+	}
+}
+
+// reportParkTimeout bounds the courtesy writes. Short on purpose: this
+// runs while a process is unwinding, sometimes one a supervisor is already
+// counting down on, and a report nobody waits for is worth more than a
+// teardown that hangs.
+const reportParkTimeout = 15 * time.Second
+
+// ParkedComment is the body [ReportPark] posts. Exported because it is
+// what the tests assert on and what the docs quote: the wording is the
+// interface here, not an implementation detail.
+//
+// It says what stopped, why, and what the reader is expected to do — a
+// park with no next move reads as noise, and lanes people learn to skip
+// are lanes that stop being read at all.
+func ParkedComment(reason string) string {
+	return fmt.Sprintf(
+		"**This run parked.** It stopped without deciding, so nothing is driving this ticket right now.\n\n> %s\n\n"+
+			"The ticket keeps its place in the lifecycle — a park is a report that the machine stopped, not a judgment about the work. "+
+			"Remove the `%s` label once you have looked; `wand dispatch` will pick the ticket up again on a later pass.",
+		strings.TrimSpace(reason), ParkedLabel)
 }
 
 // Correction is one anchored edit to the description: the exact wording the

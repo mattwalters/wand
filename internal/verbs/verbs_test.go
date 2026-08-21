@@ -23,9 +23,12 @@ type fake struct {
 	search []linear.Issue
 
 	commentErr error
+	labelErr   error
+	addErr     error
 
 	calls    []string
 	comments []string
+	added    []string
 	updates  []linear.IssueUpdate
 	creates  []linear.IssueCreate
 }
@@ -44,6 +47,9 @@ func (f *fake) Viewer(ctx context.Context) (linear.User, error) {
 }
 
 func (f *fake) CreateComment(ctx context.Context, issueID, body string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 	if f.commentErr != nil {
 		return f.commentErr
 	}
@@ -62,7 +68,22 @@ func (f *fake) TeamByKey(ctx context.Context, key string) (linear.Team, error) {
 	return f.team, nil
 }
 
+func (f *fake) AddLabel(ctx context.Context, issueID, labelID string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if f.addErr != nil {
+		return f.addErr
+	}
+	f.calls = append(f.calls, "label")
+	f.added = append(f.added, labelID)
+	return nil
+}
+
 func (f *fake) LabelByName(ctx context.Context, name string) (linear.Label, bool, error) {
+	if f.labelErr != nil {
+		return linear.Label{}, false, f.labelErr
+	}
 	for _, l := range f.labels {
 		if strings.EqualFold(l.Name, name) {
 			return l, true, nil
@@ -454,5 +475,85 @@ func TestResolveStateRoutesThroughTheGuard(t *testing.T) {
 	}
 	if len(f.updates) != 0 {
 		t.Errorf("status was written past the guard: %+v", f.updates)
+	}
+}
+
+// parkedLabels is a board that already carries the covenant's parked label.
+func parkedLabels() []linear.Label {
+	return []linear.Label{{ID: "lbl-parked", Name: ParkedLabel}}
+}
+
+// The ordering rule, stated the way Handback's is: the explanation lands
+// before the mark. A ticket marked parked with nothing saying why is the
+// same shape as a Needs Input ticket that asks no question.
+func TestReportParkCommentsBeforeLabeling(t *testing.T) {
+	f := &fake{labels: parkedLabels()}
+	var out strings.Builder
+
+	ReportPark(context.Background(), f, &out, "issue-1", "the implement worker timed out after 30m0s")
+
+	if got := strings.Join(f.calls, ","); got != "comment,label" {
+		t.Fatalf("calls = %q, want %q", got, "comment,label")
+	}
+	if len(f.added) != 1 || f.added[0] != "lbl-parked" {
+		t.Errorf("added = %v, want the parked label's id", f.added)
+	}
+	if body := f.comments[0]; !strings.Contains(body, "timed out after 30m0s") {
+		t.Errorf("the report does not quote the reason:\n%s", body)
+	}
+	if body := f.comments[0]; !strings.Contains(body, ParkedLabel) {
+		t.Errorf("the report does not tell the reader how to clear it:\n%s", body)
+	}
+}
+
+// The property that makes this callable from a failure path. Half of run's
+// park sites are themselves Linear failures; a report that could fail the
+// caller would turn "Linear is down" into a park that parks on its own
+// report, recursing exactly when Linear is already broken.
+func TestReportParkSurvivesAFailingBoard(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		f    *fake
+		want string
+	}{
+		{"the comment fails", &fake{labels: parkedLabels(), commentErr: errors.New("linear is down")}, "saying so on the ticket failed"},
+		{"the label cannot be resolved", &fake{labelErr: errors.New("linear is down")}, "resolving the \"parked\" label failed"},
+		{"the workspace has no parked label", &fake{}, "run `wand init`"},
+		{"the label will not attach", &fake{labels: parkedLabels(), addErr: errors.New("linear is down")}, "labeling it \"parked\" failed"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out strings.Builder
+			ReportPark(context.Background(), tc.f, &out, "issue-1", "a reason")
+			if !strings.Contains(out.String(), tc.want) {
+				t.Errorf("the operator is not told what went wrong:\ngot  %q\nwant it to contain %q", out.String(), tc.want)
+			}
+		})
+	}
+}
+
+// The most common park is an interrupt, which arrives as a canceled
+// context — the very context every Linear call would ride. Reporting on it
+// would fail every time, so the writes run on a context that outlives the
+// cancellation. Remove context.WithoutCancel and this is what fails.
+func TestReportParkOutlivesACanceledContext(t *testing.T) {
+	f := &fake{labels: parkedLabels()}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	var out strings.Builder
+	ReportPark(ctx, f, &out, "issue-1", "interrupted by terminated")
+
+	if got := strings.Join(f.calls, ","); got != "comment,label" {
+		t.Fatalf("an interrupted run could not report its park: calls = %q, out = %q", got, out.String())
+	}
+}
+
+// Nothing to report to is not an error. wand pm runs against a brief
+// rather than a ticket, and a park there is journal-only by design.
+func TestReportParkWithNoTicketWritesNothing(t *testing.T) {
+	f := &fake{labels: parkedLabels()}
+	ReportPark(context.Background(), f, nil, "", "a reason")
+	if len(f.calls) != 0 {
+		t.Errorf("wrote to a ticket that does not exist: %v", f.calls)
 	}
 }

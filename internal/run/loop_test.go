@@ -15,6 +15,7 @@ import (
 	"github.com/mattwalters/wand/internal/covenant"
 	"github.com/mattwalters/wand/internal/journal"
 	"github.com/mattwalters/wand/internal/linear"
+	"github.com/mattwalters/wand/internal/verbs"
 	"github.com/mattwalters/wand/internal/worker"
 )
 
@@ -293,6 +294,7 @@ func newFixture(t *testing.T) *fixture {
 			},
 			labels: map[string]linear.Label{
 				ReadyForHumanLabel: {ID: "label-rfh", Name: ReadyForHumanLabel},
+				verbs.ParkedLabel:  {ID: "label-parked", Name: verbs.ParkedLabel},
 			},
 		},
 		git:     &fakeGit{ahead: 1},
@@ -991,4 +993,56 @@ func equal(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// WND-69. A park used to be the one terminal outcome that wrote nothing to
+// Linear: the ticket stayed In Progress, assigned, with no explanation on
+// it, while the reason sat in a journal file on the operator's machine.
+// That ticket looks worked and is not, which is the state nothing drains.
+func TestAParkIsReportedOnTheTicket(t *testing.T) {
+	f := newFixture(t)
+	f.workers.steps = []workerStep{{err: errors.New("claude-code timed out after 1m0s")}}
+
+	out := f.execute(t)
+	if out.Kind != journal.Parked {
+		t.Fatalf("outcome %+v, want parked", out)
+	}
+
+	// The claim's own update opens every run; the park report is what
+	// follows it, and comment-before-label is the ordering rule.
+	var kinds []string
+	for _, c := range f.board.calls {
+		kinds = append(kinds, c.kind)
+	}
+	if got := strings.Join(kinds, ","); got != "update,comment,label" {
+		t.Fatalf("board calls = %q, want the claim then the park report", got)
+	}
+	if c := f.board.lastComment(); !strings.Contains(c, "timed out after 1m0s") {
+		t.Errorf("the report does not quote the reason:\n%s", c)
+	}
+	// The mark is a label, not a status: a park is a report that the
+	// machine stopped, not a judgment about the work, and demoting here
+	// would revoke a human's blessing over an infrastructure failure. The
+	// claim's In Progress is the only status this run may write.
+	if w := f.board.statusWrites(); len(w) != 1 {
+		t.Errorf("status writes = %v, want only the claim's In Progress", w)
+	}
+}
+
+// The report is a courtesy copy; the journal is the ending. A board that
+// refuses the report must not turn one park into two, nor into a panic —
+// half the park sites in run.go are Linear failures already.
+func TestAParkThatCannotReachLinearIsStillOnePark(t *testing.T) {
+	f := newFixture(t)
+	f.workers.steps = []workerStep{{err: errors.New("claude-code timed out after 1m0s")}}
+	f.board.labels = nil // no parked label anywhere: the report cannot land
+
+	out := f.execute(t)
+
+	if out.Kind != journal.Parked || !strings.Contains(out.Reason, "timed out") {
+		t.Fatalf("outcome %+v, want the park to survive a board that refused the report", out)
+	}
+	if st := f.journalOutcome(t, out.RunID); st.Outcome != journal.Parked {
+		t.Errorf("journal outcome = %q, want exactly one parked ending", st.Outcome)
+	}
 }

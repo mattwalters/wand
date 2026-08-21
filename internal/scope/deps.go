@@ -20,6 +20,10 @@ import (
 type Board interface {
 	verbs.Linear
 	IssueComments(ctx context.Context, issueID string) ([]linear.Comment, error)
+	// AddLabel marks the ticket. The scout's own writes never need it —
+	// it is here so a parked scope can be reported with verbs.ReportPark,
+	// which labels rather than moving a status the scout does not own.
+	AddLabel(ctx context.Context, issueID, labelID string) error
 	// UpsertSection writes one marker-fenced region of the description,
 	// leaving every byte outside it alone.
 	UpsertSection(ctx context.Context, issueID, description, id, markdown string) (next string, changed bool, err error)
