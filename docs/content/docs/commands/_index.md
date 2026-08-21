@@ -35,7 +35,8 @@ needs one.
 key from the environment, never from a file — a key in a checked-in file is
 a key in the repo forever. Create one in Linear's security settings.
 `wand version` is the exception, along with `wand ui --sample` and
-`wand ui --dump-screen`, which render a built-in board.
+`wand ui --dump-screen`, which render a built-in board, and
+[`wand stats`](../stats/), which reads only the local journal store.
 
 **The covenant file.** A checked-in [`wand.toml`](../covenant/)
 parameterizes the covenant — status names, caps, commands. Absent one, the
