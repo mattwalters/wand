@@ -201,7 +201,7 @@ wand ui --dump-screen [--script KEYS] [--width N] [--height N]
   Ready for human  1 to look at
   WND-35  In Review  Run journal and lease store
 
-  Lanes  2 to resolve
+  Stalled  2 to resolve
   WND-36  stuck      held by pid 48213 on studio.local, which is gone; the run …
   WND-33  parked     the worktree was dirty at handoff; refusing to park noise …
 
@@ -233,18 +233,22 @@ label: a pull request to review, a merge to press. Closed issues are
 dropped, because the label outlives the merge that answered it.</p>
 </li>
 <li>
-<p><strong>Lanes</strong> — runs the crash-only run journal says a person has to
+<p><strong>Stalled</strong> — runs the crash-only run journal says a person has to
 resolve. Four kinds, worst first: <code>stuck</code> (the journal says it is running
 and its holder is provably dead), <code>orphaned</code> (a live run whose ticket is
-not in a started status — nothing on the board claims the lane),
+not in a started status — nothing on the board claims the run),
 <code>unclear</code> (a holder on a machine this one cannot see, which is never swept
 automatically), and <code>parked</code> (the run stopped and recorded why).</p>
-<p>A parked lane is the one a person can act on: <code>clear parked</code> removes the
-<code>parked</code> label from its ticket, and the lane goes with it. That is not a
+<p>A parked run is the one a person can act on: <code>clear parked</code> removes the
+<code>parked</code> label from its ticket, and the row goes with it. That is not a
 cosmetic dismissal — the label is what makes a park a live obligation, so
-clearing it is the act, and the lane is a picture of it. The other three
+clearing it is the act, and the row is a picture of it. The other three
 kinds are read-only: they describe a process misbehaving right now, and
 resolving one means going to the machine.</p>
+<p>These are runs, not the dispatch <em>lanes</em> of the same name that
+<a href="../dispatch/"><code>wand dispatch</code></a> counts. A lane is a concurrency slot; a
+stalled run is one that needs you, and a <code>stuck</code> one holds no lane at all
+— being provably dead is exactly what frees it.</p>
 </li>
 </ul>
 <p>The sections are always all five, even when empty. A queue that vanished
@@ -285,12 +289,12 @@ disappears entirely when nothing is running — a cockpit nobody has pointed
 at a live run still reads exactly as it did before this existed.</p>
 <p>A run whose own liveness judgment says its holder is gone reads
 <code>possibly dead, sweep will confirm</code> rather than being dropped or guessed at
-a second time: that judgment is the same one <a href="#the-four-queues">Lanes</a> uses
-for a <code>stuck</code> lane, and only <a href="../sweep/"><code>wand sweep</code></a> ever turns it into an
-action. A run that is actually stuck this way is <em>also</em> a <code>stuck</code> lane below
-— the strip says what the journal currently believes is running, the lane
-says a person has to do something about it, and a run can be both at once
-until sweep reaps it.</p>
+a second time: that judgment is the same one <a href="#the-four-queues">Stalled</a>
+uses for a <code>stuck</code> run, and only <a href="../sweep/"><code>wand sweep</code></a> ever turns it
+into an action. A run that is actually stuck this way is <em>also</em> a <code>stuck</code>
+row below — the strip says what the journal currently believes is running,
+the Stalled section says a person has to do something about it, and a run
+can be both at once until sweep reaps it.</p>
 <h2 id="blessing">Blessing</h2>
 <p>Promoting a ticket to <strong>Todo</strong> or <strong>To Plan</strong> is the transition
 <a href="../guard/"><code>wand guard</code></a> refuses everywhere else, because it hands out
@@ -371,7 +375,7 @@ one did not land instead of guessing:</p>
 <p>Triage and Needs Input rows get all six of the first table below. A Plan
 Review row gets only two — bless, or reject with a reason — which is <code>t</code>
 and <code>b</code> from the same table, but pointed at a plan rather than a raw
-ticket. Ready-for-human and lane rows offer none, and the screen says why
+ticket. Ready-for-human and stalled rows offer none, and the screen says why
 rather than leaving a key to do nothing.</p>
 <table>
 	<thead>
