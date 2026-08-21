@@ -18,8 +18,8 @@ read-mostly pass that picks the one ticket to run next through `run` or
 `plan` and runs it, one ticket per pass, with `--watch` to poll and spawn
 detached children; `sweep` is everything that happens after a run exits —
 a re-review label, an unresolved PR thread on a ready-for-human ticket, or
-a lease whose owner is provably dead, one action per pass; and `ui` is the
-cockpit: the five queues waiting on a human, and the only surface in wand
+a lease whose owner is provably dead, one action per pass; and `ui` opens
+home: the five queues waiting on a human, and the only surface in wand
 that performs the transitions the guard forbids — blessing is a human act,
 so it has a human door. [PLAN.md](./PLAN.md) is the build order and the
 reasoning — a deliberately mortal document; the Linear tickets are the
@@ -35,7 +35,7 @@ internal/linear/     the Linear GraphQL client — raw net/http, no GraphQL libr
 internal/covenant/   the process contract: fixed topology, parameterized covenant
 internal/bootstrap/  planner/executor over the covenant; all decisions in the pure Plan
 internal/guard/      the one verdict function: which ticket writes an agent may never make
-internal/cockpit/    what is waiting on a human: the five queues, the seven judgments,
+internal/home/       what is waiting on a human: the five queues, the seven judgments,
                      the one write path that deliberately does not call the guard, and
                      the read-only Running strip over the journal and lease store
 internal/doctor/     read-only drift report: bootstrap.Plan as the diff, plus what Plan cannot express
@@ -56,7 +56,7 @@ internal/dispatch/   the selector behind `wand dispatch`: lock, gc dead leases, 
                      and vet Todo and To Plan, run the winner through run/plan
 internal/sweep/      everything behind `wand sweep`: re-review labels, unresolved PR
                      threads and dead leases, ranked, one write per pass
-internal/tui/        Bubble Tea models — the cockpit itself
+internal/tui/        Bubble Tea models — home itself
   testdata/screens/  golden screens (plain text pictures of the UI)
 internal/theme/      every lipgloss style, in one place
 internal/screen/     the renderer: model -> real program -> vt -> text
@@ -80,7 +80,7 @@ write either orchestrator makes, and every write attempt a harness's own
 tool call makes through its PreToolUse hook, is checked by the same
 `guard` verdict function — the guard sits in front of every write path but
 one. `sweep` runs after an orchestrator has already exited, acting on what
-it left behind. `ui` (the cockpit) is a reader over Linear and the journal
+it left behind. `ui` (home) is a reader over Linear and the journal
 that also holds the one write path deliberately wired around the guard,
 because it fires only on a human's own keystroke, never on an unattended
 agent.
@@ -110,7 +110,7 @@ agent.
                      write
 
     wand ui          reads Linear + the journal, read-only, except
-    (the cockpit)     Apply() — the one write path that skips the guard,
+    (home)            Apply() — the one write path that skips the guard,
                       because it runs only on a human's own keystroke,
                       never unattended
 ```

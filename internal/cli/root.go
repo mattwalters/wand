@@ -26,10 +26,10 @@ func Root() *cobra.Command {
 		// A bare `wand` takes no arguments; anything after it is either a
 		// subcommand (handled before Args runs) or a typo, and a typo
 		// should fail as an unknown command rather than silently opening
-		// the cockpit.
+		// home.
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			// A terminal is what makes the cockpit possible at all: Bubble
+			// A terminal is what makes home possible at all: Bubble
 			// Tea needs one to draw into. Anything else — a pipe, a script,
 			// CI — reads as "what is this", so it gets the same help a
 			// bare `wand` printed before this command existed.
@@ -41,7 +41,7 @@ func Root() *cobra.Command {
 			// key press, reachable from here exactly as it is from
 			// `wand ui`, with the same default harness and poll interval
 			// `wand ui`'s own flags default to.
-			return runCockpit(cmd, "", "claude-code", "", "", screen.DefaultWidth, screen.DefaultHeight, time.Minute)
+			return runHome(cmd, "", "claude-code", "", "", screen.DefaultWidth, screen.DefaultHeight, time.Minute)
 		},
 	}
 

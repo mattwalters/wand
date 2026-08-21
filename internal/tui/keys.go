@@ -6,7 +6,7 @@ import "charm.land/bubbles/v2/key"
 // struct means the help line and the Update switch cannot drift apart.
 //
 // The disposition keys are deliberately *not* here: they live on
-// cockpit.Disposition, next to the sentence each one means, so that adding a
+// home.Disposition, next to the sentence each one means, so that adding a
 // judgment is one edit rather than three that have to agree.
 type keyMap struct {
 	Up      key.Binding

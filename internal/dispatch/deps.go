@@ -27,7 +27,7 @@ type Board interface {
 }
 
 // Runs is the slice of the journal store dispatch reads to count lane
-// occupancy — the same narrow slice [cockpit.Runs] uses, for the same
+// occupancy — the same narrow slice [home.Runs] uses, for the same
 // reason: a walk of the store plus a liveness check per run, nothing else.
 type Runs interface {
 	List() ([]string, error)

@@ -1,4 +1,4 @@
-package cockpit
+package home
 
 import (
 	"errors"
@@ -21,8 +21,8 @@ func activeReport(id, ticket, phase string, round int, started, renewed time.Tim
 	}
 }
 
-// A repository with no run store yet has nothing running on it, and a
-// cockpit that refused to draw for want of one would be useless until the
+// A repository with no run store yet has nothing running on it, and a home
+// screen that refused to draw for want of one would be useless until the
 // first orchestrator shipped — the same tolerance [ReadStalled] gives a nil
 // store.
 func TestActiveRunsToleratesNoStore(t *testing.T) {

@@ -256,7 +256,7 @@ func (c *Client) SearchIssues(ctx context.Context, teamKey, term string) ([]Issu
 
 // RelationDuplicate is the relation type marking one issue a duplicate of
 // another. Linear also knows `blocks` and `related`; only this one is
-// written here, by the cockpit, in the same act as setting Duplicate status.
+// written here, by home, in the same act as setting Duplicate status.
 const RelationDuplicate = "duplicate"
 
 // RelationBlocks is the relation type marking one issue as blocking another.

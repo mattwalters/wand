@@ -1,4 +1,4 @@
-package cockpit
+package home
 
 import (
 	"context"
@@ -28,8 +28,8 @@ type Linear interface {
 
 // Runs is the slice of the journal store this package uses.
 //
-// Optional: a repository with no runs yet has no store on disk, and a
-// cockpit that refused to draw for want of one would be useless until the
+// Optional: a repository with no runs yet has no store on disk, and a home
+// screen that refused to draw for want of one would be useless until the
 // first orchestrator shipped. [Read] treats a nil Runs as "nothing stalled".
 type Runs interface {
 	List() ([]string, error)

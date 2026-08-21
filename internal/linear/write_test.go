@@ -162,7 +162,7 @@ func TestRemoveLabelSurfacesRefusal(t *testing.T) {
 	}
 }
 
-// Priority 0 is "No priority", which the cockpit sets deliberately when a
+// Priority 0 is "No priority", which home sets deliberately when a
 // human judges a ticket worth keeping and not worth ranking. A plain int
 // field would make that indistinguishable from "leave it alone", and the
 // ticket would carry its old rank into the pool — the exact opposite of the

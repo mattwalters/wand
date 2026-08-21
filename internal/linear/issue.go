@@ -268,8 +268,8 @@ func (c *Client) IssueComments(ctx context.Context, issueID string) ([]Comment, 
 // given Linear state *type* ("started", "triage", …), following pagination
 // to the end.
 //
-// By type rather than by name because the caller that needs it — the
-// cockpit, asking which tickets are actually being worked — means "any
+// By type rather than by name because the caller that needs it — home,
+// asking which tickets are actually being worked — means "any
 // started column", and a covenant may name two of them (In Progress, In
 // Review). Asking by name would need one query per column and would go
 // stale the moment a covenant adds a third.

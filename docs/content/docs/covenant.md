@@ -90,7 +90,7 @@ it its own state — rather than folding it into Needs Input, which means
 something else entirely — is how the board says so. In Planning is the
 same idea one step earlier: a live plan run is work in flight the same way
 a live build is, not a blessing sitting idle, and giving it its own
-`started` state is what lets the cockpit recognize a live plan run without
+`started` state is what lets home recognize a live plan run without
 a carve-out written just for it.
 
 ## The states, and why each exists
@@ -137,7 +137,7 @@ because it had no board move to claim.
 
 **In Planning** is a live plan run in progress: a scout is (or should be)
 behind it, the same way In Progress means a worker is behind a build. It is
-the state that makes the cockpit's generic started-type read do the right
+the state that makes home's generic started-type read do the right
 thing for a plan run without a carve-out written just for it — a live plan
 run whose ticket is not in In Planning is genuine drift, the same as it
 would be for a build. A plan run ends one of two ways, and both move the
@@ -151,8 +151,8 @@ decision back to a person.
 approaches are argued, and all that remains is a human's judgment. It exists
 because Needs Input was carrying two different jobs after a plan run — "the
 scout has a question" and "the plan is ready to bless" — and those want
-different things from the person reading the board, on different clocks. A
-cockpit whose whole purpose is to sort work by the job it needs from you
+different things from the person reading the board, on different clocks.
+Home's whole purpose is to sort work by the job it needs from you, and it
 cannot do that while one queue holds both. Building already had the pair, In
 Progress and In Review; research now has the full triple — To Plan, In
 Planning, Plan Review mirroring Todo, In Progress, In Review exactly. Like
@@ -187,8 +187,8 @@ same wall. A correctly written instruction that is only sometimes followed
 looks, from the outside, exactly like one that was never written.
 
 So the blessing has one door, and it is a human one:
-[`wand ui`](../commands/ui/), the cockpit. Every other write path in wand
-runs through the guard's verdict function first and is refused; the cockpit
+[`wand ui`](../commands/ui/), home. Every other write path in wand
+runs through the guard's verdict function first and is refused; home
 is the one that does not, because the thing on the other side of it is a
 person who has just been told what the transition authorizes.
 
@@ -196,7 +196,7 @@ person who has just been told what the transition authorizes.
 has two bad options: guess, or stall in In Progress looking healthy. Needs
 Input makes being blocked *visible and cheap* — the ticket says what it is
 waiting for, and surfacing that queue is one quarter of the whole job of
-[the cockpit](../commands/ui/).
+[home](../commands/ui/).
 It is deliberately an `unstarted` state: answering the question re-blesses
 the work, it does not resume it automatically. It means exactly one thing —
 answer me — never "review this," which is Plan Review's job and In Review's;

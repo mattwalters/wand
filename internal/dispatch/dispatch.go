@@ -143,7 +143,7 @@ func (d Deps) selectWinner(ctx context.Context, store *journal.Store) (Winner, b
 			// A run whose journal will not replay cannot be attributed to
 			// this repo at all — there is nothing here to read Meta.Repo
 			// from — so it cannot be counted against this repo's lanes.
-			// The cockpit's own reading of the store is where an
+			// Home's own reading of the store is where an
 			// unreadable run is surfaced for a person.
 			fmt.Fprintf(d.Out, "dispatch: run %s could not be inspected: %v\n", id, err)
 			continue

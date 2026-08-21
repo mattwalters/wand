@@ -8,7 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/mattwalters/wand/internal/cockpit"
+	"github.com/mattwalters/wand/internal/home"
 	"github.com/mattwalters/wand/internal/linear"
 )
 
@@ -108,7 +108,7 @@ func scroll(lines []line, cursor, height int) (visible []line, above, below int)
 }
 
 func (m Model) headerView() string {
-	left := m.theme.Title.Render("wand cockpit")
+	left := m.theme.Title.Render("wand")
 	if m.board.Team != "" {
 		left += m.theme.Muted.Render("· " + m.board.Team)
 	}
@@ -137,7 +137,7 @@ func (m Model) headerView() string {
 // engageLine is the header's second line while engage mode is on: idle
 // with a countdown to the next poll, the ticket the last poll swept, the
 // ticket it dispatched, or both — a tick that did both still reads as one
-// line. Empty while disengaged, so a cockpit nobody has turned into a
+// line. Empty while disengaged, so a home screen nobody has turned into a
 // scheduler still reads exactly as it did before this mode existed.
 func (m Model) engageLine() string {
 	if !m.engaged {
@@ -197,7 +197,7 @@ func (m Model) boardLines() []line {
 	return lines
 }
 
-func (m Model) sectionHeading(s cockpit.Section) string {
+func (m Model) sectionHeading(s home.Section) string {
 	head := m.theme.Heading.Render(pad(gutter) + s.Title)
 	if n := len(s.Rows); n > 0 {
 		head += m.theme.Muted.Render(fmt.Sprintf("  %d %s", n, s.Verb))
@@ -249,7 +249,7 @@ func (m Model) columns() columns {
 
 // rowIdentifier is the row's left column: the ticket, whether the row is a
 // ticket or a stalled run standing in front of one.
-func rowIdentifier(row cockpit.Row) string {
+func rowIdentifier(row home.Row) string {
 	if row.IsStalled() {
 		return row.Stalled.Ticket
 	}
@@ -283,7 +283,7 @@ func (m Model) runningLines(cols columns) []line {
 // kept first among the free-text fields, so a narrow terminal's truncation
 // clips harness or heartbeat before it ever clips the one thing that says a
 // row may not mean what it looks like.
-func (m Model) runningRowView(a cockpit.Active, cols columns) string {
+func (m Model) runningRowView(a home.Active, cols columns) string {
 	var fields []string
 	if a.Stale() {
 		fields = append(fields, "possibly dead, sweep will confirm")
@@ -318,7 +318,7 @@ func ago(now, at time.Time) string {
 	}
 }
 
-func (m Model) rowView(row cockpit.Row, selected bool, cols columns) string {
+func (m Model) rowView(row home.Row, selected bool, cols columns) string {
 	marker := "  "
 	if selected {
 		marker = "› "
@@ -334,7 +334,7 @@ func (m Model) rowView(row cockpit.Row, selected bool, cols columns) string {
 	if selected {
 		return m.theme.Selected.Render(line)
 	}
-	if row.IsStalled() && row.Stalled.Kind != cockpit.StallParked {
+	if row.IsStalled() && row.Stalled.Kind != home.StallParked {
 		return m.theme.Warn.Render(line)
 	}
 	return m.theme.Body.Render(line)
@@ -348,11 +348,11 @@ func (m Model) rowView(row cockpit.Row, selected bool, cols columns) string {
 // An unranked ticket gets a dash rather than a blank. Blank reads as "this
 // column does not apply here", and in Triage the absence of a rank is
 // precisely the thing being judged.
-func (m Model) rowTag(row cockpit.Row) string {
+func (m Model) rowTag(row home.Row) string {
 	if row.IsStalled() {
 		return string(row.Stalled.Kind)
 	}
-	if row.Kind == cockpit.KindReadyForHuman {
+	if row.Kind == home.KindReadyForHuman {
 		return row.Issue.State.Name
 	}
 	if row.Issue.Priority != 0 {
@@ -414,7 +414,7 @@ func (m Model) dispositionHelp() string {
 	if !ok {
 		return ""
 	}
-	disps := cockpit.Dispositions(row)
+	disps := home.Dispositions(row)
 	if len(disps) == 0 {
 		return m.theme.Muted.Render(pad(gutter) + noJudgment(row.Kind))
 	}
@@ -432,11 +432,11 @@ func (m Model) dispositionHelp() string {
 // noJudgment says why a row offers no dispositions. Both sentences name the
 // place the act actually happens, because "read-only" on its own tells a
 // user what they cannot do and not what they should.
-func noJudgment(k cockpit.Kind) string {
+func noJudgment(k home.Kind) string {
 	switch k {
-	case cockpit.KindReadyForHuman:
+	case home.KindReadyForHuman:
 		return "read-only: this one is asking for a review, which happens on the pull request"
-	case cockpit.KindStalled:
+	case home.KindStalled:
 		return "read-only: a run is not a ticket — resolving one means going to the machine"
 	default:
 		return "read-only"
@@ -447,16 +447,16 @@ func noJudgment(k cockpit.Kind) string {
 // own status name in it.
 // The ✦ is the same mark the blessing screen wears, and it is the only
 // place it appears on the board — one glyph for one act.
-func shortName(d cockpit.Disposition, status string) string {
+func shortName(d home.Disposition, status string) string {
 	if d.Stalled {
 		return "clear parked"
 	}
 	switch d.Field {
-	case cockpit.FieldPriority:
+	case home.FieldPriority:
 		return status
-	case cockpit.FieldIdentifier:
+	case home.FieldIdentifier:
 		return "duplicate"
-	case cockpit.FieldReason:
+	case home.FieldReason:
 		// FieldReason now backs two dispositions with different
 		// destinations — Cancel and RejectPlan — so the label has to name
 		// which one this is rather than assuming the older of the two.
@@ -487,7 +487,7 @@ func (m Model) detailView() string {
 		b.WriteString("\n")
 		b.WriteString(m.wrap(m.theme.Body, row.Stalled.Reason))
 		b.WriteString("\n\n")
-		b.WriteString(m.indentWrap(m.theme.Muted, noJudgment(cockpit.KindStalled), gutter))
+		b.WriteString(m.indentWrap(m.theme.Muted, noJudgment(home.KindStalled), gutter))
 		b.WriteString("\n")
 		b.WriteString(m.flashLine())
 		b.WriteString(m.theme.Muted.Render(pad(gutter) + "esc back • q quit"))
@@ -541,9 +541,9 @@ func (m Model) detailView() string {
 // the thing this screen exists to put a human's judgment on — not the
 // description around it, which is the ticket as it stood before the plan
 // run that just ended.
-func (m Model) body(row cockpit.Row) string {
-	if row.Kind == cockpit.KindPlanReview {
-		text, ok, err := cockpit.PlanSection(row.Issue)
+func (m Model) body(row home.Row) string {
+	if row.Kind == home.KindPlanReview {
+		text, ok, err := home.PlanSection(row.Issue)
 		switch {
 		case err != nil:
 			return "the plan section could not be read: " + err.Error()
@@ -649,7 +649,7 @@ func (m Model) confirmView() string {
 // the disposition itself cannot know: an unranked ticket promoted to Todo
 // sorts behind everything ranked, so the blessing works and the work still
 // never starts.
-func (m Model) blessWarning(in cockpit.Intent) string {
+func (m Model) blessWarning(in home.Intent) string {
 	if !in.Disp.Bless || in.Issue.Priority != 0 {
 		return ""
 	}
@@ -657,9 +657,9 @@ func (m Model) blessWarning(in cockpit.Intent) string {
 		"Blessing it authorizes the work without scheduling it.", in.Issue.Identifier)
 }
 
-func (m Model) fieldView(in cockpit.Intent) string {
+func (m Model) fieldView(in home.Intent) string {
 	switch in.Disp.Field {
-	case cockpit.FieldPriority:
+	case home.FieldPriority:
 		var parts []string
 		for p := 1; p <= 4; p++ {
 			label := fmt.Sprintf("%d %s", p, linear.PriorityName(p))
@@ -671,9 +671,9 @@ func (m Model) fieldView(in cockpit.Intent) string {
 		}
 		return m.theme.Muted.Render(fmt.Sprintf("%s%-*s", pad(gutter+2), fieldLabelWidth, "priority")) +
 			strings.Join(parts, " ")
-	case cockpit.FieldIdentifier, cockpit.FieldReason:
+	case home.FieldIdentifier, home.FieldReason:
 		label := "duplicate of"
-		if in.Disp.Field == cockpit.FieldReason {
+		if in.Disp.Field == home.FieldReason {
 			label = "reason"
 		}
 		value := m.input.View()
@@ -694,20 +694,20 @@ func (m Model) fieldView(in cockpit.Intent) string {
 // for these two dispositions is wrong in exactly the direction that gets a
 // cancellation reason posted twice. The sentence is also what makes the
 // frozen field make sense rather than look broken.
-func preWriteNote(in cockpit.Intent) string {
+func preWriteNote(in home.Intent) string {
 	if !in.Done.PreWritten {
 		return ""
 	}
 	switch in.Disp.Field {
-	case cockpit.FieldIdentifier:
+	case home.FieldIdentifier:
 		return "The duplicate link is already recorded, and is not written again: enter retries the status move alone."
-	case cockpit.FieldReason:
+	case home.FieldReason:
 		return "The reason is already posted on the ticket, and is not posted again: enter retries the status move alone."
 	}
 	return ""
 }
 
-func (m Model) confirmHelp(in cockpit.Intent) string {
+func (m Model) confirmHelp(in home.Intent) string {
 	if m.busy {
 		return m.theme.Muted.Render(pad(gutter) + "writing to Linear…")
 	}

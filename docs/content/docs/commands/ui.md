@@ -1,10 +1,10 @@
 ---
 title: wand ui
 weight: 200
-summary: The cockpit — everything waiting on a human, and the one place blessing happens.
+summary: Home — everything waiting on a human, and the one place blessing happens.
 ---
 
-`ui` opens wand's cockpit: one screen answering one question — *what is
+`ui` opens home: one screen answering one question — *what is
 waiting on me?*
 
 Bare `wand`, with a terminal attached and no flags, does the same thing:
@@ -24,14 +24,14 @@ wand ui --dump-screen [--script KEYS] [--width N] [--height N]
 ## The five queues
 
 ```
- wand cockpit · WND                                             7 waiting on you
+ wand · WND                                                     7 waiting on you
 
   Triage  2 to judge
 › WND-42  Low        doctor prints an empty drift section on a clean board
   WND-41  —          guard: a raw state UUID is not matched
 
   Plan Review  1 to bless
-  WND-44  Urgent     cockpit: a fifth queue for plans awaiting blessing
+  WND-44  Urgent     home: a fifth queue for plans awaiting blessing
 
   Needs Input  1 to answer
   WND-38  High       Second harness adapter: which one?
@@ -88,8 +88,8 @@ when it drained would teach you to stop looking for it, and the day it
 refilled you would not notice.
 
 **Backlog is deliberately absent.** A Backlog ticket is not waiting on you;
-it is the pool, and browsing a pool is Linear's job, done better there. The
-cockpit shows what has *stopped*, not what exists.
+it is the pool, and browsing a pool is Linear's job, done better there. Home
+shows what has *stopped*, not what exists.
 
 `enter` opens the row under the cursor; `r` re-reads the whole board. The
 two compose: refreshing while a row is open re-resolves that row against
@@ -124,10 +124,10 @@ fixing one for the whole run.
 
 **Nothing here is waiting on you**, so nothing here counts toward the
 header's count or takes a cursor: hand-launched `wand run` and `wand plan`
-invocations journal identically to an engaged cockpit's own, and appear here
+invocations journal identically to an engaged home's own, and appear here
 identically, whether or not engage mode is on. The strip is read-only and
-disappears entirely when nothing is running — a cockpit nobody has pointed
-at a live run still reads exactly as it did before this existed.
+disappears entirely when nothing is running — a home screen nobody has
+pointed at a live run still reads exactly as it did before this existed.
 
 A run whose own liveness judgment says its holder is gone reads
 `possibly dead, sweep will confirm` rather than being dropped or guessed at
@@ -142,7 +142,7 @@ can be both at once until sweep reaps it.
 
 Promoting a ticket to **Todo** or **To Plan** is the transition
 [`wand guard`](../guard/) refuses everywhere else, because it hands out
-authorization an agent does not have. The cockpit is the one place a person
+authorization an agent does not have. Home is the one place a person
 grants it — and it is a moment, not a keystroke:
 
 ```
@@ -176,7 +176,7 @@ from a ticket you already have open, and this screen exists to put your
 judgment on the plan itself rather than the argument for it.
 
 ```
- WND-44  cockpit: a fifth queue for plans awaiting blessing
+ WND-44  home: a fifth queue for plans awaiting blessing
 
   status    Plan Review
   priority  Urgent
@@ -195,7 +195,7 @@ judgment on the plan itself rather than the argument for it.
 
   ### How it is proven
 
-  Golden screens at two widths, plus the existing cockpit test tiers.
+  Golden screens at two widths, plus the existing home test tiers.
   … 8 more lines; read it in Linear
 
   judge  t ✦Todo  b Backlog
@@ -218,7 +218,7 @@ one did not land instead of guessing:
 ```
   Backlog, with reason
 
-    WND-44  cockpit: a fifth queue for plans awaiting blessing
+    WND-44  home: a fifth queue for plans awaiting blessing
     Plan Review → Backlog
 
     Backlog is the pool. The reason is posted as a comment before the status
@@ -273,7 +273,7 @@ to `Ready` gets a screen that says `→ Ready`.
 
 ## Engage mode
 
-Press `e` to engage. While engaged, the cockpit polls Todo and To Plan on
+Press `e` to engage. While engaged, home polls Todo and To Plan on
 `--interval` (default `1m`) exactly the way `wand dispatch --watch` (see
 [`wand dispatch`](../dispatch/)) does — because it *is* that mechanism,
 reused rather than reimplemented: each poll runs a sweep pass first — the
@@ -282,23 +282,23 @@ back a re-plan or re-review label, or draining an unresolved PR thread on a
 converged ticket, then counts lanes, ranks and vets Todo and To Plan, and
 when a winner exists spawns it as a **detached child process** through
 `wand run` or `wand scope`, the same way `--watch` does. That child
-survives the cockpit: closing the UI, or the whole terminal it runs in,
+survives home: closing the UI, or the whole terminal it runs in,
 never kills work already spawned. Press `e` again to disengage.
 
 The header names what engage mode is doing:
 
 ```
- wand cockpit · WND                                             7 waiting on you
+ wand · WND                                                     7 waiting on you
   engaged · idle · next poll in 40s
 ```
 
 ```
- wand cockpit · WND                                             7 waiting on you
+ wand · WND                                                     7 waiting on you
   engaged · dispatched WND-9 (run) · next poll in 60s
 ```
 
 ```
- wand cockpit · WND                                             7 waiting on you
+ wand · WND                                                     7 waiting on you
   engaged · reaped WND-1 · next poll in 60s
 ```
 
@@ -306,23 +306,23 @@ A tick that both swept and dispatched reads as one line: `engaged · reaped
 WND-1, dispatched WND-9 (run) · next poll in 60s`.
 
 **Engaging is always a deliberate key press, never a default.** Bare
-`wand` opens the cockpit read-for-work but never pre-engaged — opening a
+`wand` opens home read-for-work but never pre-engaged — opening a
 dashboard must not start spending money. Nothing engages it for you.
 
-**Multiple engaged cockpits, and an engaged cockpit alongside a standalone
+**Multiple engaged homes, and an engaged home alongside a standalone
 `wand dispatch`, are all safe together.** Engaging acquires the same
 per-repo dispatch lock `wand dispatch` itself arbitrates: the loser of a
 pass — whichever process asks for the lock second — simply cannot toggle
-on, and the `e` key says why. Disengaging, or quitting the cockpit while
+on, and the `e` key says why. Disengaging, or quitting home while
 engaged, releases the lock; a killed terminal releases it the same way
 `--watch` does, through the lock's own dead-holder reclaim rather than
-through any code in the cockpit.
+through any code in home.
 
 Engage mode needs the same dependencies `wand dispatch` needs to run a
 winner — `LINEAR_API_KEY`, an authenticated `gh`, `commands.verify` in
 `wand.toml`, and a resolvable team key — plus whichever of `--harness`,
 `--model` and `--effort` you want a spawned winner to run with. Missing any
-of them does not stop the cockpit from opening: it opens exactly as it
+of them does not stop home from opening: it opens exactly as it
 always has, read and judge still work, and only the `e` key refuses, saying
 why.
 
@@ -332,8 +332,8 @@ every standalone pass uses, so a gate placed there covers both without
 engage mode needing its own copy of it.
 
 Left out, deliberately: engage mode does not act on the `parked` label — a
-parked lane is a decision only a human at the cockpit makes, by pressing
-`c`, and an engaged cockpit is by definition in front of a person who can
+parked lane is a decision only a human at home makes, by pressing
+`c`, and an engaged home is by definition in front of a person who can
 press it. The poll interval is a flag, not a covenant parameter; that
 remains a natural extension if engage mode earns it.
 
@@ -418,7 +418,7 @@ whatever width the window happens to be.
 
 | Code | Meaning |
 |---|---|
-| `0` | The cockpit exited cleanly, or the screen was printed. |
+| `0` | Home exited cleanly, or the screen was printed. |
 | `1` | No resolvable team key (neither `--team-key` nor `[team] key` in `wand.toml`), an unreachable Linear, an unparseable `--script`, `--script` or `--width`/`--height` without `--dump-screen`, or a failure in the program itself. |
 
 The board is read *before* the alternate screen opens, deliberately: a

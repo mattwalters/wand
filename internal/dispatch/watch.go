@@ -124,7 +124,7 @@ type pendingChild struct {
 }
 
 // Pending tracks children one polling session — `dispatch --watch`'s own
-// loop, or the cockpit's engage-mode loop driving [WatchDeps.Tick] itself —
+// loop, or home's engage-mode loop driving [WatchDeps.Tick] itself —
 // has spawned but that have not yet exited, so a poll immediately after a
 // spawn does not re-read the journal, see no run registered yet, and
 // dispatch a second winner into a lane the first has already claimed.
@@ -173,7 +173,7 @@ func (p *Pending) add(ticket string, verb Verb, cmd *exec.Cmd) {
 }
 
 // TickResult is one poll's outcome: enough for both --watch's own
-// state-change-only logging and a caller like the cockpit's engage mode to
+// state-change-only logging and a caller like home's engage mode to
 // describe precisely what happened, without either re-deriving it from a
 // log line.
 type TickResult struct {
@@ -202,7 +202,7 @@ type TickResult struct {
 // wait this method itself performs is an ordinary network or process-start
 // call, never a sleep — which is what lets a caller drive its own polling
 // schedule around it instead of being driven by Watch's own loop. Watch
-// calls this in its for-loop; the cockpit's engage mode calls it from a
+// calls this in its for-loop; home's engage mode calls it from a
 // tea.Cmd fired on its own interval, holding the same *Pending across ticks
 // the way Watch holds one across its own.
 func (w WatchDeps) Tick(ctx context.Context, store *journal.Store, p *Pending, logDir string) (TickResult, error) {

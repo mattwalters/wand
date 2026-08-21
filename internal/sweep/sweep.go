@@ -321,7 +321,7 @@ func (d Deps) unresolvedThreadCandidates(ctx context.Context, issues []linear.Is
 	return out
 }
 
-// openIssues drops closed work, the same discipline [cockpit.openIssues]
+// openIssues drops closed work, the same discipline [home.openIssues]
 // applies to ready-for-human: a label outlives the merge that answered it.
 func openIssues(issues []linear.Issue) []linear.Issue {
 	var open []linear.Issue

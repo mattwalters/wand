@@ -1,4 +1,4 @@
- WND-44  cockpit: a fifth queue for plans awaiting blessing
+ WND-44  home: a fifth queue for plans awaiting blessing
 
   status    Plan Review
   priority  Urgent

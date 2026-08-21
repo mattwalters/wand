@@ -9,30 +9,30 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/mattwalters/wand/internal/cockpit"
+	"github.com/mattwalters/wand/internal/home"
 	"github.com/mattwalters/wand/internal/journal"
 	"github.com/mattwalters/wand/internal/linear"
 	"github.com/mattwalters/wand/internal/screen"
 	"github.com/mattwalters/wand/internal/tuitest"
 )
 
-// fakeBackend records what the screen asked for. Every write the cockpit
+// fakeBackend records what the screen asked for. Every write home
 // makes is a status transition the guard forbids agents, so a test that
 // could not see exactly which one was attempted would not be testing much.
 type fakeBackend struct {
-	applied []cockpit.Intent
+	applied []home.Intent
 	err     error
 	// preWritten makes Apply fail the way a partial judgment really does:
 	// the comment or the relation landed, the status move did not. It is
-	// what cockpit.Apply reports back through the returned intent.
+	// what home.Apply reports back through the returned intent.
 	preWritten bool
 
 	reads   int
-	snap    cockpit.Snapshot
+	snap    home.Snapshot
 	readErr error
 }
 
-func (f *fakeBackend) Apply(_ context.Context, in cockpit.Intent) (cockpit.Intent, error) {
+func (f *fakeBackend) Apply(_ context.Context, in home.Intent) (home.Intent, error) {
 	f.applied = append(f.applied, in)
 	if f.preWritten {
 		in.Done.PreWritten = true
@@ -40,10 +40,10 @@ func (f *fakeBackend) Apply(_ context.Context, in cockpit.Intent) (cockpit.Inten
 	return in, f.err
 }
 
-func (f *fakeBackend) Read(context.Context) (cockpit.Snapshot, error) {
+func (f *fakeBackend) Read(context.Context) (home.Snapshot, error) {
 	f.reads++
 	if f.readErr != nil {
-		return cockpit.Snapshot{}, f.readErr
+		return home.Snapshot{}, f.readErr
 	}
 	return f.snap, nil
 }
@@ -52,7 +52,7 @@ func (f *fakeBackend) Read(context.Context) (cockpit.Snapshot, error) {
 func board(t *testing.T, back Backend) Model {
 	t.Helper()
 	return New(Config{
-		Snapshot: cockpit.Sample(),
+		Snapshot: home.Sample(),
 		Backend:  back,
 		Width:    screen.DefaultWidth,
 		Height:   screen.DefaultHeight,
@@ -145,8 +145,8 @@ func TestCursorMoves(t *testing.T) {
 func TestRunningRowsAreNotInTheCursorOrder(t *testing.T) {
 	plain := board(t, &fakeBackend{})
 
-	withRunning := cockpit.Sample()
-	withRunning.Active = []cockpit.Active{{RunID: "r", Ticket: "WND-99", Phase: "implement", Verb: "run"}}
+	withRunning := home.Sample()
+	withRunning.Active = []home.Active{{RunID: "r", Ticket: "WND-99", Phase: "implement", Verb: "run"}}
 	m := New(Config{
 		Snapshot: withRunning,
 		Backend:  &fakeBackend{},
@@ -404,7 +404,7 @@ func TestEscapeReturnsWhereItCameFrom(t *testing.T) {
 // The read-only model is the one an agent can reach, through
 // `wand ui --dump-screen`. It must walk every screen and write nothing.
 func TestReadOnlyModelWalksButNeverWrites(t *testing.T) {
-	m := New(Config{Snapshot: cockpit.Sample(), Width: 80, Height: 24})
+	m := New(Config{Snapshot: home.Sample(), Width: 80, Height: 24})
 
 	got, cmd := apply(t, m, "t,enter")
 	if got.state != stateConfirm {
@@ -419,7 +419,7 @@ func TestReadOnlyModelWalksButNeverWrites(t *testing.T) {
 }
 
 func TestRefreshReplacesTheBoard(t *testing.T) {
-	back := &fakeBackend{snap: cockpit.Snapshot{
+	back := &fakeBackend{snap: home.Snapshot{
 		Team:   "WND",
 		Triage: []linear.Issue{{Identifier: "WND-99", Title: "filed since you looked"}},
 	}}
@@ -557,7 +557,7 @@ func TestPlanReviewDetailAtOtherSizes(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.golden, func(t *testing.T) {
 			m := New(Config{
-				Snapshot: cockpit.Sample(),
+				Snapshot: home.Sample(),
 				Backend:  &fakeBackend{},
 				Width:    tt.width,
 				Height:   tt.height,
@@ -567,11 +567,11 @@ func TestPlanReviewDetailAtOtherSizes(t *testing.T) {
 	}
 }
 
-// The empty board is the answer the cockpit exists to be able to give, and
+// The empty board is the answer home exists to be able to give, and
 // it has to say so rather than showing five blank headings.
 func TestEmptyBoard(t *testing.T) {
 	m := New(Config{
-		Snapshot: cockpit.Snapshot{Team: "WND"},
+		Snapshot: home.Snapshot{Team: "WND"},
 		Backend:  &fakeBackend{},
 		Width:    screen.DefaultWidth,
 		Height:   screen.DefaultHeight,
@@ -584,7 +584,7 @@ func TestEmptyBoard(t *testing.T) {
 func TestSampleBoardScreens(t *testing.T) {
 	sample := func() Model {
 		return New(Config{
-			Snapshot: cockpit.Sample(),
+			Snapshot: home.Sample(),
 			Width:    screen.DefaultWidth,
 			Height:   screen.DefaultHeight,
 			Notice:   "sample board — reads no Linear team, and writes none",
@@ -601,8 +601,8 @@ func TestSampleBoardScreens(t *testing.T) {
 // never a second one this screen invents from the heartbeat's age.
 func TestRunningStripScreen(t *testing.T) {
 	now := time.Date(2026, 3, 5, 9, 30, 0, 0, time.UTC)
-	snap := cockpit.Sample()
-	snap.Active = []cockpit.Active{
+	snap := home.Sample()
+	snap.Active = []home.Active{
 		{
 			RunID: "run-1", Ticket: "WND-12", Verb: "run", Harness: "claude-code",
 			Phase: "implement", Round: 1,
@@ -645,7 +645,7 @@ func TestRefreshOnDetailResyncsTheOpenedRow(t *testing.T) {
 
 	// The board comes back with the same ticket, retitled.
 	const retitled = "a title the opened copy has never seen"
-	next := cockpit.Sample()
+	next := home.Sample()
 	next.Triage = retitle(t, next.Triage, m.detail.Issue.Identifier, retitled)
 	back.snap = next
 
@@ -700,7 +700,7 @@ func TestRefreshOnDetailLeavesWhenTheRowIsGone(t *testing.T) {
 	m, _ := apply(t, board(t, back), "enter")
 	gone := m.detail.Issue.Identifier
 
-	next := cockpit.Sample()
+	next := home.Sample()
 	next.Triage = without(t, next.Triage, gone) // somebody else judged it
 	back.snap = next
 
@@ -746,7 +746,7 @@ func TestRefreshFailureIsVisibleOnTheDetailScreen(t *testing.T) {
 
 // The screen keeps a failed judgment on the confirmation so it can be
 // retried. When the failure came after the pre-write landed, the retry has
-// to carry that fact back to cockpit.Apply, or it posts the same reason a
+// to carry that fact back to home.Apply, or it posts the same reason a
 // second time.
 func TestRetryCarriesTheProgressOfAFailedJudgment(t *testing.T) {
 	back := &fakeBackend{err: errors.New("linear: refused the issue update"), preWritten: true}

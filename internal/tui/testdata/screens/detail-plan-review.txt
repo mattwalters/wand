@@ -1,4 +1,4 @@
- WND-44  cockpit: a fifth queue for plans awaiting blessing
+ WND-44  home: a fifth queue for plans awaiting blessing
 
   status    Plan Review
   priority  Urgent
@@ -17,7 +17,7 @@
 
   ### How it is proven
 
-  Golden screens at two widths, plus the existing cockpit test tiers.
+  Golden screens at two widths, plus the existing home test tiers.
   … 8 more lines; read it in Linear
 
   judge  t ✦Todo  b Backlog

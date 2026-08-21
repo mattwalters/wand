@@ -1,4 +1,4 @@
-package cockpit
+package home
 
 import (
 	"fmt"
@@ -8,8 +8,8 @@ import (
 	"github.com/mattwalters/wand/internal/journal"
 )
 
-// Active is one run a live process is presently driving — the cockpit's
-// answer to "what is the machine doing right now?", which is a different
+// Active is one run a live process is presently driving — home's answer to
+// "what is the machine doing right now?", which is a different
 // question from the one the four queues answer. A run belongs here for as
 // long as its journal has not recorded a terminal state, whether or not a
 // process can still be proven to hold it: the same run can be an Active row

@@ -7,7 +7,7 @@ machinery — its covenant, and the blessing path work travels along.
 > installs the guard hook; `guard` enforces the covenant's authorization
 > rules; `queue` and `ticket` are the read layer; the lifecycle verbs
 > (`claim`, `handback`, `abandon`, `file`) are the write layer; `doctor`
-> reports a team's drift from the covenant; `ui` is the cockpit, where a
+> reports a team's drift from the covenant; `ui` opens home, where a
 > human blesses work; `plan` is the first orchestrator — a cold scout that
 > turns one blessed-for-research ticket into a plan a human can bless for
 > building; `run` drives one blessed ticket through the implement → CI →
@@ -51,9 +51,9 @@ repo, or to run against a team other than the one the repo is bound to. A
 repo with `[team] key = "WND"` in its `wand.toml` needs it on none of these:
 
 ```bash
-wand                        # the cockpit: everything waiting on a human
+wand                        # home: everything waiting on a human
 wand help                   # help
-wand ui --team-key WND      # the cockpit, spelled explicitly
+wand ui --team-key WND      # home, spelled explicitly
 wand queue --team-key WND   # the ranked, vetted Todo queue
 wand ticket WND-3           # one ticket whole, for a cold reader
 wand claim WND-3            # take a blessed issue: In Progress + assignee, first
@@ -68,19 +68,19 @@ wand doctor --team-key WND  # report the team's drift from the covenant
 wand version                # build info, and the covenant schema this binary speaks
 ```
 
-## The cockpit
+## Home
 
 `wand ui` is one screen answering one question: **what is waiting on me?**
 
 ```
- wand cockpit · WND                                             7 waiting on you
+ wand · WND                                                     7 waiting on you
 
   Triage  2 to judge
 › WND-42  Low        doctor prints an empty drift section on a clean board
   WND-41  —          guard: a raw state UUID is not matched
 
   Plan Review  1 to bless
-  WND-44  Urgent     cockpit: a fifth queue for plans awaiting blessing
+  WND-44  Urgent     home: a fifth queue for plans awaiting blessing
 
   Needs Input  1 to answer
   WND-38  High       Second harness adapter: which one?
@@ -110,7 +110,7 @@ starts from why the last plan did not land instead of guessing.
 
 **Blessing lives here.** Promoting a ticket to Todo or To Plan is the
 transition [the guard](#the-guard) refuses everywhere else, because it hands
-out authorization an agent does not have. The cockpit is the one place a
+out authorization an agent does not have. Home is the one place a
 person grants it, and it is a deliberate moment rather than a keystroke:
 
 ```
@@ -139,17 +139,17 @@ be on it.
 `wand ui --sample` opens the same screen against a built-in board, so you can
 walk the whole interface without an API key or a team.
 
-Press `e` to **engage**: the cockpit then polls Todo and To Plan on an
+Press `e` to **engage**: home then polls Todo and To Plan on an
 interval, spawning a winner as a detached process, and also drains sweep's
 four conditions — a dead lease, a re-plan or re-review hand-back, an
 unresolved PR thread on a converged ticket — the same pass `wand sweep`
 runs standalone. It is `wand dispatch --watch`'s own mechanics, run from
-inside the cockpit instead of a standalone process. It is always a
-deliberate key press, never a default: bare `wand` opens the cockpit, never
+inside home instead of a standalone process. It is always a
+deliberate key press, never a default: bare `wand` opens home, never
 pre-engaged, because opening a dashboard must not start spending money. See
 the engage mode section of [the `ui` command
 docs](https://wandcli.com/docs/commands/ui/) for the safety story across
-multiple engaged cockpits.
+multiple engaged homes.
 
 `wand version` reports the covenant schema version alongside the build:
 a repo's covenant file declares the schema it was written against, and
@@ -545,7 +545,7 @@ details and the rules that keep it deterministic.
 ## Development
 
 ```bash
-go run . ui --sample # run the cockpit from source, against the sample board
+go run . ui --sample # run home from source, against the sample board
 make test            # fast suite
 make test-e2e        # pty smoke test
 make test-conformance # worker isolation against the real harness (spends a model call)
