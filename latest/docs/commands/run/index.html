@@ -181,7 +181,12 @@ the repository&rsquo;s default branch (<code>origin/main</code>, not a local <co
 be stale or absent):</p>
 <ol>
 <li><strong>implement</strong> — a cold worker gets the whole ticket (description and
-comments) and commits its work in the worktree.</li>
+comments) and commits its work in the worktree. The description is the
+specification; the comments are the record of how it got there — the
+reasoning, the open questions, the answers, approaches raised and
+rejected along the way — and the prompt says so explicitly, so a worker
+is not left to guess which half governs when a ticket&rsquo;s comments carry
+an approach that was proposed and then turned down.</li>
 <li><strong>CI</strong> — the orchestrator runs the covenant&rsquo;s verify command. Every
 failure spawns a cold <strong>fix-CI</strong> worker, up to <code>caps.ci_attempts</code>
 failures across the whole run.</li>
