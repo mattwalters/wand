@@ -51,12 +51,27 @@ func installShim(out io.Writer, dryRun bool) error {
 	return installOneShim(out, dryRun, codexHooksPath, codexEnsured, codexChanged, shim.EnsureCodex)
 }
 
+// commitMe is appended to a line reporting a shim that exists on disk and
+// needs to be in git for the guard to protect anyone beyond whoever ran
+// init: settings.json and hooks.json are committed and shared across
+// machines (internal/shim/shim.go's own doc comment says so), but that
+// reasoning lives in a file nobody adopting wand reads. WND-86 is this
+// exact failure in wand's own repo — the shim regenerated a dozen times,
+// committed never, because nothing ever said to.
+const commitMe = " — commit this file, or only this checkout is protected"
+
 func installOneShim(out io.Writer, dryRun bool, path string, ensured []byte, changed bool, ensure func([]byte) ([]byte, bool, error)) error {
 	if !changed {
-		fmt.Fprintf(out, "guard hook already installed in %s\n", path)
+		note := ""
+		if shim.Tracked(context.Background(), ".", path) == shim.StatusUntracked {
+			note = commitMe
+		}
+		fmt.Fprintf(out, "guard hook already installed in %s%s\n", path, note)
 		return nil
 	}
 	if dryRun {
+		// No file exists yet to commit — dry-run's contract is "print the
+		// plan and write nothing" — so no commit-me note here.
 		fmt.Fprintf(out, "would install PreToolUse guard hook in %s (%s → wand guard)\n", path, shim.Matcher)
 		return nil
 	}
@@ -73,7 +88,8 @@ func installOneShim(out io.Writer, dryRun bool, path string, ensured []byte, cha
 	if _, again, err := ensure(written); err != nil || again {
 		return fmt.Errorf("guard hook still not installed after writing %s", path)
 	}
-	fmt.Fprintf(out, "install PreToolUse guard hook in %s (%s → wand guard)\n", path, shim.Matcher)
+	// A file that was just written to disk always needs committing.
+	fmt.Fprintf(out, "install PreToolUse guard hook in %s (%s → wand guard)%s\n", path, shim.Matcher, commitMe)
 	return nil
 }
 
