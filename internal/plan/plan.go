@@ -425,6 +425,18 @@ func (s *planning) draft(ctx context.Context) (Draft, *Outcome) {
 	return s.parse(ctx, res.Handoff, "scout")
 }
 
+// persistRejected saves a handoff that failed validation to the run's
+// scratch directory before the caller parks: worker.collect deletes a
+// worker's own copy the instant it reads it, so this is the only remaining
+// chance to keep the rejected bytes recoverable rather than a total loss.
+// Every validation site calls this before s.park — see [planning.parse],
+// [planning.parseRevision], [planning.critique], and [planning.parseReplan].
+func (s *planning) persistRejected(raw json.RawMessage, phase string) {
+	if werr := os.WriteFile(s.r.RejectedHandoffPath(), raw, 0o644); werr != nil {
+		fmt.Fprintf(s.d.Out, "could not persist the rejected %s handoff: %v\n", phase, werr)
+	}
+}
+
 // parse validates a draft, journals it, and checks the tree the worker was
 // told not to touch — in that order, so the research survives in the
 // journal even when the run then parks on what the worker did to the
@@ -438,11 +450,7 @@ func (s *planning) draft(ctx context.Context) (Draft, *Outcome) {
 func (s *planning) parse(ctx context.Context, raw json.RawMessage, phase string) (Draft, *Outcome) {
 	draft, err := ParseDraft(raw, s.d.Cov)
 	if err != nil {
-		// Persist before parking: the reason names what was wrong, but only
-		// the bytes let anyone judge whether the validator or the scout was.
-		if werr := os.WriteFile(s.r.RejectedHandoffPath(), raw, 0o644); werr != nil {
-			fmt.Fprintf(s.d.Out, "could not persist the rejected %s handoff: %v\n", phase, werr)
-		}
+		s.persistRejected(raw, phase)
 		return Draft{}, s.park(ctx, fmt.Sprintf("the %s's handoff is unusable, so nothing was written to the ticket: %v", phase, err))
 	}
 	if len(draft.Dropped) > 0 {
@@ -463,9 +471,7 @@ func (s *planning) parse(ctx context.Context, raw json.RawMessage, phase string)
 func (s *planning) parseRevision(ctx context.Context, raw json.RawMessage, objections int) (Revision, *Outcome) {
 	rev, err := ParseRevision(raw, s.d.Cov, objections)
 	if err != nil {
-		if werr := os.WriteFile(s.r.RejectedHandoffPath(), raw, 0o644); werr != nil {
-			fmt.Fprintf(s.d.Out, "could not persist the rejected reviser handoff: %v\n", werr)
-		}
+		s.persistRejected(raw, "reviser")
 		return Revision{}, s.park(ctx, fmt.Sprintf("the reviser's handoff is unusable, so nothing was written to the ticket: %v", err))
 	}
 	if len(rev.Dropped) > 0 {
@@ -496,6 +502,7 @@ func (s *planning) critique(ctx context.Context, draft Draft) (Draft, *Outcome) 
 	}
 	critique, err := ParseCritique(res.Handoff)
 	if err != nil {
+		s.persistRejected(res.Handoff, "critic")
 		return draft, s.park(ctx, fmt.Sprintf("the critic's handoff is unusable: %v — a draft nobody could attack is not thereby sound, so nothing was written", err))
 	}
 	s.note("critique", critique)
@@ -735,9 +742,7 @@ func (s *planning) runReplan(ctx context.Context, comments []linear.Comment) Out
 func (s *planning) parseReplan(ctx context.Context, raw json.RawMessage) (Replan, *Outcome) {
 	rev, err := ParseReplan(raw, s.d.Cov)
 	if err != nil {
-		if werr := os.WriteFile(s.r.RejectedHandoffPath(), raw, 0o644); werr != nil {
-			fmt.Fprintf(s.d.Out, "could not persist the rejected reviser handoff: %v\n", werr)
-		}
+		s.persistRejected(raw, "reviser")
 		return Replan{}, s.park(ctx, fmt.Sprintf("the reviser's handoff is unusable, so nothing was written to the ticket: %v", err))
 	}
 	if len(rev.Dropped) > 0 {
