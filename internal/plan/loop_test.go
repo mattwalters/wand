@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -1190,35 +1191,114 @@ func TestAParkThatCannotReachLinearIsStillOnePark(t *testing.T) {
 // Keeping them is what makes a park diagnosable rather than merely
 // reported. The reason names what was wrong; only the bytes let anyone
 // judge whether the validator or the scout was.
+//
+// This is a table over every phase that can reject a handoff — scout,
+// critic, reviser, and replan — not just the scout. WND-95 was exactly
+// this test covering one phase and missing that the critic's own gate
+// (plan.go's critique, not parse/parseRevision/parseReplan) never persisted
+// at all; a per-phase table is what would have caught it, a second
+// single-phase test would not.
 func TestARejectedHandoffIsKeptForTheHuman(t *testing.T) {
-	bad := goodDraft()
-	delete(bad, "approaches") // structural: still fatal, still discarded
-	h := newHarness(t, workerResult{handoff: bad})
+	cases := []struct {
+		name     string
+		wantFile string
+		setup    func(t *testing.T) (*harness, map[string]any)
+	}{
+		{
+			name:     "scout",
+			wantFile: "scout-1.rejected.json",
+			setup: func(t *testing.T) (*harness, map[string]any) {
+				bad := goodDraft()
+				delete(bad, "approaches") // structural: still fatal, still discarded
+				return newHarness(t, workerResult{handoff: bad}), bad
+			},
+		},
+		{
+			name:     "critic",
+			wantFile: "critic-1.rejected.json",
+			setup: func(t *testing.T) (*harness, map[string]any) {
+				// The exact shape WND-45 parked on: an objection field the
+				// schema does not know, refused by strictUnmarshal.
+				bad := map[string]any{"verdict": "flawed", "objections": []any{
+					map[string]any{"target": "the recommendation", "summary": "Vet cannot see blockers",
+						"consequence": "every plan over a blocked ticket is wrong", "failure_scenario": "bogus extra field"},
+				}}
+				h := newHarness(t, workerResult{handoff: draftHandoff()}, workerResult{handoff: bad})
+				h.deps.Cov.Toggles.PlanCritic = true
+				return h, bad
+			},
+		},
+		{
+			name:     "reviser",
+			wantFile: "revise-1.rejected.json",
+			setup: func(t *testing.T) (*harness, map[string]any) {
+				bad := goodDraft()
+				delete(bad, "approaches") // structural: still fatal, still discarded
+				h := newHarness(t,
+					workerResult{handoff: draftHandoff()},
+					workerResult{handoff: map[string]any{"verdict": "flawed", "objections": []any{
+						map[string]any{"target": "the recommendation", "summary": "Vet cannot see blockers", "consequence": "every plan over a blocked ticket is wrong"},
+					}}},
+					workerResult{handoff: bad},
+				)
+				h.deps.Cov.Toggles.PlanCritic = true
+				return h, bad
+			},
+		},
+		{
+			name:     "replan",
+			wantFile: "replan-1.rejected.json",
+			setup: func(t *testing.T) (*harness, map[string]any) {
+				bad := goodDraft()
+				delete(bad, "approaches") // structural: still fatal, still discarded
+				h := newHarness(t, workerResult{handoff: bad})
+				h.board.issue = rePlanIssue(t)
+				h.board.existingComments = []linear.Comment{
+					{Author: "wand", CreatedAt: time.Now().Add(-time.Hour),
+						Body: plan.OptionsComment(parsedGoodDraft(t), "fibonacci", "Plan Review", plan.Provenance{RunID: "r-1", Harness: "claude-code"})},
+					{Author: "Matt Walters", CreatedAt: time.Now(),
+						Body: "Vet already carries too much; put the filter in Build instead."},
+				}
+				return h, bad
+			},
+		},
+	}
 
-	out, err := h.run(t)
-	if err != nil {
-		t.Fatalf("Execute: %v", err)
-	}
-	if out.Kind != journal.Parked {
-		t.Fatalf("outcome = %s (%s), want parked", out.Kind, out.Reason)
-	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h, bad := tc.setup(t)
 
-	path := filepath.Join(h.store.Dir(out.RunID), "scratch", "scout-1.rejected.json")
-	kept, rerr := os.ReadFile(path)
-	if rerr != nil {
-		t.Fatalf("the rejected handoff was not kept: %v", rerr)
-	}
-	// The bytes, not a summary of them: a re-render loses whatever made
-	// the validator refuse it.
-	var got map[string]any
-	if jerr := json.Unmarshal(kept, &got); jerr != nil {
-		t.Fatalf("what was kept is not the handoff's own JSON: %v", jerr)
-	}
-	if got["understanding"] != bad["understanding"] {
-		t.Errorf("the kept handoff is not the one the worker wrote:\n%s", kept)
-	}
-	if _, ok := got["approaches"]; ok {
-		t.Errorf("the kept handoff was repaired on the way to disk:\n%s", kept)
+			out, err := h.run(t)
+			if err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+			if out.Kind != journal.Parked {
+				t.Fatalf("outcome = %s (%s), want parked", out.Kind, out.Reason)
+			}
+
+			path := filepath.Join(h.store.Dir(out.RunID), "scratch", tc.wantFile)
+			kept, rerr := os.ReadFile(path)
+			if rerr != nil {
+				t.Fatalf("the rejected handoff was not kept: %v", rerr)
+			}
+			// The bytes, not a summary of them: a re-render loses whatever
+			// made the validator refuse it. Round-trip both sides through
+			// JSON so map key order and Go type quirks do not matter.
+			var got, want map[string]any
+			if jerr := json.Unmarshal(kept, &got); jerr != nil {
+				t.Fatalf("what was kept is not the handoff's own JSON: %v", jerr)
+			}
+			wantBytes, werr := json.Marshal(bad)
+			if werr != nil {
+				t.Fatalf("json.Marshal(bad): %v", werr)
+			}
+			if jerr := json.Unmarshal(wantBytes, &want); jerr != nil {
+				t.Fatalf("json.Unmarshal(wantBytes): %v", jerr)
+			}
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("the kept handoff is not the one the worker wrote:\ngot:  %s\nwant: %s", kept, wantBytes)
+			}
+		})
 	}
 }
 
