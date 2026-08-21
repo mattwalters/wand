@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The single writer · wand</title>
+  <link rel="stylesheet" href="../../style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="../../">wand</a>
+    
+    <a class="nav here" href="../../docs/">Docs</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/mattwalters/wand">GitHub</a>
+    <span class="version">
+      latest
+      <select id="version-picker" hidden aria-label="Documentation version"></select>
+    </span>
+  </header>
+  
+  <div class="wrap">
+    
+    <nav class="sidenav">
+      
+      
+      <h5>Start</h5>
+      
+      
+      
+      
+      
+      <a href="../../docs/">Overview</a>
+      
+      <h5>Doctrine</h5>
+      
+      
+      
+      
+      
+      <a href="../../docs/covenant/">The covenant</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/architecture/">No daemon</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/topology/" class="active" aria-current="page">The single writer</a>
+      
+      <h5>Commands</h5>
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/">All commands</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/init/" class="mono">wand init</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/doctor/" class="mono">wand doctor</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/guard/" class="mono">wand guard</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/queue/" class="mono">wand queue</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/ticket/" class="mono">wand ticket</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/claim/" class="mono">wand claim</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/handback/" class="mono">wand handback</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/abandon/" class="mono">wand abandon</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/file/" class="mono">wand file</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/plan/" class="mono">wand plan</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/run/" class="mono">wand run</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/ui/" class="mono">wand ui</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/version/" class="mono">wand version</a>
+      
+    </nav>
+    
+    <main>
+      
+
+<h1>The single writer</h1>
+<p><a href="../covenant/">The covenant</a> and <a href="../architecture/">No daemon</a> are the
+lifecycle&rsquo;s rules and its process shape. This page is the two structural
+facts underneath both: who is allowed to write, and what order a run&rsquo;s
+phases happen in. Both are drawn here because a picture makes them
+checkable at a glance, where prose only makes them arguable.</p>
+<h2 id="the-single-writer">The single writer</h2>
+<p>The orchestrator — <code>wand run</code> or <code>wand plan</code> — holds the only Linear and
+GitHub credentials in the system and makes every write to either. Every
+worker it spawns is cold: a fresh process, no memory of any prior phase,
+no credentials of its own. A worker receives a prompt, does its work
+against the filesystem and git, and leaves exactly one JSON handoff file.
+Nothing else it does can reach the orchestrator, and nothing it writes can
+reach Linear or GitHub directly — the isolation conformance suite
+(<code>internal/workertest</code>) instructs a real harness to try, per adapter, and
+requires every attempt to fail.</p>
+<p>The picture below draws that as a boundary, not a wall of prose: the
+prompt is the only thing that crosses it going in, the handoff file is the
+only thing that crosses it coming back, and nothing else — no credential,
+no direct write — ever does.</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">    ┌────────────────────────────────────────────────────────────┐
+</span></span><span class="line"><span class="cl">    │            orchestrator  (wand run / wand plan)            │
+</span></span><span class="line"><span class="cl">    │                                                            │
+</span></span><span class="line"><span class="cl">    │    the only process holding Linear + GitHub credentials    │
+</span></span><span class="line"><span class="cl">    └────────────────────────────────────────────────────────────┘
+</span></span><span class="line"><span class="cl">    │
+</span></span><span class="line"><span class="cl">    │  prompt in — no credentials, no state
+</span></span><span class="line"><span class="cl">    ▼
+</span></span><span class="line"><span class="cl">    ══════════════════════════════════════════════════════════════
+</span></span><span class="line"><span class="cl">    ════════════════════ credential boundary ═════════════════════
+</span></span><span class="line"><span class="cl">    ══════════════════════════════════════════════════════════════
+</span></span><span class="line"><span class="cl">    │
+</span></span><span class="line"><span class="cl">    ▼
+</span></span><span class="line"><span class="cl">    ┌────────────────────────────────────────────────────────────┐
+</span></span><span class="line"><span class="cl">    │           cold worker  (one phase, one process)            │
+</span></span><span class="line"><span class="cl">    │                                                            │
+</span></span><span class="line"><span class="cl">    │  stateless, mute — never calls Linear, never calls GitHub  │
+</span></span><span class="line"><span class="cl">    │               filesystem + git in the middle               │
+</span></span><span class="line"><span class="cl">    └────────────────────────────────────────────────────────────┘
+</span></span><span class="line"><span class="cl">    │
+</span></span><span class="line"><span class="cl">    │  one JSON handoff file — the only arrow that
+</span></span><span class="line"><span class="cl">    │  crosses this boundary back
+</span></span><span class="line"><span class="cl">    ▲
+</span></span><span class="line"><span class="cl">    ══════════════════════════════════════════════════════════════
+</span></span><span class="line"><span class="cl">    ════════════════════ credential boundary ═════════════════════
+</span></span><span class="line"><span class="cl">    ══════════════════════════════════════════════════════════════
+</span></span><span class="line"><span class="cl">    ▲
+</span></span></code></pre></div><p>Two writers on one ticket cannot be reconciled afterwards, so the second
+writer is not allowed to exist — this is the diagram of that conviction.</p>
+<h2 id="one-runs-phase-graph">One run&rsquo;s phase graph</h2>
+<p>Both orchestrators journal a phase&rsquo;s start before the phase runs, never
+after (<code>internal/journal</code>&rsquo;s crash-only rule: a record announces a
+transition before it happens). That ordering is drawn explicitly below —
+every phase is entered through its journal write, not the other way
+round — because it is the property that lets a crash mid-phase resume from
+what the journal already says, instead of leaving a ticket stuck with
+nothing to explain it. See <a href="../journal/">the run journal</a> for the record
+schema itself.</p>
+<h3 id="wand-run-implement--ci--review--revise"><code>wand run</code>: implement → CI → review → revise</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">  claim ticket: Todo → In Progress
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  journal: phase.started(implement) ──▶ implement (cold worker)
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  journal: phase.started(ci) ──▶ ci: fix CI (cold worker)
+</span></span><span class="line"><span class="cl">    passes                                    ──▶ continue to review
+</span></span><span class="line"><span class="cl">    fails, retries left (&lt; Caps.CIAttempts)   ──▶ back to journal: phase.started(ci)
+</span></span><span class="line"><span class="cl">    fails, CIAttempts exhausted               ──▶ HANDED BACK
+</span></span><span class="line"><span class="cl">                                                    Needs Input, CI cap reason
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  journal: phase.started(review) ──▶ review (cold worker)
+</span></span><span class="line"><span class="cl">    approved, states what it verified   ──▶ CONVERGED
+</span></span><span class="line"><span class="cl">                                              In Review, ready-for-human
+</span></span><span class="line"><span class="cl">    no parseable handoff                ──▶ PARKED — reason
+</span></span><span class="line"><span class="cl">    findings                            ──▶ journal: phase.started(revise)
+</span></span><span class="line"><span class="cl">                                              ──▶ revise (cold worker)
+</span></span><span class="line"><span class="cl">        round left (&lt; Caps.ReviewRounds)   ──▶ back to journal: phase.started(ci)
+</span></span><span class="line"><span class="cl">        ReviewRounds exhausted             ──▶ HANDED BACK
+</span></span><span class="line"><span class="cl">                                                 Needs Input, final round&#39;s
+</span></span><span class="line"><span class="cl">                                                 findings quoted whole
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  any phase, any time: crash / interrupt / signal ──▶ PARKED — reason
+</span></span></code></pre></div><p>Three ways out, and only three: <strong>converged</strong> (an approval that names what
+it verified), <strong>handed back</strong> (a cap exhausted, or a worker reporting the
+ticket&rsquo;s premise itself is wrong — always with a reason a human reads),
+and <strong>parked</strong> (a run the orchestrator could not carry to either of the
+other two, always with a reason). A cap running out is never silent
+convergence — it is a hand-back that says so.</p>
+<h3 id="wand-plan-scout--critic--interview--four-writes"><code>wand plan</code>: scout → critic → interview → four writes</h3>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-text" data-lang="text"><span class="line"><span class="cl">  claim ticket: To Plan → In Planning
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  journal: phase.started(scout) ──▶ scout (cold, read-only worker)
+</span></span><span class="line"><span class="cl">    wrong premise   ──▶ HANDED BACK — Needs Input, premise reason
+</span></span><span class="line"><span class="cl">    otherwise       ──▶ continue to critic
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  journal: phase.started(critic) ──▶ critic (cold worker)   [if the covenant enables it]
+</span></span><span class="line"><span class="cl">    objections   ──▶ journal: phase.started(revise) ──▶ reviser (cold worker)
+</span></span><span class="line"><span class="cl">                        wrong premise   ──▶ HANDED BACK
+</span></span><span class="line"><span class="cl">    otherwise    ──▶ continue to interview
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  journal: phase.started(interview) ──▶ interview   [if a human is present]
+</span></span><span class="line"><span class="cl">    answers      ──▶ journal: phase.started(revise) ──▶ reviser (cold worker)
+</span></span><span class="line"><span class="cl">                        wrong premise   ──▶ HANDED BACK
+</span></span><span class="line"><span class="cl">    otherwise    ──▶ continue to the four writes
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl">  four writes, in this fixed order:
+</span></span><span class="line"><span class="cl">    1. description — UpsertSection: the marker-fenced plan region only
+</span></span><span class="line"><span class="cl">    2. comment — the options and argued trade-offs
+</span></span><span class="line"><span class="cl">    3. issue update — the estimate, if the draft set one
+</span></span><span class="line"><span class="cl">    4. status — Plan Review
+</span></span></code></pre></div><p>Every stage that can replace the draft (critic, interview) is followed by
+the same wrong-premise check the scout&rsquo;s own draft gets: a human can be the
+one who says the thing that makes a ticket&rsquo;s premise wrong, and the plan
+does not get written over that. An invalid handoff at any stage parks the
+run rather than writing a partial plan — a plan is read as a decision, and
+a draft missing its trade-offs reads finished when it is not.</p>
+
+
+    </main>
+    
+    
+    
+    <nav class="toc">
+      <h5>On this page</h5>
+      <nav id="TableOfContents">
+  <ul>
+    <li><a href="#the-single-writer">The single writer</a></li>
+    <li><a href="#one-runs-phase-graph">One run&rsquo;s phase graph</a>
+      <ul>
+        <li><a href="#wand-run-implement--ci--review--revise"><code>wand run</code>: implement → CI → review → revise</a></li>
+        <li><a href="#wand-plan-scout--critic--interview--four-writes"><code>wand plan</code>: scout → critic → interview → four writes</a></li>
+      </ul>
+    </li>
+  </ul>
+</nav>
+    </nav>
+    
+  </div>
+  <script>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    (function () {
+      var root = new URL("..", document.querySelector('link[rel="stylesheet"]').href);
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          var picker = document.getElementById("version-picker");
+          ["latest"].concat(versions).forEach(function (v) {
+            var option = document.createElement("option");
+            option.value = v;
+            option.textContent = v;
+            option.selected = v === "latest";
+            picker.appendChild(option);
+          });
+          picker.addEventListener("change", function () {
+            window.location.href = new URL(picker.value + "/", root);
+          });
+          picker.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>
