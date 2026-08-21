@@ -60,6 +60,7 @@ func Root() *cobra.Command {
 	root.AddCommand(newPMCmd())
 	root.AddCommand(newDispatchCmd())
 	root.AddCommand(newSweepCmd())
+	root.AddCommand(newStatsCmd())
 	root.AddCommand(newVersionCmd())
 	return root
 }
