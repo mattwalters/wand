@@ -167,6 +167,7 @@ func Default() Covenant {
 			{Name: "agent-filed", Color: "#5E6AD2"},
 			{Name: "ready-for-human", Color: "#4CB782"},
 			{Name: "re-review", Color: "#EB5757"},
+			{Name: "parked", Color: "#BEC2C8"},
 		},
 		Automations: []Automation{
 			{Event: "draft", Status: "In Progress"},

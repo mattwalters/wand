@@ -155,7 +155,9 @@ by vigilance:
   closes exactly what merging finished.
 - **Queues nothing drains.** Needs Input, Triage and parked runs wait on
   people and are invisible unless surfaced. Answer: that is the cockpit's
-  entire job.
+  entire job — and, for parks specifically, the board's too. A park writes
+  its reason to the ticket and marks it `parked`, because a queue you have
+  to run a command to see is one you find out about an hour late.
 
 ## Risks worth naming
 

@@ -173,15 +173,18 @@ A scheduler contract, and the one `wand run` publishes too.
 | `0` | Scoped. The plan, the options and the estimate are on the ticket, and it is in Scoped for a human to judge. |
 | `1` | The run never started: no API key, the ticket is not in Scoping, `--interactive` with no terminal, another process holds the ticket. Nothing was written. |
 | `2` | Handed back. The scout judged the ticket's premise wrong; its account is on the ticket, no plan was written, and it is in Needs Input for a human to answer. |
-| `3` | Parked. The run stopped without deciding — an unusable handoff, a worker failure, a write that failed part-way. The journal says which, and how much reached the ticket. |
+| `3` | Parked. The run stopped without deciding — an unusable handoff, a worker failure, a write that failed part-way. The journal says which, and how much reached the ticket; the ticket itself carries the reason as a comment and the `parked` label. |
 
 ## The journal
 
 Every scope is a journaled run: each phase recorded before it happens, the
 scout's handoff kept as a note, and exactly one terminal record. Runs live
 under `$XDG_STATE_HOME/wand/runs` (or `WAND_STATE_DIR`), outside every
-repository. A park is journal-only, deliberately — it has to be reachable
-when Linear itself is what failed.
+repository. The journal is written before the ticket is, deliberately — a
+park has to be reachable when Linear itself is what failed. Once it is
+journaled, the ticket gets the same sentence as a comment and the `parked`
+label, best-effort: a scope never owns its ticket's status, so the mark is
+a label and the ticket stays in Scoping where a human put it.
 
 ## Requirements
 

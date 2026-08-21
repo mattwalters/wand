@@ -77,9 +77,16 @@ that asks nothing. Hand-backs happen when:
 the recorded reason), a worker that left no parseable handoff, a dirty
 tree, a worker timeout. A reviewer that produces no parseable handoff
 **parks** rather than converges — anything else would turn every reviewer
-crash into a clean pass. Parking writes only the journal, deliberately, so
-it is reachable even when Linear itself is what failed. The worktree is
-preserved for inspection.
+crash into a clean pass. The journal is written first and is the run's real
+ending, so a park is reachable even when Linear itself is what failed; the
+ticket then gets the same sentence as a comment and the `parked` label,
+best-effort and never fatal. The worktree is preserved for inspection.
+
+The mark is a label rather than a status move. A park reports that the
+machine stopped, not that the work was judged — often for a reason that has
+nothing to do with the ticket, like a host that slept mid-phase — so the
+ticket keeps its place and its blessing. Remove the label once you have
+looked and the ticket is dispatchable again.
 
 A later run of the same ticket resumes its branch: a preserved worktree
 that is clean (everything committed on the branch) is removed and replaced;
@@ -122,7 +129,7 @@ The codes are a contract a scheduler can read:
 | `0` | Converged: In Review, `ready-for-human`, PR open. |
 | `1` | The run never started — refused claim, missing configuration, no journal. Nothing to sweep. |
 | `2` | Handed back: Needs Input, with the reason posted as a comment. |
-| `3` | Parked: the journal has the reason; the worktree is preserved. |
+| `3` | Parked: the journal has the reason, the ticket carries it as a comment and the `parked` label, and the worktree is preserved. |
 
 Exit 1 keeps its "nothing to sweep" promise even when the failure lands
 after the claim: a run whose journal will not open hands the ticket

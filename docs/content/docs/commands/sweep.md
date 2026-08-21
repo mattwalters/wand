@@ -78,5 +78,5 @@ key comes from unless `--team-key` overrides it.
 [`wand dispatch`](../dispatch/) is the selector that runs a ticket in the
 first place; [`wand run`](../run/) is where the re-review and
 unresolved-thread conditions originate; the `re-review` label is covenant
-topology, created by [`wand init`](../init/) like `ready-for-human` and
-`human-only`.
+topology, created by [`wand init`](../init/) like `ready-for-human`,
+`human-only` and `parked`.
