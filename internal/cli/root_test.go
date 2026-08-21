@@ -19,7 +19,7 @@ func runRoot(t *testing.T, args ...string) (string, error) {
 	return out.String(), err
 }
 
-// A bare `wand` cannot open the cockpit without a terminal to draw into, so
+// A bare `wand` cannot open home without a terminal to draw into, so
 // outside one it falls back to the same help a bare `wand` printed before
 // this command had a RunE at all — a pipe, a script, or CI reads that as
 // "what is this", not as a hang.
@@ -34,7 +34,7 @@ func TestBareRootWithoutATTYPrintsHelp(t *testing.T) {
 }
 
 // A typo must still fail as an unknown command rather than silently opening
-// the cockpit — root gaining a RunE must not loosen its Args.
+// home — root gaining a RunE must not loosen its Args.
 func TestUnknownCommandStillErrors(t *testing.T) {
 	_, err := runRoot(t, "bogus")
 	if err == nil {

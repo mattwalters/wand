@@ -1,4 +1,4 @@
-package cockpit
+package home
 
 import (
 	"errors"
@@ -226,8 +226,8 @@ func TestReconcileIgnoresAnEarlierResolution(t *testing.T) {
 }
 
 // A ticket parked more than once has one current park and the rest history:
-// the cockpit shows the newer reason, not the one that happened to be
-// classified first.
+// home shows the newer reason, not the one that happened to be classified
+// first.
 func TestReconcileCollapsesRepeatedParksToTheNewestReason(t *testing.T) {
 	early := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	late := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
@@ -294,8 +294,8 @@ func (f *fakeRuns) Inspect(id string) (journal.Report, error) {
 	return f.reports[id], nil
 }
 
-// A repository with no runs yet has no store on disk, and a cockpit that
-// refused to draw for want of one would be useless until the first
+// A repository with no runs yet has no store on disk, and a home screen
+// that refused to draw for want of one would be useless until the first
 // orchestrator shipped.
 func TestReadStalledToleratesNoStore(t *testing.T) {
 	stalled, err := ReadStalled(nil, nil, nil)

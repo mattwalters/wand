@@ -1,4 +1,4 @@
-package cockpit
+package home
 
 import (
 	"time"
@@ -41,7 +41,7 @@ func Sample() Snapshot {
 		},
 		PlanReview: []linear.Issue{
 			{
-				Identifier: "WND-44", Title: "cockpit: a fifth queue for plans awaiting blessing",
+				Identifier: "WND-44", Title: "home: a fifth queue for plans awaiting blessing",
 				State: linear.IssueState{Name: "Plan Review", Type: "unstarted"}, Priority: 1,
 				Assignee: "Matt Walters", CreatedAt: at(2),
 				Description: samplePlanDescription(),
@@ -84,7 +84,7 @@ func Sample() Snapshot {
 // markers come from [linear.WithSection] rather than typed by hand, so the
 // sample can never drift from what the real fence looks like.
 func samplePlanDescription() string {
-	human := "The cockpit only has four sections. A blessed plan has nowhere to be judged " +
+	human := "Home only has four sections. A blessed plan has nowhere to be judged " +
 		"from but Linear itself, which is the review surface this tool exists to replace."
 	planText := "## Implementation plan\n\n" +
 		"**Add a Scoped section.** Triage and Scoped are both authorization judgments; " +
@@ -94,9 +94,9 @@ func samplePlanDescription() string {
 		"2. Render the plan section on the detail screen.\n" +
 		"3. Wire Bless → Todo and Backlog, with reason.\n\n" +
 		"### How it is proven\n\n" +
-		"Golden screens at two widths, plus the existing cockpit test tiers.\n\n" +
+		"Golden screens at two widths, plus the existing home test tiers.\n\n" +
 		"### Where the code is\n\n" +
-		"- `internal/cockpit/cockpit.go` — the fifth section and its two judgments\n" +
+		"- `internal/home/home.go` — the fifth section and its two judgments\n" +
 		"- `internal/tui/view.go` — the plan rendered in place\n\n" +
 		"The next plan run of this ticket rewrites this region whole; notes of your own " +
 		"live outside it, where nothing machine-written touches them.\n"

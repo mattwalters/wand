@@ -72,7 +72,7 @@ func Build(issues []linear.Issue) (ready []linear.Issue, skips []Skip) {
 // Less is the queue order. Deterministic all the way down: two readers
 // holding the same issues must print the same queue.
 //
-// Exported because the cockpit ranks its judgment queues with it. Two
+// Exported because home ranks its judgment queues with it. Two
 // orderings would mean the ticket a human blessed first is not the one an
 // agent starts first, which makes the ranking they did meaningless.
 func Less(a, b linear.Issue) bool {

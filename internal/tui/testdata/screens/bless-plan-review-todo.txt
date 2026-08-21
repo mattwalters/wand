@@ -1,6 +1,6 @@
   ✦ Blessing
 
-    WND-44  cockpit: a fifth queue for plans awaiting blessing
+    WND-44  home: a fifth queue for plans awaiting blessing
     Plan Review → Todo
 
     Todo is the gate between written down and a bot may act on this unattended.

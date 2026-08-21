@@ -1,4 +1,4 @@
-// Package tui holds wand's Bubble Tea models — the cockpit, and nothing
+// Package tui holds wand's Bubble Tea models — the home screen, and nothing
 // else. One screen, one question: what is waiting on a human?
 //
 // Everything here obeys the determinism rules in CLAUDE.md: Update is a pure
@@ -15,7 +15,7 @@
 // the keys that navigate, so the blessing screen stays inspectable. That is
 // the mode `wand ui --dump-screen` and `wand ui --sample` both run in, and it
 // is the reason an agent cannot bless a ticket by scripting the very command
-// it uses to look at the interface. See cockpit.Apply for the other half of
+// it uses to look at the interface. See home.Apply for the other half of
 // that argument.
 package tui
 
@@ -28,21 +28,21 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/mattwalters/wand/internal/cockpit"
 	"github.com/mattwalters/wand/internal/covenant"
+	"github.com/mattwalters/wand/internal/home"
 	"github.com/mattwalters/wand/internal/linear"
 	"github.com/mattwalters/wand/internal/theme"
 )
 
-// Backend is the cockpit's I/O. Nil means read-only: the screen navigates
+// Backend is home's I/O. Nil means read-only: the screen navigates
 // as usual, and the key that would write does nothing and says why.
 type Backend interface {
 	// Read fetches the board again.
-	Read(ctx context.Context) (cockpit.Snapshot, error)
+	Read(ctx context.Context) (home.Snapshot, error)
 	// Apply performs one judgment, and returns the intent with whatever
-	// landed marked on it — see cockpit.Progress. A failed judgment is
+	// landed marked on it — see home.Progress. A failed judgment is
 	// retried from the returned value, never from the original.
-	Apply(ctx context.Context, in cockpit.Intent) (cockpit.Intent, error)
+	Apply(ctx context.Context, in home.Intent) (home.Intent, error)
 }
 
 // EngageResult is one engage-mode poll's outcome, translated from
@@ -65,15 +65,15 @@ type EngageResult struct {
 	SweptTicket, SweptAction string
 }
 
-// Engager is the cockpit's process-manager extension to Backend: the
+// Engager is home's process-manager extension to Backend: the
 // mechanics `wand dispatch --watch` already implements, driven from inside
-// the cockpit instead of a standalone process. Nil means engage mode is
+// home instead of a standalone process. Nil means engage mode is
 // unavailable — the toggle refuses and says why, the same shape readOnly
 // already uses for Backend.
 //
 // AcquireLock and ReleaseLock hold the same per-repo dispatch lock
 // dispatch.Acquire arbitrates: engaging is what starts holding it, so two
-// engaged cockpits — or an engaged cockpit and a standalone `wand dispatch`
+// engaged homes — or an engaged home and a standalone `wand dispatch`
 // — never race the same Todo read. Tick drives exactly one non-blocking
 // poll of dispatch's own gc/read/select/spawn-if-winner logic.
 type Engager interface {
@@ -87,7 +87,7 @@ type Engager interface {
 // error printed at a shell — not an error message trapped inside an
 // alternate screen the user then has to quit out of.
 type Config struct {
-	Snapshot cockpit.Snapshot
+	Snapshot home.Snapshot
 	Backend  Backend
 	// Covenant names the statuses. The screen says "→ Todo" only because
 	// the covenant calls it that; a repo whose blessed column is called
@@ -127,8 +127,8 @@ const (
 // Model is the root model.
 type Model struct {
 	state  state
-	snap   cockpit.Snapshot
-	board  cockpit.Board
+	snap   home.Snapshot
+	board  home.Board
 	cursor int
 
 	backend Backend
@@ -140,9 +140,9 @@ type Model struct {
 	height  int
 
 	// detail is the row the detail screen is showing.
-	detail cockpit.Row
+	detail home.Row
 	// pending is the half-made judgment the confirm screen is holding.
-	pending cockpit.Intent
+	pending home.Intent
 	// from is the screen the confirmation was started from, so esc goes
 	// back where the user came from rather than somewhere plausible.
 	from  state
@@ -188,7 +188,7 @@ type Model struct {
 	now time.Time
 }
 
-// New returns a cockpit model over an already-read snapshot.
+// New returns a home model over an already-read snapshot.
 func New(cfg Config) Model {
 	in := textinput.New()
 	in.Prompt = ""
@@ -206,7 +206,7 @@ func New(cfg Config) Model {
 
 	m := Model{
 		snap:     cfg.Snapshot,
-		board:    cockpit.Build(cfg.Snapshot),
+		board:    home.Build(cfg.Snapshot),
 		backend:  cfg.Backend,
 		cov:      cov,
 		keys:     defaultKeyMap(),
@@ -233,20 +233,20 @@ func New(cfg Config) Model {
 func (m Model) readOnly() bool { return m.backend == nil }
 
 // rows is the flat cursor order across every section.
-func (m Model) rows() []cockpit.Row { return m.board.Rows() }
+func (m Model) rows() []home.Row { return m.board.Rows() }
 
 // current returns the row under the cursor, if there is one.
-func (m Model) current() (cockpit.Row, bool) {
+func (m Model) current() (home.Row, bool) {
 	rows := m.rows()
 	if m.cursor < 0 || m.cursor >= len(rows) {
-		return cockpit.Row{}, false
+		return home.Row{}, false
 	}
 	return rows[m.cursor], true
 }
 
 // subject is the row the disposition keys act on: the highlighted row on
 // the board, the opened row on the detail screen.
-func (m Model) subject() (cockpit.Row, bool) {
+func (m Model) subject() (home.Row, bool) {
 	if m.state == stateDetail {
 		return m.detail, true
 	}
@@ -257,18 +257,18 @@ func (m Model) subject() (cockpit.Row, bool) {
 // the app. Only the confirm screen's free-text fields type.
 func (m Model) typing() bool {
 	return m.state == stateConfirm && !m.pending.Done.PreWritten &&
-		m.pending.Disp.Field != cockpit.FieldPriority &&
-		m.pending.Disp.Field != cockpit.FieldNone
+		m.pending.Disp.Field != home.FieldPriority &&
+		m.pending.Disp.Field != home.FieldNone
 }
 
 // Init implements tea.Model.
 func (m Model) Init() tea.Cmd { return nil }
 
-// appliedMsg carries the result of one judgment: the intent as cockpit.Apply
+// appliedMsg carries the result of one judgment: the intent as home.Apply
 // left it, so a failure that happened after a pre-write lands comes back
 // carrying that fact rather than losing it.
 type appliedMsg struct {
-	intent cockpit.Intent
+	intent home.Intent
 	err    error
 }
 
@@ -276,7 +276,7 @@ type appliedMsg struct {
 // tea.Cmd took at the moment the read landed — Update stores it, never
 // reads the clock itself, the same discipline engageTickMsg already uses.
 type refreshedMsg struct {
-	snap cockpit.Snapshot
+	snap home.Snapshot
 	at   time.Time
 	err  error
 }
@@ -323,7 +323,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// The returned intent replaces the pending one, so a retry
 			// carries the progress the failed attempt made. Without this
 			// the retry would post the reason a second time — see
-			// cockpit.Apply's Retrying section.
+			// home.Apply's Retrying section.
 			m.pending = msg.intent
 			m.failure = msg.err.Error()
 			if m.pending.Done.PreWritten {
@@ -339,7 +339,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.snap = withoutIssue(m.snap, msg.intent.Issue.ID, msg.intent.Issue.Identifier)
 		}
-		m.board = cockpit.Build(m.snap)
+		m.board = home.Build(m.snap)
 		m.clampCursor()
 		m.state = stateBoard
 		m.failure = ""
@@ -353,7 +353,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.snap = msg.snap
-		m.board = cockpit.Build(m.snap)
+		m.board = home.Build(m.snap)
 		m.now = msg.at
 		m.clampCursor()
 		m.flash, m.flashOK = "", false
@@ -482,7 +482,7 @@ func (m Model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if !ok {
 		return m, nil
 	}
-	disp, ok := cockpit.DispositionByKey(row, msg.String())
+	disp, ok := home.DispositionByKey(row, msg.String())
 	if !ok || m.busy {
 		return m, nil
 	}
@@ -500,14 +500,14 @@ func (m Model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 const readOnlyRefusal = "read-only: this is the sample board. Every key here walks the screen; none of them write."
 
 // begin moves to the confirmation for one disposition.
-func (m Model) begin(row cockpit.Row, disp cockpit.Disposition) Model {
-	m.pending = cockpit.Intent{Issue: row.Issue, Stalled: row.Stalled, Disp: disp}
+func (m Model) begin(row home.Row, disp home.Disposition) Model {
+	m.pending = home.Intent{Issue: row.Issue, Stalled: row.Stalled, Disp: disp}
 	m.from = m.state
 	m.state = stateConfirm
 	m.failure = ""
 	m.flash = ""
 
-	if disp.Field == cockpit.FieldPriority {
+	if disp.Field == home.FieldPriority {
 		// Seed with the ticket's own priority when it has one: that is a
 		// judgment someone already made, and re-typing it is not the
 		// decision this screen is asking for. An unranked ticket seeds
@@ -523,11 +523,11 @@ func (m Model) begin(row cockpit.Row, disp cockpit.Disposition) Model {
 	return m
 }
 
-func placeholderFor(d cockpit.Disposition) string {
+func placeholderFor(d home.Disposition) string {
 	switch d.Field {
-	case cockpit.FieldIdentifier:
+	case home.FieldIdentifier:
 		return "the issue this duplicates, e.g. WND-3"
-	case cockpit.FieldReason:
+	case home.FieldReason:
 		if d.Status == "canceled" {
 			return "why this is being closed"
 		}
@@ -559,7 +559,7 @@ func (m Model) confirmKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, applyCmd(m.backend, in)
 	}
 
-	if m.pending.Disp.Field == cockpit.FieldPriority {
+	if m.pending.Disp.Field == home.FieldPriority {
 		if p := priorityKey(msg.String()); p != 0 {
 			m.pending.Priority = p
 		}
@@ -585,7 +585,7 @@ func priorityKey(s string) int {
 }
 
 // intent is the pending judgment with the live text field folded in.
-func (m Model) intent() cockpit.Intent {
+func (m Model) intent() home.Intent {
 	in := m.pending
 	if m.typing() {
 		in.Text = m.input.Value()
@@ -639,7 +639,7 @@ func (m *Model) resyncDetail() {
 // rowKey is a row's identity across a re-read: the issue it names, or the
 // run behind a stalled row. Not the cursor index, which is a position and belongs
 // to the board rather than to the row.
-func rowKey(r cockpit.Row) string {
+func rowKey(r home.Row) string {
 	if r.IsStalled() {
 		return "stalled:" + r.Stalled.RunID
 	}
@@ -650,7 +650,7 @@ func rowKey(r cockpit.Row) string {
 }
 
 // rowGone names a row for the sentence saying it left the board.
-func rowGone(r cockpit.Row) string {
+func rowGone(r home.Row) string {
 	if r.IsStalled() {
 		if r.Stalled.Ticket != "" {
 			return "the " + string(r.Stalled.Kind) + " run on " + r.Stalled.Ticket
@@ -663,7 +663,7 @@ func rowGone(r cockpit.Row) string {
 // applied is the sentence the board flashes after a judgment lands. It
 // names the destination, because the row vanishing is not by itself an
 // answer to what happened to it.
-func (m Model) applied(in cockpit.Intent) string {
+func (m Model) applied(in home.Intent) string {
 	if in.Disp.Stalled {
 		return fmt.Sprintf("cleared the parked label on %s.", in.Stalled.Ticket)
 	}
@@ -672,7 +672,7 @@ func (m Model) applied(in cockpit.Intent) string {
 		verb = "blessed"
 	}
 	sentence := fmt.Sprintf("%s %s → %s.", verb, in.Issue.Identifier, m.statusName(in.Disp.Status))
-	if in.Disp.Field == cockpit.FieldPriority {
+	if in.Disp.Field == home.FieldPriority {
 		sentence += " " + linear.PriorityName(in.Priority) + "."
 	}
 	return sentence
@@ -711,7 +711,7 @@ func dropIssue(issues []linear.Issue, id, identifier string) []linear.Issue {
 // nil, so the issue is not in that queue any more, and a board that kept
 // showing it until a refresh would invite a second judgment on a ticket
 // already judged.
-func withoutIssue(s cockpit.Snapshot, id, identifier string) cockpit.Snapshot {
+func withoutIssue(s home.Snapshot, id, identifier string) home.Snapshot {
 	s.Triage = dropIssue(s.Triage, id, identifier)
 	s.PlanReview = dropIssue(s.PlanReview, id, identifier)
 	s.NeedsInput = dropIssue(s.NeedsInput, id, identifier)
@@ -723,8 +723,8 @@ func withoutIssue(s cockpit.Snapshot, id, identifier string) cockpit.Snapshot {
 // "remove locally rather than re-read" reasoning [withoutIssue] uses: the
 // write returned nil, so the run is resolved, and a board that kept showing
 // it until a refresh would invite clearing the same label twice.
-func withoutStalled(s cockpit.Snapshot, runID string) cockpit.Snapshot {
-	var kept []cockpit.StalledRun
+func withoutStalled(s home.Snapshot, runID string) home.Snapshot {
+	var kept []home.StalledRun
 	for _, st := range s.Stalled {
 		if st.RunID != runID {
 			kept = append(kept, st)
@@ -734,7 +734,7 @@ func withoutStalled(s cockpit.Snapshot, runID string) cockpit.Snapshot {
 	return s
 }
 
-func applyCmd(b Backend, in cockpit.Intent) tea.Cmd {
+func applyCmd(b Backend, in home.Intent) tea.Cmd {
 	return func() tea.Msg {
 		out, err := b.Apply(context.Background(), in)
 		return appliedMsg{intent: out, err: err}

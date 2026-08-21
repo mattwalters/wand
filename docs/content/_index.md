@@ -17,7 +17,7 @@ install: brew install mattwalters/wand/wand
 ```console
 $ wand ui --sample
 
- wand cockpit · WND                                             7 waiting on you
+ wand · WND                                                     7 waiting on you
   sample board — reads no Linear team, and writes none
 
   Triage  2 to judge
@@ -25,7 +25,7 @@ $ wand ui --sample
   WND-41  —          guard: a raw state UUID is not matched
 
   Plan Review  1 to bless
-  WND-44  Urgent     cockpit: a fifth queue for plans awaiting blessing
+  WND-44  Urgent     home: a fifth queue for plans awaiting blessing
 
   Needs Input  1 to answer
   WND-38  High       Second harness adapter: which one?
@@ -115,7 +115,7 @@ the `v1` tag always points at the latest `v1.x.y`.
 [The documentation](docs/) — the doctrine and the reference, versioned with
 the tool. It is also the Docs link in the header, on every page.
 
-[The cockpit](docs/commands/ui/) — `wand ui`: one screen answering one
+[Home](docs/commands/ui/) — `wand ui`: one screen answering one
 question, *what is waiting on me?*, and the one place in wand a human
 blesses work.
 

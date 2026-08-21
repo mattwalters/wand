@@ -10,9 +10,9 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/spf13/cobra"
 
-	"github.com/mattwalters/wand/internal/cockpit"
 	"github.com/mattwalters/wand/internal/covenant"
 	"github.com/mattwalters/wand/internal/dispatch"
+	"github.com/mattwalters/wand/internal/home"
 	"github.com/mattwalters/wand/internal/journal"
 	"github.com/mattwalters/wand/internal/screen"
 	"github.com/mattwalters/wand/internal/sweep"
@@ -40,8 +40,8 @@ func newUICmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "ui",
-		Short: "Open the cockpit: everything waiting on a human",
-		Long: "Open wand's cockpit — one screen answering one question: what is\n" +
+		Short: "Open home: everything waiting on a human",
+		Long: "Open wand's home screen — one screen answering one question: what is\n" +
 			"waiting on me? Triage to judge, Needs Input to answer, ready-for-human\n" +
 			"work to look at, and stalled runs no process is driving any more.\n\n" +
 			"Blessing lives here. Promotion to Todo and to To Plan is the transition\n" +
@@ -57,13 +57,13 @@ func newUICmd() *cobra.Command {
 			"can be walked through without an API key or a team.\n\n" +
 			"Running it against a real board requires LINEAR_API_KEY, and a team key —\n" +
 			"either --team-key, or [team] key in the nearest wand.toml.\n\n" +
-			"Press 'e' to engage: the cockpit then polls Todo and To Plan on --interval\n" +
+			"Press 'e' to engage: home then polls Todo and To Plan on --interval\n" +
 			"(default 1m) the way `wand dispatch --watch` does, sweeping a dead lease\n" +
 			"or a re-plan/re-review/unresolved-thread hand-back before spawning a\n" +
-			"winner as a detached child that survives the cockpit closing. Engaging is\n" +
+			"winner as a detached child that survives home closing. Engaging is\n" +
 			"deliberate — it is never on by default, bare `wand` included — and needs the same\n" +
 			"dependencies `wand dispatch` does (--harness, --model, --effort and\n" +
-			"commands.verify in wand.toml); missing them leaves the cockpit open and\n" +
+			"commands.verify in wand.toml); missing them leaves home open and\n" +
 			"read-only, refusing only the 'e' key.",
 		Args: cobra.NoArgs,
 		Example: "  wand ui --team-key WND\n" +
@@ -100,7 +100,7 @@ func newUICmd() *cobra.Command {
 				}
 			}
 			if dumpScreen {
-				return dumpCockpit(cmd, script, width, height)
+				return dumpHome(cmd, script, width, height)
 			}
 			if script != "" {
 				return fmt.Errorf("the --script flag only applies with --dump-screen")
@@ -109,7 +109,7 @@ func newUICmd() *cobra.Command {
 				_, err := tea.NewProgram(sampleModel(width, height)).Run()
 				return err
 			}
-			return runCockpit(cmd, teamKey, harness, model, effort, width, height, interval)
+			return runHome(cmd, teamKey, harness, model, effort, width, height, interval)
 		},
 	}
 
@@ -128,14 +128,14 @@ func newUICmd() *cobra.Command {
 	return cmd
 }
 
-// dumpCockpit renders the sample board with no backend.
+// dumpHome renders the sample board with no backend.
 //
 // No backend is the whole point, and it is a structural refusal rather than
 // a flag: this is the path an agent can reach, so nothing on it can write.
 // The sample board is also what makes the dump comparable — a screen built
 // from whatever happened to be in a live Triage is one no two people can
 // diff, and it would need an API key to look at a user interface.
-func dumpCockpit(cmd *cobra.Command, script string, width, height int) error {
+func dumpHome(cmd *cobra.Command, script string, width, height int) error {
 	msgs, err := screen.ParseScript(script)
 	if err != nil {
 		return fmt.Errorf("could not parse --script: %w", err)
@@ -156,7 +156,7 @@ func dumpCockpit(cmd *cobra.Command, script string, width, height int) error {
 // agent dumps and the screen a person walks through cannot differ.
 func sampleModel(width, height int) tui.Model {
 	return tui.New(tui.Config{
-		Snapshot: cockpit.Sample(),
+		Snapshot: home.Sample(),
 		Covenant: covenant.Default(),
 		Width:    width,
 		Height:   height,
@@ -164,13 +164,13 @@ func sampleModel(width, height int) tui.Model {
 	})
 }
 
-// runCockpit reads the real board, then hands it to the program.
+// runHome reads the real board, then hands it to the program.
 //
 // The read happens before the alternate screen opens, deliberately: a
 // Linear failure is then an ordinary command error on stderr rather than a
 // message trapped inside a full-screen app the user has to quit out of to
 // read.
-func runCockpit(cmd *cobra.Command, teamKey, harness, model, effort string, width, height int, interval time.Duration) error {
+func runHome(cmd *cobra.Command, teamKey, harness, model, effort string, width, height int, interval time.Duration) error {
 	cov, fileTeamKey, _, err := covenantFromCwd()
 	if err != nil {
 		return err
@@ -188,7 +188,7 @@ func runCockpit(cmd *cobra.Command, teamKey, harness, model, effort string, widt
 		return err
 	}
 
-	back := &cockpitBackend{cl: cl, runs: runs, cov: cov, teamKey: resolvedTeamKey}
+	back := &homeBackend{cl: cl, runs: runs, cov: cov, teamKey: resolvedTeamKey}
 	ctx, cancel := context.WithTimeout(cmd.Context(), apiTimeout)
 	snap, err := back.Read(ctx)
 	cancel()
@@ -217,7 +217,7 @@ func runCockpit(cmd *cobra.Command, teamKey, harness, model, effort string, widt
 
 // buildEngager assembles engage mode's dependencies — the same dispatch.Deps
 // surface `wand dispatch` builds through dispatchDeps — and returns nil when
-// they cannot be assembled, so the cockpit still opens read-only rather than
+// they cannot be assembled, so home still opens read-only rather than
 // refusing to open at all. Bare `wand` and `wand ui` both go through this:
 // nothing here starts engage mode, it only makes the 'e' key possible to
 // press. Errors are swallowed on purpose — Read has already succeeded by the
@@ -238,13 +238,13 @@ func buildEngager(cmd *cobra.Command, teamKey, harness, model, effort string) tu
 	if err := os.MkdirAll(logDir, 0o755); err != nil {
 		return nil
 	}
-	return &cockpitEngager{deps: d, sweep: sweepDepsFor(cmd, cl, d), store: store, bin: bin, logDir: logDir}
+	return &homeEngager{deps: d, sweep: sweepDepsFor(cmd, cl, d), store: store, bin: bin, logDir: logDir}
 }
 
-// cockpitEngager is tui.Engager over the dispatch package: the same
+// homeEngager is tui.Engager over the dispatch package: the same
 // lock/select/spawn/sweep mechanics `wand dispatch --watch` runs in its own
-// process, driven one poll at a time from inside the cockpit instead.
-type cockpitEngager struct {
+// process, driven one poll at a time from inside home instead.
+type homeEngager struct {
 	deps   dispatch.Deps
 	sweep  *sweep.Deps
 	store  *journal.Store
@@ -255,7 +255,7 @@ type cockpitEngager struct {
 	pending *dispatch.Pending
 }
 
-func (e *cockpitEngager) AcquireLock() error {
+func (e *homeEngager) AcquireLock() error {
 	lock, err := dispatch.Acquire(e.store.Root, e.deps.Repo)
 	if err != nil {
 		return err
@@ -265,7 +265,7 @@ func (e *cockpitEngager) AcquireLock() error {
 	return nil
 }
 
-func (e *cockpitEngager) ReleaseLock() error {
+func (e *homeEngager) ReleaseLock() error {
 	if e.lock == nil {
 		return nil
 	}
@@ -274,7 +274,7 @@ func (e *cockpitEngager) ReleaseLock() error {
 	return err
 }
 
-func (e *cockpitEngager) Tick(ctx context.Context) (tui.EngageResult, error) {
+func (e *homeEngager) Tick(ctx context.Context) (tui.EngageResult, error) {
 	if e.lock == nil {
 		return tui.EngageResult{}, fmt.Errorf("dispatch: engage mode ticked without holding its own lock; this is a wand bug")
 	}
@@ -301,7 +301,7 @@ func (e *cockpitEngager) Tick(ctx context.Context) (tui.EngageResult, error) {
 }
 
 // sweptActionWord turns sweep's own machine-readable ActedKind into the
-// word the cockpit's header renders — "reaped" or "handed back" — so the
+// word home's header renders — "reaped" or "handed back" — so the
 // tui package never needs to import internal/sweep just to render its
 // header line.
 func sweptActionWord(kind sweep.ActedKind) string {
@@ -311,23 +311,23 @@ func sweptActionWord(kind sweep.ActedKind) string {
 	return "handed back"
 }
 
-// cockpitBackend is the live I/O behind the screen: Linear for the board and
+// homeBackend is the live I/O behind the screen: Linear for the board and
 // the judgments, the run store for the stalled runs.
-type cockpitBackend struct {
-	cl      cockpit.Linear
-	runs    cockpit.Runs
+type homeBackend struct {
+	cl      home.Linear
+	runs    home.Runs
 	cov     covenant.Covenant
 	teamKey string
 }
 
-func (b *cockpitBackend) Read(ctx context.Context) (cockpit.Snapshot, error) {
+func (b *homeBackend) Read(ctx context.Context) (home.Snapshot, error) {
 	ctx, cancel := context.WithTimeout(ctx, apiTimeout)
 	defer cancel()
-	return cockpit.Read(ctx, b.cl, b.runs, b.cov, b.teamKey)
+	return home.Read(ctx, b.cl, b.runs, b.cov, b.teamKey)
 }
 
-func (b *cockpitBackend) Apply(ctx context.Context, in cockpit.Intent) (cockpit.Intent, error) {
+func (b *homeBackend) Apply(ctx context.Context, in home.Intent) (home.Intent, error) {
 	ctx, cancel := context.WithTimeout(ctx, apiTimeout)
 	defer cancel()
-	return cockpit.Apply(ctx, b.cl, b.cov, in)
+	return home.Apply(ctx, b.cl, b.cov, in)
 }

@@ -10,7 +10,7 @@ import (
 )
 
 // fakeRuns is an in-memory Runs a test can hold without a filesystem —
-// mirrors internal/cockpit/active_test.go's fakeRuns.
+// mirrors internal/home/active_test.go's fakeRuns.
 type fakeRuns struct {
 	ids     []string
 	records map[string][]journal.Record
@@ -43,7 +43,7 @@ func detail(t *testing.T, tokensIn, tokensOut *int64, wallClock string, attempt 
 func i64(v int64) *int64 { return &v }
 
 // A store with no runs, or a nil Runs, has nothing to report — the same
-// tolerance internal/cockpit.ActiveRuns gives a repository with no run
+// tolerance internal/home.ActiveRuns gives a repository with no run
 // store yet.
 func TestWalkToleratesNoStore(t *testing.T) {
 	result, err := Walk(nil)

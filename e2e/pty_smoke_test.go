@@ -147,14 +147,14 @@ func waitExitError(t *testing.T, cmd *exec.Cmd) {
 }
 
 // Bare `wand` over a real pty must take the same path `wand ui` does: it is
-// a TTY, so it must attempt the cockpit rather than falling back to help.
+// a TTY, so it must attempt to open home rather than falling back to help.
 // It cannot render a full board without live Linear, so what this proves is
 // narrower but just as load-bearing: given a real terminal, root's RunE
-// reaches runCockpit's team-key resolution rather than either hanging or
+// reaches runHome's team-key resolution rather than either hanging or
 // silently printing help — the two ways an inverted TTY check would fail
 // silently. Run in an empty directory with no wand.toml, so the failure is
 // hermetic: no network, no team, no API key required.
-func TestBareWandOverAPTYEntersTheCockpitPath(t *testing.T) {
+func TestBareWandOverAPTYEntersTheHomePath(t *testing.T) {
 	bin := buildWand(t)
 
 	pty, err := xpty.NewPty(termWidth, termHeight)
@@ -230,11 +230,11 @@ func TestBinaryRendersAndQuitsCleanly(t *testing.T) {
 		_, _ = io.Copy(screen, pty)
 	}()
 
-	// The cockpit should render all five queues without any input.
+	// Home should render all five queues without any input.
 	got := screen.waitForText(t, "Needs Input")
-	for _, want := range []string{"wand cockpit", "Triage", "Plan Review", "Needs Input", "Ready for human", "Stalled"} {
+	for _, want := range []string{"wand", "Triage", "Plan Review", "Needs Input", "Ready for human", "Stalled"} {
 		if !strings.Contains(got, want) {
-			t.Errorf("cockpit is missing %q; screen was:\n%s", want, got)
+			t.Errorf("home is missing %q; screen was:\n%s", want, got)
 		}
 	}
 

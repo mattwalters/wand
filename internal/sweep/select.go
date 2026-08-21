@@ -50,7 +50,7 @@ type Candidate struct {
 // actively lying about itself on the board — the ticket reads In Progress
 // and nothing is behind it — while a re-review or an unresolved thread is
 // an orderly, already-visible request for another look. Mirrors
-// [cockpit.stallSeverity]'s own reasoning for the same ordering problem.
+// [home.stallSeverity]'s own reasoning for the same ordering problem.
 var severity = map[Kind]int{
 	KindDeadLease:         0,
 	KindReReview:          1,
@@ -104,7 +104,7 @@ func deadLeaseReason(runID string, r journal.Report) string {
 
 // ReReviewCandidates turns every issue labeled [ReReviewLabel] into a
 // candidate. Filtering to open, in-review work is the caller's — the same
-// openIssues discipline [cockpit.Build] applies to ready-for-human.
+// openIssues discipline [home.Build] applies to ready-for-human.
 func ReReviewCandidates(issues []linear.Issue) []Candidate {
 	out := make([]Candidate, 0, len(issues))
 	for _, issue := range issues {

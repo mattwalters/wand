@@ -1,4 +1,4 @@
- wand cockpit · WND                                             7 waiting on you
+ wand · WND                                                     7 waiting on you
   engaged · reaped WND-1 · next poll in 60s
 
   Triage  2 to judge
@@ -6,7 +6,7 @@
   WND-41  —          guard: a raw state UUID is not matched
 
   Plan Review  1 to bless
-  WND-44  Urgent     cockpit: a fifth queue for plans awaiting blessing
+  WND-44  Urgent     home: a fifth queue for plans awaiting blessing
 
   Needs Input  1 to answer
   WND-38  High       Second harness adapter: which one?

@@ -29,7 +29,7 @@ import (
 
 // Runs is the slice of the journal store this package uses. An interface so
 // tests hold a fake instead of writing real journals to disk for every case
-// — mirrors internal/cockpit's own Runs interface.
+// — mirrors internal/home's own Runs interface.
 type Runs interface {
 	List() ([]string, error)
 	Records(id string) ([]journal.Record, error)
@@ -90,7 +90,7 @@ type WalkResult struct {
 	Runs []RunSummary
 	// Skipped names runs whose journal failed to read or replay. Skipping
 	// one run is not fatal to the report — the same tolerance
-	// internal/cockpit/active.go's ActiveRuns gives an unreadable run.
+	// internal/home/active.go's ActiveRuns gives an unreadable run.
 	Skipped []string
 }
 

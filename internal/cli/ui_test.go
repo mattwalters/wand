@@ -29,7 +29,7 @@ func TestDumpScreenNeedsNothing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ui --dump-screen: %v", err)
 	}
-	for _, want := range []string{"wand cockpit", "Triage", "Needs Input", "Ready for human", "Stalled", sampleNotice} {
+	for _, want := range []string{"wand", "Triage", "Needs Input", "Ready for human", "Stalled", sampleNotice} {
 		if !strings.Contains(out, want) {
 			t.Errorf("dump is missing %q; screen was:\n%s", want, out)
 		}
@@ -147,7 +147,7 @@ func TestDumpScreenIgnoresAFileSuppliedTeamKey(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ui --dump-screen inside a repo with a keyed wand.toml: %v", err)
 	}
-	if !strings.Contains(out, "wand cockpit") {
+	if !strings.Contains(out, "wand") {
 		t.Errorf("dump is missing the header; screen was:\n%s", out)
 	}
 }
@@ -169,7 +169,7 @@ func TestDumpScreenHonorsTheSizeFlags(t *testing.T) {
 // --- engage mode's dependency wiring ----------------------------------------
 
 // buildEngager must fail closed: with no resolvable team key it cannot even
-// get as far as reading Linear, and the cockpit still has to open — engage
+// get as far as reading Linear, and home still has to open — engage
 // mode just is not available, the same way a missing Backend leaves the
 // board read-only rather than refusing to open at all.
 func TestBuildEngagerReturnsNilWithoutATeamKey(t *testing.T) {

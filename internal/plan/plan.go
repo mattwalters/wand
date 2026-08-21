@@ -166,7 +166,7 @@ func Execute(ctx context.Context, d Deps, store *journal.Store, identifier strin
 
 	// The journal's Verb keeps writing "plan" only — a journal run predates
 	// this rename and may still carry "scope", but nothing here reads that
-	// back for its own sake; the cockpit and dispatch.LanesUsed are the
+	// back for its own sake; home and dispatch.LanesUsed are the
 	// readers, and both take "scope" as a synonym for "plan" rather than
 	// this package migrating 60+ existing local runs for a value nothing
 	// else needs.
@@ -621,8 +621,8 @@ func (s *planning) write(ctx context.Context, draft Draft) Outcome {
 	// Review, never Needs Input: that status is the scout's other ending,
 	// reserved for a blocking question ([wrongPremise], through
 	// verbs.Handback). A finished plan is a different kind of "ask a
-	// human" — judge, not answer — and Plan Review is what tells the
-	// cockpit which queue it belongs in.
+	// human" — judge, not answer — and Plan Review is what tells home
+	// which queue it belongs in.
 	stateID, err := verbs.ResolveState(ctx, s.d.Board, s.d.Cov, s.issue.TeamID, "plan_review")
 	if err != nil {
 		return *s.park(ctx, fmt.Sprintf("could not resolve the %s status: %v", s.d.Cov.StatusName("plan_review"), err))

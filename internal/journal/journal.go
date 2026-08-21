@@ -138,7 +138,7 @@ type Meta struct {
 	// Ticket is the Linear identifier the run works, e.g. "WND-7".
 	Ticket string `json:"ticket"`
 	// Verb names the orchestrator: "run", "plan" ("scope" in a run
-	// journaled before this rename — the cockpit and dispatch.LanesUsed
+	// journaled before this rename — home and dispatch.LanesUsed
 	// both read the two as synonyms rather than migrating old runs).
 	Verb string `json:"verb"`
 	// Repo is the absolute path of the repository the run acts on. A

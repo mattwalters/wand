@@ -85,7 +85,7 @@ anything staying resident between ticks except the OS's own process table.
 
 What doesn't exist yet: the UI is not itself what spawns `--watch` or a
 dispatch child today — `--watch` is invoked from the CLI directly, by a
-person. Managed mode, the cockpit spawning and supervising detached
+person. Managed mode, home spawning and supervising detached
 dispatch children, is the shape this decision commits to, not a shipped
 feature. When it is built it inherits the same constraint: whatever it
 spawns must be detached, surviving the process that spawned it — a UI that

@@ -1,4 +1,4 @@
-package cockpit
+package home
 
 import (
 	"context"
@@ -111,7 +111,7 @@ func subject() linear.Issue {
 	}
 }
 
-// The cockpit performs, on purpose, four transitions the guard refuses
+// Home performs, on purpose, four transitions the guard refuses
 // everywhere else. If any of these stops working, the human's half of the
 // protocol has no surface at all.
 func TestApplyPerformsTheTransitionsTheGuardForbids(t *testing.T) {
@@ -283,8 +283,8 @@ func TestApplyChecksBeforeItWrites(t *testing.T) {
 	}
 }
 
-// A covenant that renames the blessed column must be honoured: the cockpit
-// refers to statuses by what they mean, not by what a stock board calls them.
+// A covenant that renames the blessed column must be honoured: home refers
+// to statuses by what they mean, not by what a stock board calls them.
 func TestApplyFollowsACovenantRename(t *testing.T) {
 	cov := covenant.Default()
 	for i := range cov.Statuses {

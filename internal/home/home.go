@@ -1,4 +1,4 @@
-// Package cockpit answers one question: what is waiting on a human?
+// Package home answers one question: what is waiting on a human?
 //
 // Five queues, and nothing else. Triage to judge, Plan Review to bless a
 // plan, Needs Input to answer, ready-for-human work to look at, and stalled
@@ -8,7 +8,7 @@
 //
 // What is deliberately *not* here: Backlog. A Backlog ticket is not waiting
 // on you; it is the pool, and browsing a pool is Linear's job, done better
-// there. The cockpit shows what has stopped, not what exists.
+// there. Home shows what has stopped, not what exists.
 //
 // Alongside the four queues sits one strip that answers a different
 // question — not "what is waiting on a human?" but "what is the machine
@@ -32,7 +32,7 @@
 // and every decision in between is a function a test can hold.
 //
 // [guard]: https://pkg.go.dev/github.com/mattwalters/wand/internal/guard
-package cockpit
+package home
 
 import (
 	"fmt"
@@ -49,7 +49,7 @@ import (
 // parameter (see covenant.Default).
 const ReadyForHumanLabel = "ready-for-human"
 
-// Snapshot is everything the cockpit reads, already fetched. Pure input:
+// Snapshot is everything home reads, already fetched. Pure input:
 // [Build] turns one of these into a board without touching the network.
 type Snapshot struct {
 	// Team is the team key the board was read for, e.g. "WND".

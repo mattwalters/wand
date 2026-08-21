@@ -9,7 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/mattwalters/wand/internal/cockpit"
+	"github.com/mattwalters/wand/internal/home"
 	"github.com/mattwalters/wand/internal/screen"
 	"github.com/mattwalters/wand/internal/tuitest"
 )
@@ -46,7 +46,7 @@ func (f *fakeEngager) Tick(context.Context) (EngageResult, error) {
 func boardEngaged(t *testing.T, back Backend, eng Engager) Model {
 	t.Helper()
 	return New(Config{
-		Snapshot: cockpit.Sample(),
+		Snapshot: home.Sample(),
 		Backend:  back,
 		Engager:  eng,
 		Width:    screen.DefaultWidth,
@@ -189,7 +189,7 @@ func TestEngageTickReportingADispatchFlashesTheWinner(t *testing.T) {
 
 // A poll's error surfaces the same way a failed refresh does: on the flash,
 // as bad news, without touching engaged itself — a transient Linear failure
-// should not silently disengage the cockpit.
+// should not silently disengage the home.
 func TestEngageTickErrorFlashesAndStaysEngaged(t *testing.T) {
 	eng := &fakeEngager{}
 	m := boardEngaged(t, &fakeBackend{}, eng)
@@ -199,14 +199,14 @@ func TestEngageTickErrorFlashesAndStaysEngaged(t *testing.T) {
 	m = next.(Model)
 
 	if !m.engaged {
-		t.Error("a poll error disengaged the cockpit; it should only flash")
+		t.Error("a poll error disengaged home; it should only flash")
 	}
 	if m.flashOK || !strings.Contains(m.flash, "linear is unreachable") {
 		t.Errorf("flash = %q (ok=%v), want it to report the poll error", m.flash, m.flashOK)
 	}
 }
 
-// A poll landing after the cockpit has already disengaged must not
+// A poll landing after home has already disengaged must not
 // resurrect engaged state or reschedule another poll.
 func TestEngageTickAfterDisengageIsDropped(t *testing.T) {
 	eng := &fakeEngager{}
@@ -216,7 +216,7 @@ func TestEngageTickAfterDisengageIsDropped(t *testing.T) {
 	next, cmd := m.Update(engageTickMsg{at: time.Now(), res: EngageResult{Dispatched: true, Ticket: "WND-1"}})
 	m = next.(Model)
 	if m.engaged {
-		t.Error("a stray tick re-engaged the cockpit")
+		t.Error("a stray tick re-engaged home")
 	}
 	if m.tickResult.Dispatched {
 		t.Error("a stray tick's result was recorded after disengaging")

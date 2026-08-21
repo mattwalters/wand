@@ -14,7 +14,7 @@ from the command definitions, not from memory: flags, help text and exit
 codes match what the binary does.
 
 There is no standalone `bless` page, because promoting a ticket is a human
-act with a human door: it lives in the cockpit, [`wand ui`](../ui/). A
+act with a human door: it lives in home, [`wand ui`](../ui/). A
 one-shot CLI verb that promoted a ticket to Todo would be a verb an agent
 could call, which is the whole thing the guard exists to prevent.
 [`wand pm bless`](../pm/) is not that verb: it never sets a guarded status,
@@ -22,7 +22,7 @@ only files a validated, human-reviewed proposal into Triage — the same
 status [`wand file`](../file/) already lands an agent's own findings in —
 so it is documented on `pm`'s own page rather than getting one of its own.
 
-Bare `wand`, with a terminal attached, opens that same cockpit — it is what
+Bare `wand`, with a terminal attached, opens that same home screen — it is what
 typing the tool's name gets you. `wand help` is the documented way to get
 help instead; `wand --help` and `-h` work everywhere they always did.
 Without a terminal (a pipe, a script, CI), bare `wand` falls back to the

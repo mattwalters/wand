@@ -72,7 +72,7 @@ smoke: ## Check that a wand binary answers, e.g. make smoke BIN=bin/wand
 	@printf 'smoke: %s answers, and its guard still blocks\n' '$(BIN)'
 
 .PHONY: run
-run: ## Run the cockpit from source, against the built-in sample board
+run: ## Run home from source, against the built-in sample board
 	@go run . ui --sample
 
 .PHONY: test

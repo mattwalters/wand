@@ -52,7 +52,7 @@ and should feel like one.
    In Planning before it touches anything, the lock is gone, and the
    research half is symmetric with the build half: To Plan/In
    Planning/Plan Review mirror Todo/In Progress/In Review exactly, and the
-   cockpit's generic started-type read (`internal/cockpit/stalled.go`) needs
+   home's generic started-type read (`internal/home/stalled.go`) needs
    no plan-specific carve-out any more (the one WND-66 added is deleted).
    Nothing had shipped when this landed, which is what made the reversal
    free — the bill this convictions text describes ("topology changes ship
@@ -167,7 +167,7 @@ run exits). wand's own repo is the first customer — a Go CLI needs nothing
 but a worktree and `make check`, so the default covenant gets exercised
 before any complex infrastructure does.
 
-**Phase 7 — the cockpit and the second harness (WAND-12, 13, 15).** The
+**Phase 7 — home and the second harness (WAND-12, 13, 15).** The
 TUI answering one question — *what is waiting on me?* — with blessing as a
 deliberate human act; a second harness adapter behind the same conformance
 test; the versioned docs site, whose first real content is the covenant's
@@ -194,7 +194,7 @@ by vigilance:
   ticket templates that split deliverables by owner, so the automation
   closes exactly what merging finished.
 - **Queues nothing drains.** Needs Input, Triage and parked runs wait on
-  people and are invisible unless surfaced. Answer: that is the cockpit's
+  people and are invisible unless surfaced. Answer: that is home's
   entire job — and, for parks specifically, the board's too. A park writes
   its reason to the ticket and marks it `parked`, because a queue you have
   to run a command to see is one you find out about an hour late. The

@@ -21,8 +21,8 @@ go run . ui --script "j,enter" --dump-screen
 ```
 
 `--dump-screen` renders the built-in sample board with no writer behind it, so
-every screen is reachable and none of them can write. That is deliberate: the
-cockpit is the one place in wand that performs the transitions `wand guard`
+every screen is reachable and none of them can write. That is deliberate:
+home is the one place in wand that performs the transitions `wand guard`
 forbids, and the command an agent uses to *look* at it must not be a way to
 *use* it.
 
