@@ -458,18 +458,23 @@ to <code>Ready</code> gets a screen that says <code>→ Ready</code>.</p>
 <p>Press <code>e</code> to engage. While engaged, the cockpit polls Todo and To Plan on
 <code>--interval</code> (default <code>1m</code>) exactly the way <code>wand dispatch --watch</code> (see
 <a href="../dispatch/"><code>wand dispatch</code></a>) does — because it <em>is</em> that mechanism,
-reused rather than reimplemented: each poll counts lanes, ranks
-and vets Todo and To Plan, and when a winner exists spawns it as a
-<strong>detached child process</strong> through <code>wand run</code> or <code>wand scope</code>, the same way
-<code>--watch</code> does. That child survives the cockpit: closing the UI, or the
-whole terminal it runs in, never kills work already spawned. Press <code>e</code>
-again to disengage.</p>
+reused rather than reimplemented: each poll runs a sweep pass first — the
+same one <code>wand sweep</code> runs standalone — reclaiming a dead lease, handing
+back a re-plan or re-review label, or draining an unresolved PR thread on a
+converged ticket, then counts lanes, ranks and vets Todo and To Plan, and
+when a winner exists spawns it as a <strong>detached child process</strong> through
+<code>wand run</code> or <code>wand scope</code>, the same way <code>--watch</code> does. That child
+survives the cockpit: closing the UI, or the whole terminal it runs in,
+never kills work already spawned. Press <code>e</code> again to disengage.</p>
 <p>The header names what engage mode is doing:</p>
 <pre tabindex="0"><code> wand cockpit · WND                                             7 waiting on you
   engaged · idle · next poll in 40s
 </code></pre><pre tabindex="0"><code> wand cockpit · WND                                             7 waiting on you
   engaged · dispatched WND-9 (run) · next poll in 60s
-</code></pre><p><strong>Engaging is always a deliberate key press, never a default.</strong> Bare
+</code></pre><pre tabindex="0"><code> wand cockpit · WND                                             7 waiting on you
+  engaged · reaped WND-1 · next poll in 60s
+</code></pre><p>A tick that both swept and dispatched reads as one line: <code>engaged · reaped WND-1, dispatched WND-9 (run) · next poll in 60s</code>.</p>
+<p><strong>Engaging is always a deliberate key press, never a default.</strong> Bare
 <code>wand</code> opens the cockpit read-for-work but never pre-engaged — opening a
 dashboard must not start spending money. Nothing engages it for you.</p>
 <p><strong>Multiple engaged cockpits, and an engaged cockpit alongside a standalone
@@ -491,9 +496,11 @@ why.</p>
 unchanged — engage mode selects a winner through the same <code>dispatch.Select</code>
 every standalone pass uses, so a gate placed there covers both without
 engage mode needing its own copy of it.</p>
-<p>Left out of this pass, deliberately: engage mode does not also run periodic
-<code>wand sweep</code> passes, and the poll interval is a flag, not a covenant
-parameter. Both are natural extensions if engage mode earns them.</p>
+<p>Left out, deliberately: engage mode does not act on the <code>parked</code> label — a
+parked lane is a decision only a human at the cockpit makes, by pressing
+<code>c</code>, and an engaged cockpit is by definition in front of a person who can
+press it. The poll interval is a flag, not a covenant parameter; that
+remains a natural extension if engage mode earns it.</p>
 <h2 id="looking-at-the-interface-without-a-terminal">Looking at the interface without a terminal</h2>
 <p>A terminal interface is the one kind of program you cannot observe by
 reading its output, which makes it the one kind an agent cannot check its
