@@ -222,6 +222,45 @@ func TestReconcileIgnoresAnEarlierResolution(t *testing.T) {
 	}
 }
 
+// A ticket parked more than once has one current park and the rest history:
+// the cockpit shows the newer reason, not the one that happened to be
+// classified first.
+func TestReconcileCollapsesRepeatedParksToTheNewestReason(t *testing.T) {
+	early := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	late := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
+
+	stale := Lane{Kind: LaneParked, Ticket: "WND-66", RunID: "old-park", Since: early, Reason: "citation gate"}
+	current := Lane{Kind: LaneParked, Ticket: "WND-66", RunID: "new-park", Since: late, Reason: "timeout"}
+
+	got := Reconcile([]Lane{stale, current}, nil)
+	if len(got) != 1 {
+		t.Fatalf("lanes = %+v, want one: repeated parks on the same ticket collapse", got)
+	}
+	if got[0].RunID != "new-park" || got[0].Reason != "timeout" {
+		t.Errorf("lane = %+v, want the newer park's run and reason", got[0])
+	}
+}
+
+// The collapse is per-ticket, not a blanket dedup of every parked lane: two
+// different tickets each parked once must both survive.
+func TestReconcileKeepsParksForDifferentTickets(t *testing.T) {
+	early := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	late := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
+
+	older := Lane{Kind: LaneParked, Ticket: "WND-1", RunID: "a", Since: early}
+	newer := Lane{Kind: LaneParked, Ticket: "WND-2", RunID: "b", Since: late}
+
+	got := Reconcile([]Lane{newer, older}, nil)
+	if len(got) != 2 {
+		t.Fatalf("lanes = %+v, want both: different tickets, not a blanket dedup", got)
+	}
+
+	rows := laneRows(got)
+	if len(rows) != 2 || rows[0].Lane.RunID != "a" || rows[1].Lane.RunID != "b" {
+		t.Errorf("rows = %+v, want oldest-first across tickets", rows)
+	}
+}
+
 func TestReconcileLeavesOtherKindsAlone(t *testing.T) {
 	early := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
 	late := time.Date(2026, 3, 2, 0, 0, 0, 0, time.UTC)
