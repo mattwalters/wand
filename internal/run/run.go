@@ -204,6 +204,32 @@ type phaseDetail struct {
 	// base, taken at the end of every phase — the run verb only, since
 	// scope has no worktree.
 	DiffStat string `json:"diff_stat,omitempty"`
+	// Attempt is which spawn of this phase-and-round this record ends,
+	// counting from 1. It is above 1 only when an earlier attempt failed
+	// transiently and was retried, so a reader who has never seen a retry
+	// never sees the field.
+	Attempt int `json:"attempt,omitempty"`
+	// Transient is what the adapter made of a failure: true when the
+	// harness itself reported infrastructure rather than the work. Kept on
+	// the failing record so a later reader can tell a retried park from
+	// one that never had the option.
+	Transient bool `json:"transient,omitempty"`
+}
+
+// retryNote is the detail on the journal note a transient failure writes:
+// what failed, which attempt it was, and how much budget the covenant
+// allowed. Written whether or not the retry happens, because "we could have
+// retried and did not" is the more surprising of the two outcomes and the
+// one a reader will want explained.
+type retryNote struct {
+	Phase   string `json:"phase"`
+	Round   int    `json:"round"`
+	Attempt int    `json:"attempt"`
+	Retries int    `json:"retries"`
+	Error   string `json:"error"`
+	// Tree says why a clean-tree check refused the retry; absent when the
+	// tree was not what stopped it.
+	Tree string `json:"tree,omitempty"`
 }
 
 // journalTail bounds the output tail a journal record keeps.
@@ -352,61 +378,142 @@ func (l *loop) run(ctx context.Context) Outcome {
 // work journals a phase, spawns its worker, and journals what came back.
 // A worker failure — no handoff, timeout, spawn error — parks: the loop
 // cannot tell a crash from a success without the report.
+//
+// The one exception is a failure the harness itself reported as
+// infrastructure rather than as anything about the work (see
+// [worker.Retryable]): a provider error, a host that suspended
+// mid-response. That phase respawns, up to Caps.WorkerRetries times, and
+// parks with the original reason once the budget is out.
+//
+// Every attempt runs at the *same* round, journalled as its own
+// StartPhase/EndPhase pair with a note in between saying why it happened
+// again. Bumping the round instead would spend review or CI budget on a
+// closed laptop lid, which is the opposite of the point. Reusing the round
+// also reuses HandoffPath, which is safe twice over: collect deletes a
+// handoff the moment it reads it, and worker.Run clears anything left at
+// the path before it spawns.
 func (l *loop) work(ctx context.Context, phase string, round int, rules []string, prompt string) (worker.Result, *Outcome) {
-	fmt.Fprintf(l.d.Out, "phase %s round %d: spawning worker (%s)\n", phase, round, l.d.Harness)
-	if err := l.r.StartPhase(phase, round); err != nil {
-		// An unjournaled phase must not run; that is the package's one rule.
-		return worker.Result{}, l.park(ctx, fmt.Sprintf("could not journal phase %s: %v", phase, err))
+	for attempt := 0; ; attempt++ {
+		if attempt == 0 {
+			fmt.Fprintf(l.d.Out, "phase %s round %d: spawning worker (%s)\n", phase, round, l.d.Harness)
+		} else {
+			fmt.Fprintf(l.d.Out, "phase %s round %d: respawning worker (%s), retry %d of %d\n",
+				phase, round, l.d.Harness, attempt, l.d.Cov.Caps.WorkerRetries)
+		}
+		if err := l.r.StartPhase(phase, round); err != nil {
+			// An unjournaled phase must not run; that is the package's one rule.
+			return worker.Result{}, l.park(ctx, fmt.Sprintf("could not journal phase %s: %v", phase, err))
+		}
+		// Built after StartPhase, every time round: HandoffPath is named
+		// for the journal's *open* phase and round, so a spec built before
+		// the phase opened would point the worker at the previous phase's
+		// handoff file — or, on the first phase, at the run's bare
+		// handoff.json.
+		spec := worker.Spec{
+			Mode:        phase,
+			Rules:       rules,
+			Prompt:      prompt,
+			Dir:         l.tree,
+			ScratchDir:  l.r.ScratchDir(),
+			HandoffPath: l.r.HandoffPath(),
+			Timeout:     l.d.Cov.Caps.WorkerTimeout,
+			Model:       l.d.Model,
+			Effort:      l.d.Effort,
+			Out:         l.d.Out,
+			Label:       fmt.Sprintf("%s round %d", phase, round),
+			OnHeartbeat: l.heartbeat(phase, round),
+		}
+		start := time.Now()
+		res, err := l.d.Workers.Run(ctx, spec)
+		elapsed := time.Since(start)
+		detail := phaseDetail{
+			ExitCode:  res.ExitCode,
+			TimedOut:  res.TimedOut,
+			Handoff:   res.Handoff != nil,
+			Harness:   l.d.Harness,
+			Model:     l.d.Model,
+			WallClock: elapsed.String(),
+			Attempt:   attempt + 1,
+		}
+		if res.Usage != nil {
+			detail.TokensIn = res.Usage.InputTokens
+			detail.TokensOut = res.Usage.OutputTokens
+		}
+		// Best-effort, like workState: a metrics call that cannot run (no
+		// commits yet, a transient git failure) must not park a run over a
+		// diff stat, so a failure here just leaves the field absent.
+		if stat, derr := l.d.Git.DiffStat(ctx, l.tree, l.base.Ref); derr == nil {
+			detail.DiffStat = stat
+		}
+		if err != nil {
+			detail.Error = err.Error()
+			detail.OutputTail = worker.Clip(res.Output, journalTail)
+			detail.Transient = res.Transient
+		}
+		if jerr := l.r.EndPhase(detail); jerr != nil {
+			return res, l.park(ctx, fmt.Sprintf("could not journal the end of phase %s: %v", phase, jerr))
+		}
+		if ctx.Err() != nil {
+			return res, l.park(ctx, "the run was interrupted")
+		}
+		if err == nil {
+			return res, nil
+		}
+		if !l.mayRetry(ctx, phase, round, attempt, res, err) {
+			return res, l.park(ctx, fmt.Sprintf("the %s worker (round %d) failed: %v", phase, round, err))
+		}
 	}
-	spec := worker.Spec{
-		Mode:        phase,
-		Rules:       rules,
-		Prompt:      prompt,
-		Dir:         l.tree,
-		ScratchDir:  l.r.ScratchDir(),
-		HandoffPath: l.r.HandoffPath(),
-		Timeout:     l.d.Cov.Caps.WorkerTimeout,
-		Model:       l.d.Model,
-		Effort:      l.d.Effort,
-		Out:         l.d.Out,
-		Label:       fmt.Sprintf("%s round %d", phase, round),
-		OnHeartbeat: l.heartbeat(phase, round),
+}
+
+// mayRetry decides whether a failed phase gets another worker, and says so
+// in both the journal and the narration either way. It is the impure half
+// of the policy: [worker.Retryable] answers "was this failure about the
+// work", and everything this adds is about whether retrying is safe *here*.
+//
+// A dirty tree is the check that matters. Work phases commit, so a worker
+// that died mid-edit leaves uncommitted changes, and requireClean already
+// parks on those — but only *after* work returns, which a failing phase
+// never reaches. Without this check a transient death would respawn a
+// second worker on top of the first one's half-finished edits, in a tree
+// nobody has looked at. A tree git cannot read counts as dirty: an unknown
+// tree is not a clean one.
+func (l *loop) mayRetry(ctx context.Context, phase string, round, attempt int, res worker.Result, err error) bool {
+	if !worker.Retryable(res, err, ctx.Err() != nil) {
+		return false
 	}
-	start := time.Now()
-	res, err := l.d.Workers.Run(ctx, spec)
-	elapsed := time.Since(start)
-	detail := phaseDetail{
-		ExitCode:  res.ExitCode,
-		TimedOut:  res.TimedOut,
-		Handoff:   res.Handoff != nil,
-		Harness:   l.d.Harness,
-		Model:     l.d.Model,
-		WallClock: elapsed.String(),
+	left := l.d.Cov.Caps.WorkerRetries - attempt
+	if left <= 0 {
+		fmt.Fprintf(l.d.Out, "phase %s round %d: the harness called this failure infrastructure, but %d retries are already spent; parking\n",
+			phase, round, l.d.Cov.Caps.WorkerRetries)
+		l.note("transient worker failure, out of retries", retryNote{
+			Phase: phase, Round: round, Attempt: attempt + 1,
+			Retries: l.d.Cov.Caps.WorkerRetries, Error: err.Error(),
+		})
+		return false
 	}
-	if res.Usage != nil {
-		detail.TokensIn = res.Usage.InputTokens
-		detail.TokensOut = res.Usage.OutputTokens
+	if l.tree != "" {
+		dirty, derr := l.d.Git.Dirty(ctx, l.tree)
+		if derr != nil || dirty {
+			why := "the tree is dirty"
+			if derr != nil {
+				why = fmt.Sprintf("the tree could not be read (%v)", derr)
+			}
+			fmt.Fprintf(l.d.Out, "phase %s round %d: the harness called this failure infrastructure, but %s, so the work is at risk; parking with the worktree preserved at %s\n",
+				phase, round, why, l.tree)
+			l.note("transient worker failure, tree not clean", retryNote{
+				Phase: phase, Round: round, Attempt: attempt + 1,
+				Retries: l.d.Cov.Caps.WorkerRetries, Error: err.Error(), Tree: why,
+			})
+			return false
+		}
 	}
-	// Best-effort, like workState: a metrics call that cannot run (no
-	// commits yet, a transient git failure) must not park a run over a
-	// diff stat, so a failure here just leaves the field absent.
-	if stat, derr := l.d.Git.DiffStat(ctx, l.tree, l.base.Ref); derr == nil {
-		detail.DiffStat = stat
-	}
-	if err != nil {
-		detail.Error = err.Error()
-		detail.OutputTail = worker.Clip(res.Output, journalTail)
-	}
-	if jerr := l.r.EndPhase(detail); jerr != nil {
-		return res, l.park(ctx, fmt.Sprintf("could not journal the end of phase %s: %v", phase, jerr))
-	}
-	if ctx.Err() != nil {
-		return res, l.park(ctx, "the run was interrupted")
-	}
-	if err != nil {
-		return res, l.park(ctx, fmt.Sprintf("the %s worker (round %d) failed: %v", phase, round, err))
-	}
-	return res, nil
+	fmt.Fprintf(l.d.Out, "phase %s round %d: the harness reported infrastructure, not the work; retrying (%d left)\n",
+		phase, round, left)
+	l.note("transient worker failure, retrying", retryNote{
+		Phase: phase, Round: round, Attempt: attempt + 1,
+		Retries: l.d.Cov.Caps.WorkerRetries, Error: err.Error(),
+	})
+	return true
 }
 
 // heartbeat returns the worker.Spec.OnHeartbeat callback for one phase: a

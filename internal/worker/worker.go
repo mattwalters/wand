@@ -219,6 +219,13 @@ type Result struct {
 	// an adapter that implements UsageAdapter. Nil when the harness does
 	// not report usage, or a parse failed — absent, never estimated.
 	Usage *Usage
+	// Transient reports that the harness itself said this failure was
+	// infrastructure — a provider error, a host suspended mid-response —
+	// rather than anything about the work. Set by an adapter that
+	// implements TransienceAdapter; false whenever no adapter recognized
+	// the output, which is the safe default: the caller parks, as it did
+	// before anything could say otherwise.
+	Transient bool
 }
 
 // Usage is the token accounting a harness reported for one invocation.
@@ -239,6 +246,24 @@ type Usage struct {
 type UsageAdapter interface {
 	Adapter
 	ParseUsage(output string) *Usage
+}
+
+// TransienceAdapter optionally recognizes a harness's own report that a
+// failure said nothing about the work: a provider error, a host that
+// suspended mid-response. An orchestrator can retry such a phase instead
+// of parking a run over a closed laptop lid, but only a harness knows what
+// its own failures look like — so the recognition lives with the adapter,
+// beside [UsageAdapter], and for the same reason: neither CLI's output
+// shape is a versioned, guaranteed-stable API.
+//
+// It fails soft in exactly one direction. An adapter that does not
+// implement this interface, or whose Transient does not recognize what it
+// was handed, reports false — "not transient" — and the run parks as it
+// does today. A wrong false costs one park, which is the behavior that
+// already exists; a wrong true respawns a worker over a real failure.
+type TransienceAdapter interface {
+	Adapter
+	Transient(res Result) bool
 }
 
 // Compose renders the contract the orchestrator hands down, followed by the
@@ -381,6 +406,9 @@ func Run(ctx context.Context, a Adapter, spec Spec) (Result, error) {
 	if ua, ok := a.(UsageAdapter); ok {
 		res.Usage = ua.ParseUsage(res.Output)
 	}
+	if ta, ok := a.(TransienceAdapter); ok {
+		res.Transient = ta.Transient(res)
+	}
 	// Attribute the deadline honestly: Spec.Timeout fired only if the run
 	// actually failed while the caller's own context was still live. A
 	// caller's earlier deadline or cancellation is the caller's act, and
@@ -518,4 +546,28 @@ func AdapterFor(name string) (Adapter, error) {
 		return Codex{}, nil
 	}
 	return nil, fmt.Errorf("worker: no adapter named %q (have claude-code, codex)", name)
+}
+
+// Retryable reports whether one failed invocation is worth respawning: the
+// harness itself said the failure was infrastructure, and nothing else
+// about the run says stop.
+//
+// It is the whole "is this worth another try" policy in one pure function,
+// exported because run and scope both ask the question and a second copy is
+// how two orchestrators quietly grow two different answers. What it
+// deliberately does not know is the rest of the decision: how much retry
+// budget is left (covenant.Caps.WorkerRetries) and whether the working tree
+// is clean. Both belong to the caller, and both are checked there.
+//
+// Three failures never retry, whatever the harness reported:
+//
+//   - A run that returned no error did not fail.
+//   - An interrupt is a person saying stop. Whatever the harness printed on
+//     its way down, the answer to ctrl-c is not "try again".
+//   - A timeout is ambiguous — a wedged worker, or a job genuinely bigger
+//     than the cap — and on either reading a respawn buys another full
+//     timeout for nothing. Per-phase timeouts are the fix for that, not
+//     this.
+func Retryable(res Result, err error, interrupted bool) bool {
+	return err != nil && !interrupted && !res.TimedOut && res.Transient
 }

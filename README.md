@@ -333,8 +333,8 @@ human's call as making one.
 `wand run WND-3` owns one blessed ticket from claim to a terminal state:
 implement → CI → review → revise, a cold worker per phase, in a run-private
 worktree, with phases and caps from the covenant (`caps.review_rounds`,
-`caps.ci_attempts`, `caps.worker_timeout_minutes`; `commands.verify` is
-required). Workers commit and are mute — their environments carry no Linear
+`caps.ci_attempts`, `caps.worker_timeout_minutes`, `caps.worker_retries`;
+`commands.verify` is required). Workers commit and are mute — their environments carry no Linear
 or GitHub credentials, proven per harness by the isolation conformance
 suite — while the orchestrator makes every external write: it runs verify,
 pushes, opens and titles the PR (`[WND-3] …`, written at open and repaired
@@ -364,6 +364,20 @@ is a contract a scheduler can read:
   pick it up again. A reviewer that leaves no parseable handoff parks
   rather than converges: anything else turns reviewer crashes into clean
   passes.
+
+One failure does not park: a worker whose harness reported the failure as
+infrastructure rather than as anything about the work — a provider error, a
+host that suspended mid-response. That phase respawns, up to
+`caps.worker_retries` times (one by default; `0` turns it off), at the same
+round, so a closed laptop lid never spends review or CI budget. Only the
+harness's own verdict counts, through an optional adapter interface that
+fails soft: a harness that cannot say, or output nothing recognized, means
+"not transient" and the run parks as before. Timeouts are excluded on
+purpose — a timeout cannot distinguish a wedged worker from a job bigger
+than the cap, and a retry costs another whole one — and an interrupt is
+never retried, whatever the harness printed on the way down. A retry only
+happens into a clean tree: uncommitted work is work at risk, and a second
+worker must not write over the first one's half-finished edits.
 
 The run journal makes all of it crash-only: every phase is journaled before
 its worker spawns, and a run killed outright is provably dead and cheap to

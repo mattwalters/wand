@@ -72,6 +72,14 @@ type Caps struct {
 	// Scoping winner never needs one (see internal/dispatch), so research
 	// is never starved by full lane occupancy.
 	Lanes int
+	// WorkerRetries is how many extra times one phase may respawn its
+	// worker after a failure the harness itself reported as
+	// infrastructure — see worker.TransienceAdapter. It counts retries,
+	// not attempts: every phase gets one spawn regardless, and zero is the
+	// coherent, safe answer meaning "never retry", which is what wand did
+	// before this existed. Nothing else is ever retried; a failure that
+	// might be about the work still parks on the first attempt.
+	WorkerRetries int
 }
 
 // Toggles switch the lifecycle's optional stages.
@@ -180,6 +188,7 @@ func Default() Covenant {
 			CIAttempts:    3,
 			WorkerTimeout: 30 * time.Minute,
 			Lanes:         1,
+			WorkerRetries: 1,
 		},
 		Toggles: Toggles{
 			ScopeInterview: true,

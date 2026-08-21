@@ -3,6 +3,7 @@ package scope_test
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -165,6 +166,11 @@ type workerResult struct {
 	handoff any // marshaled to the handoff; a string is passed through raw
 	err     error
 	usage   *worker.Usage
+	// transient is what a TransienceAdapter would have said about this
+	// failure — worker.Run sets Result.Transient on the way past, so a
+	// fake that always left it false could not test either side of the
+	// retry decision.
+	transient bool
 }
 
 func (w *workers) Run(ctx context.Context, spec worker.Spec) (worker.Result, error) {
@@ -176,7 +182,7 @@ func (w *workers) Run(ctx context.Context, spec worker.Spec) (worker.Result, err
 	next := w.results[0]
 	w.results = w.results[1:]
 	if next.err != nil {
-		return worker.Result{ExitCode: 1}, next.err
+		return worker.Result{ExitCode: 1, Transient: next.transient}, next.err
 	}
 	var raw json.RawMessage
 	switch h := next.handoff.(type) {
@@ -983,4 +989,139 @@ func TestARejectedHandoffIsKeptForTheHuman(t *testing.T) {
 	if _, ok := got["approaches"]; ok {
 		t.Errorf("the kept handoff was repaired on the way to disk:\n%s", kept)
 	}
+}
+
+// --- transient scout failures ---------------------------------------------
+//
+// A scout costs a whole model call and produces nothing at all until it
+// hands off, so a provider error is the most expensive possible thing to
+// mistake for a verdict. See internal/worker for the captured harness
+// output this models.
+
+var transientErr = errors.New("worker: claude-code exited 1 without a usable handoff: no handoff file was written")
+
+// notes returns every journal note message the run wrote, in order.
+func (h *harness) notes(t *testing.T, id string) []string {
+	t.Helper()
+	records, err := h.store.Records(id)
+	if err != nil {
+		t.Fatalf("reading the journal: %v", err)
+	}
+	var out []string
+	for _, r := range records {
+		if r.Kind == journal.KindNote {
+			out = append(out, r.Reason)
+		}
+	}
+	return out
+}
+
+func (h *harness) phaseStarts(t *testing.T, id string) int {
+	t.Helper()
+	records, err := h.store.Records(id)
+	if err != nil {
+		t.Fatalf("reading the journal: %v", err)
+	}
+	n := 0
+	for _, r := range records {
+		if r.Kind == journal.KindPhaseStarted {
+			n++
+		}
+	}
+	return n
+}
+
+func TestScoutRetriesATransientFailureAndScopes(t *testing.T) {
+	h := newHarness(t,
+		workerResult{err: transientErr, transient: true},
+		workerResult{handoff: draftHandoff()},
+	)
+	h.deps.Cov.Caps.WorkerRetries = 1
+
+	out, err := h.run(t)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if out.Kind != journal.Converged {
+		t.Fatalf("outcome = %s (%s), want converged — a provider error is not a research finding", out.Kind, out.Reason)
+	}
+	if got := h.phaseStarts(t, out.RunID); got != 2 {
+		t.Errorf("%d phase starts, want 2 — both attempts belong in the journal", got)
+	}
+	if notes := h.notes(t, out.RunID); !hasSubstring(notes, "retrying") {
+		t.Errorf("notes %v carry no record of why the scout ran twice", notes)
+	}
+}
+
+func TestScoutParksOnceRetriesAreSpent(t *testing.T) {
+	h := newHarness(t,
+		workerResult{err: transientErr, transient: true},
+		workerResult{err: transientErr, transient: true},
+	)
+	h.deps.Cov.Caps.WorkerRetries = 1
+
+	out, err := h.run(t)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if out.Kind != journal.Parked {
+		t.Fatalf("outcome = %s (%s), want parked", out.Kind, out.Reason)
+	}
+	if !strings.Contains(out.Reason, "no handoff file was written") {
+		t.Errorf("park reason %q dropped the worker's own error", out.Reason)
+	}
+	if notes := h.notes(t, out.RunID); !hasSubstring(notes, "out of retries") {
+		t.Errorf("notes %v do not say the budget ran out", notes)
+	}
+}
+
+func TestScoutDoesNotRetryANonTransientFailure(t *testing.T) {
+	h := newHarness(t, workerResult{err: transientErr})
+	h.deps.Cov.Caps.WorkerRetries = 3
+
+	out, err := h.run(t)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if out.Kind != journal.Parked {
+		t.Fatalf("outcome = %s (%s), want parked", out.Kind, out.Reason)
+	}
+	if got := h.phaseStarts(t, out.RunID); got != 1 {
+		t.Errorf("%d phase starts, want 1 — a failure that might be the research gets no second try", got)
+	}
+}
+
+// s.d.Repo is usually a person's own checkout, not a worktree this run
+// owns. A scout that changed it on its way down is about to have that
+// change handed back to its owner by requireUntouched; respawning a second
+// scout into the same directory first would write more into a checkout
+// somebody is about to be asked to look at.
+func TestScoutDoesNotRetryIntoATouchedCheckout(t *testing.T) {
+	h := newHarness(t, workerResult{err: transientErr, transient: true})
+	h.deps.Cov.Caps.WorkerRetries = 3
+	// Status is read once at setup; every later read sees the change.
+	h.tree.changeAfter = 1
+
+	out, err := h.run(t)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if out.Kind != journal.Parked {
+		t.Fatalf("outcome = %s (%s), want parked", out.Kind, out.Reason)
+	}
+	if got := h.phaseStarts(t, out.RunID); got != 1 {
+		t.Errorf("%d phase starts, want 1 — nothing may be respawned into a checkout the scout touched", got)
+	}
+	if notes := h.notes(t, out.RunID); !hasSubstring(notes, "checkout not untouched") {
+		t.Errorf("notes %v do not say the checkout is why it parked", notes)
+	}
+}
+
+func hasSubstring(haystack []string, needle string) bool {
+	for _, h := range haystack {
+		if strings.Contains(h, needle) {
+			return true
+		}
+	}
+	return false
 }

@@ -114,10 +114,11 @@ func (b *fakeBoard) lastComment() string {
 }
 
 type fakeGit struct {
-	dirty   []bool // popped per Dirty call; empty means clean
-	ahead   int
-	pushes  int
-	removed bool
+	dirty    []bool // popped per Dirty call; empty means clean
+	dirtyErr error  // when set, Dirty cannot answer at all
+	ahead    int
+	pushes   int
+	removed  bool
 
 	// worktreeBase and aheadBase record the commit-ish the loop actually
 	// handed git: the run must branch from and count against the
@@ -143,6 +144,9 @@ func (g *fakeGit) RemoveWorktree(context.Context, string, string) error {
 	return nil
 }
 func (g *fakeGit) Dirty(context.Context, string) (bool, error) {
+	if g.dirtyErr != nil {
+		return false, g.dirtyErr
+	}
 	if len(g.dirty) == 0 {
 		return false, nil
 	}
@@ -213,6 +217,12 @@ type workerStep struct {
 	handoff string
 	err     error
 	usage   *worker.Usage
+	// transient is what a TransienceAdapter would have said about this
+	// failure. Modeled here rather than assumed absent: worker.Run sets
+	// Result.Transient on the way past, so a fake that always left it
+	// false would make the retry path untestable and, worse, make a test
+	// of the park path pass for the wrong reason.
+	transient bool
 }
 
 type fakeWorkers struct {
@@ -229,7 +239,7 @@ func (w *fakeWorkers) Run(_ context.Context, spec worker.Spec) (worker.Result, e
 	step := w.steps[0]
 	w.steps = w.steps[1:]
 	if step.err != nil {
-		return worker.Result{ExitCode: 1, Output: "worker noise"}, step.err
+		return worker.Result{ExitCode: 1, Output: "worker noise", Transient: step.transient}, step.err
 	}
 	return worker.Result{Handoff: json.RawMessage(step.handoff), ExitCode: 0, Usage: step.usage}, nil
 }
@@ -1112,5 +1122,232 @@ func TestAnAbsentPRStillParks(t *testing.T) {
 
 	if out.Kind != journal.Parked || !strings.Contains(out.Reason, "is gone") {
 		t.Fatalf("outcome %+v, want a park over the vanished PR", out)
+	}
+}
+
+// --- transient worker failures --------------------------------------------
+//
+// The failure these cover cost a real run: WND-68-20260820T101039Z spent
+// 1.19M input tokens on an implement phase, the laptop suspended
+// mid-response, and the run parked on a report that said nothing about the
+// ticket. See internal/worker for the captured harness output.
+
+// transientErr is what worker.Run returns for a harness that exited without
+// a handoff — the shape the api_error case actually took.
+var transientErr = errors.New("worker: claude-code exited 1 without a usable handoff: no handoff file was written")
+
+// phaseAttempts counts the phase.started records the journal holds per
+// phase-and-round, which is how a retry is visible to a reader.
+func (f *fixture) phaseAttempts(t *testing.T, id string) map[string]int {
+	t.Helper()
+	records, err := f.store.Records(id)
+	if err != nil {
+		t.Fatalf("reading the journal: %v", err)
+	}
+	attempts := map[string]int{}
+	for _, r := range records {
+		if r.Kind == journal.KindPhaseStarted {
+			attempts[fmt.Sprintf("%s/%d", r.Phase, r.Round)]++
+		}
+	}
+	return attempts
+}
+
+// journalNotes returns every note message the run wrote, in order.
+func (f *fixture) journalNotes(t *testing.T, id string) []string {
+	t.Helper()
+	records, err := f.store.Records(id)
+	if err != nil {
+		t.Fatalf("reading the journal: %v", err)
+	}
+	var notes []string
+	for _, r := range records {
+		if r.Kind == journal.KindNote {
+			notes = append(notes, r.Reason)
+		}
+	}
+	return notes
+}
+
+// The whole point: a phase whose worker died of infrastructure runs again,
+// and the run converges as if nothing had happened.
+func TestTransientWorkerFailureRetriesAndConverges(t *testing.T) {
+	f := newFixture(t)
+	f.deps.Cov.Caps.WorkerRetries = 1
+	f.workers.steps = []workerStep{
+		{err: transientErr, transient: true}, // the laptop lid
+		{handoff: doneHandoff},               // the retry
+		{handoff: approveHandoff},
+	}
+	f.shell.steps = []shellStep{{ok: true}}
+
+	out := f.execute(t)
+
+	if out.Kind != journal.Converged || out.ExitCode() != ExitConverged {
+		t.Fatalf("outcome %+v, want converged/exit 0 — a suspended host is not a verdict on the ticket", out)
+	}
+	if got := f.workers.modes(); !equal(got, []string{"implement", "implement", "review"}) {
+		t.Errorf("phases %v, want implement twice then review", got)
+	}
+	// The retry reuses its round. Bumping it would spend review or CI
+	// budget on an infrastructure hiccup.
+	if got := f.phaseAttempts(t, out.RunID); got["implement/1"] != 2 {
+		t.Errorf("implement round 1 started %d times, want 2 — both attempts must be in the journal at the same round", got["implement/1"])
+	}
+	if got := f.phaseAttempts(t, out.RunID); got["implement/2"] != 0 {
+		t.Errorf("a retry opened round 2 (%d starts); a retry must not consume a round", got["implement/2"])
+	}
+	if notes := f.journalNotes(t, out.RunID); !containsSubstring(notes, "retrying") {
+		t.Errorf("notes %v carry no record of why the phase ran twice", notes)
+	}
+}
+
+// The budget is a cap, not a suggestion: past it, the run parks carrying the
+// worker's own error rather than anything about the retry machinery.
+func TestTransientWorkerFailureParksOnceRetriesAreSpent(t *testing.T) {
+	f := newFixture(t)
+	f.deps.Cov.Caps.WorkerRetries = 2
+	f.workers.steps = []workerStep{
+		{err: transientErr, transient: true},
+		{err: transientErr, transient: true},
+		{err: transientErr, transient: true},
+	}
+
+	out := f.execute(t)
+
+	if out.Kind != journal.Parked {
+		t.Fatalf("outcome %+v, want parked once the retries are spent", out)
+	}
+	if !strings.Contains(out.Reason, "no handoff file was written") {
+		t.Errorf("park reason %q dropped the worker's own error", out.Reason)
+	}
+	if got := len(f.workers.modes()); got != 3 {
+		t.Errorf("%d spawns, want 3 — one attempt plus two retries", got)
+	}
+	if notes := f.journalNotes(t, out.RunID); !containsSubstring(notes, "out of retries") {
+		t.Errorf("notes %v do not say the budget ran out", notes)
+	}
+}
+
+// A failure the harness did not call infrastructure might be about the work,
+// so it parks on the first attempt — the behavior wand already had.
+func TestNonTransientWorkerFailureDoesNotRetry(t *testing.T) {
+	f := newFixture(t)
+	f.deps.Cov.Caps.WorkerRetries = 3
+	f.workers.steps = []workerStep{{err: transientErr}} // transient: false
+
+	out := f.execute(t)
+
+	if out.Kind != journal.Parked {
+		t.Fatalf("outcome %+v, want parked", out)
+	}
+	if got := len(f.workers.modes()); got != 1 {
+		t.Errorf("%d spawns, want 1 — a failure that might be the work gets no second try", got)
+	}
+}
+
+// A worker that died mid-edit leaves uncommitted work. requireClean parks on
+// that, but only after work() returns — which a failing phase never reaches.
+// So the retry makes the check itself, or it respawns a second worker on top
+// of the first one's half-finished edits in a tree nobody has looked at.
+func TestTransientWorkerFailureDoesNotRetryADirtyTree(t *testing.T) {
+	f := newFixture(t)
+	f.deps.Cov.Caps.WorkerRetries = 3
+	f.git.dirty = []bool{true}
+	f.workers.steps = []workerStep{{err: transientErr, transient: true}}
+
+	out := f.execute(t)
+
+	if out.Kind != journal.Parked {
+		t.Fatalf("outcome %+v, want parked", out)
+	}
+	if got := len(f.workers.modes()); got != 1 {
+		t.Errorf("%d spawns, want 1 — uncommitted work is work at risk, and a retry would write over it", got)
+	}
+	if notes := f.journalNotes(t, out.RunID); !containsSubstring(notes, "tree not clean") {
+		t.Errorf("notes %v do not say the tree is why it parked", notes)
+	}
+}
+
+// A tree git cannot read is not a clean tree.
+func TestTransientWorkerFailureDoesNotRetryAnUnreadableTree(t *testing.T) {
+	f := newFixture(t)
+	f.deps.Cov.Caps.WorkerRetries = 3
+	f.git.dirtyErr = errors.New("git: index.lock exists")
+	f.workers.steps = []workerStep{{err: transientErr, transient: true}}
+
+	out := f.execute(t)
+
+	if out.Kind != journal.Parked {
+		t.Fatalf("outcome %+v, want parked", out)
+	}
+	if got := len(f.workers.modes()); got != 1 {
+		t.Errorf("%d spawns, want 1 — an unknown tree state must not be treated as clean", got)
+	}
+}
+
+// ctrl-c means stop. Whatever the harness printed on its way down, the
+// answer to an interrupt is never "try again".
+func TestInterruptNeverRetriesEvenWhenTransient(t *testing.T) {
+	f := newFixture(t)
+	f.deps.Cov.Caps.WorkerRetries = 3
+	f.workers.steps = []workerStep{{err: transientErr, transient: true}}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	out, err := Execute(ctx, f.deps, f.store, "WND-1")
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+
+	if out.Kind != journal.Parked {
+		t.Fatalf("outcome %+v, want parked", out)
+	}
+	if got := len(f.workers.modes()); got > 1 {
+		t.Errorf("%d spawns after an interrupt, want at most 1 — ctrl-c is not a transient failure", got)
+	}
+}
+
+func containsSubstring(haystack []string, needle string) bool {
+	for _, h := range haystack {
+		if strings.Contains(h, needle) {
+			return true
+		}
+	}
+	return false
+}
+
+// worker.Spec.HandoffPath is named for the journal's open phase and round,
+// so the spec has to be built after StartPhase — not once, ahead of the
+// loop. Nothing guarded that until a retry made it possible to build the
+// spec in the wrong place: every phase would then have pointed its worker
+// at the previous phase's handoff file, and the first one at the run's bare
+// handoff.json. worker.Run clears a stale file before spawning, so the
+// symptom would not have been a crash — just two phases quietly sharing one
+// path, which is exactly what naming it per phase exists to prevent.
+func TestEachPhaseGetsItsOwnHandoffPath(t *testing.T) {
+	f := newFixture(t)
+	f.deps.Cov.Caps.WorkerRetries = 1
+	f.workers.steps = []workerStep{
+		{err: transientErr, transient: true}, // retried, so same phase and round
+		{handoff: doneHandoff},
+		{handoff: approveHandoff},
+	}
+	f.shell.steps = []shellStep{{ok: true}}
+
+	f.execute(t)
+
+	want := []string{
+		"implement-1.handoff.json",
+		"implement-1.handoff.json", // the retry reuses its round, and so its path
+		"review-1.handoff.json",
+	}
+	if len(f.workers.specs) != len(want) {
+		t.Fatalf("%d specs, want %d", len(f.workers.specs), len(want))
+	}
+	for i, w := range want {
+		if got := filepath.Base(f.workers.specs[i].HandoffPath); got != w {
+			t.Errorf("spec %d handoff %q, want %q", i, got, w)
+		}
 	}
 }

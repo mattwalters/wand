@@ -130,3 +130,52 @@ func TestClaudeCodeParseUsageAbsentOnGarbage(t *testing.T) {
 		})
 	}
 }
+
+// claudeAPIErrorSample is the real `claude -p --output-format json` result
+// that ended run WND-68-20260820T101039Z, lifted verbatim out of that run's
+// journal. The laptop had suspended mid-response; the phase had already
+// spent 1.19M input tokens; the run parked. Captured rather than
+// hand-built, so a CLI upgrade that renames terminal_reason fails this test
+// instead of quietly making every transient failure look permanent again.
+const claudeAPIErrorSample = `{"is_error":true,"duration_api_ms":163608,"num_turns":19,"stop_reason":"stop_sequence","session_id":"4f4e2fec-c5bc-44d6-9f4f-ad3aa7cf544b","total_cost_usd":0.9739736999999998,"usage":{"input_tokens":34,"cache_creation_input_tokens":64876,"cache_read_input_tokens":1125041,"output_tokens":14490,"output_tokens_details":{"thinking_tokens":7697},"server_tool_use":{"web_search_requests":0,"web_fetch_requests":0},"service_tier":"standard","cache_creation":{"ephemeral_1h_input_tokens":64876,"ephemeral_5m_input_tokens":0},"inference_geo":"not_available","iterations":[],"speed":"standard"},"modelUsage":{"claude-haiku-4-5-20251001":{"inputTokens":5154,"outputTokens":18,"cacheReadInputTokens":0,"cacheCreationInputTokens":0,"webSearchRequests":0,"costUSD":0.0052439999999999995,"contextWindow":200000,"maxOutputTokens":32000,"canonicalModel":"claude-haiku-4-5","provider":"firstParty"},"claude-sonnet-5":{"inputTokens":36,"outputTokens":14493,"cacheReadInputTokens":1206569,"cacheCreationInputTokens":64876,"webSearchRequests":0,"costUSD":0.9687296999999998,"contextWindow":1000000,"maxOutputTokens":64000,"canonicalModel":"claude-sonnet-5","provider":"firstParty"}},"permission_denials":[],"terminal_reason":"api_error","fast_mode_state":"off","fast_mode_disabled_reason":"sdk_opt_in_required","subtype":"success","api_error_status":null,"result":"API Error: Your computer went to sleep mid-response. The response above may be incomplete.","type":"result","duration_ms":163362,"uuid":"ff7af09c-5185-4c51-a700-d6b4a40996fc"}`
+
+func TestClaudeCodeTransient(t *testing.T) {
+	if !(worker.ClaudeCode{}).Transient(worker.Result{Output: claudeAPIErrorSample}) {
+		t.Error("Transient = false on a captured api_error result; this is the failure the retry exists for")
+	}
+}
+
+func TestClaudeCodeTransientWithNoiseAroundTheLine(t *testing.T) {
+	// stderr shares the captured Tail, exactly as in the ParseUsage case.
+	noisy := "warning: something on stderr\n" + claudeAPIErrorSample + "\ntrailing chatter\n"
+	if !(worker.ClaudeCode{}).Transient(worker.Result{Output: noisy}) {
+		t.Error("Transient = false with noise around the result line; the scan is line by line for exactly this reason")
+	}
+}
+
+// Every one of these must read as "not transient", because that is the
+// answer that parks — the behavior wand already had. A wrong false costs one
+// park; a wrong true respawns a worker over a real failure.
+func TestClaudeCodeTransientFailsSoft(t *testing.T) {
+	for name, output := range map[string]string{
+		"Empty":               "",
+		"PlainText":           "the CLI crashed before writing anything structured",
+		"NotJSON":             "{not json at all",
+		"CompletedNormally":   claudeSample,
+		"OtherTerminalReason": `{"type":"result","terminal_reason":"refusal"}`,
+		"NoTerminalReason":    `{"type":"result","is_error":true}`,
+		// The reason on something that is not the result record. A
+		// transcript event echoing the string must not be mistaken for the
+		// harness's own verdict on the turn.
+		"ReasonOnAnotherRecord": `{"type":"assistant","terminal_reason":"api_error"}`,
+		// The prose is deliberately not consulted: it is a human-facing
+		// sentence, free to change between releases.
+		"ProseOnly": `{"type":"result","result":"API Error: Your computer went to sleep mid-response."}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			if (worker.ClaudeCode{}).Transient(worker.Result{Output: output}) {
+				t.Errorf("Transient(%q) = true, want false — a parse miss must park, never respawn", output)
+			}
+		})
+	}
+}

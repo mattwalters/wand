@@ -41,7 +41,9 @@ internal/cockpit/    what is waiting on a human: the five queues, the seven judg
 internal/doctor/     read-only drift report: bootstrap.Plan as the diff, plus what Plan cannot express
 internal/shim/       generates the PreToolUse hook entry that routes save_issue to wand guard
 internal/worker/     the harness seam: an Adapter turns a Spec into one headless invocation;
-                     the runner owns the timeout, credential strip, prompt contract and handoff
+                     the runner owns the timeout, credential strip, prompt contract and handoff.
+                     What one harness knows about itself — token accounting, its own verdict
+                     on why a turn ended — arrives through optional interfaces that fail soft
 internal/workertest/ the isolation conformance suite every adapter must pass
 internal/journal/    the crash-only run journal, lease and lock: journal before you act,
                      exactly one terminal record, and a dead holder provably dead
