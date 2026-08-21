@@ -57,6 +57,12 @@ type EngageResult struct {
 	Ticket, Verb string
 	// LanesUsed and LanesCap are lane occupancy as of this poll.
 	LanesUsed, LanesCap int
+	// Swept reports whether this poll also ran sweep and it acted —
+	// independent of Dispatched, since a single tick can do both.
+	Swept bool
+	// SweptTicket and SweptAction name what sweep did — e.g. "reaped" or
+	// "handed back" — and the ticket it acted on. Set only when Swept.
+	SweptTicket, SweptAction string
 }
 
 // Engager is the cockpit's process-manager extension to Backend: the
@@ -383,7 +389,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.flash, m.flashOK = "engage: "+msg.err.Error(), false
 		} else {
 			m.tickResult = msg.res
-			if msg.res.Dispatched {
+			switch {
+			case msg.res.Swept && msg.res.Dispatched:
+				m.flash, m.flashOK = fmt.Sprintf("engaged: %s %s, dispatched %s (%s)",
+					msg.res.SweptAction, msg.res.SweptTicket, msg.res.Ticket, msg.res.Verb), true
+			case msg.res.Swept:
+				m.flash, m.flashOK = fmt.Sprintf("engaged: %s %s", msg.res.SweptAction, msg.res.SweptTicket), true
+			case msg.res.Dispatched:
 				m.flash, m.flashOK = fmt.Sprintf("engaged: dispatched %s (%s)", msg.res.Ticket, msg.res.Verb), true
 			}
 		}

@@ -271,12 +271,14 @@ to `Ready` gets a screen that says `→ Ready`.
 Press `e` to engage. While engaged, the cockpit polls Todo and To Plan on
 `--interval` (default `1m`) exactly the way `wand dispatch --watch` (see
 [`wand dispatch`](../dispatch/)) does — because it *is* that mechanism,
-reused rather than reimplemented: each poll counts lanes, ranks
-and vets Todo and To Plan, and when a winner exists spawns it as a
-**detached child process** through `wand run` or `wand scope`, the same way
-`--watch` does. That child survives the cockpit: closing the UI, or the
-whole terminal it runs in, never kills work already spawned. Press `e`
-again to disengage.
+reused rather than reimplemented: each poll runs a sweep pass first — the
+same one `wand sweep` runs standalone — reclaiming a dead lease, handing
+back a re-plan or re-review label, or draining an unresolved PR thread on a
+converged ticket, then counts lanes, ranks and vets Todo and To Plan, and
+when a winner exists spawns it as a **detached child process** through
+`wand run` or `wand scope`, the same way `--watch` does. That child
+survives the cockpit: closing the UI, or the whole terminal it runs in,
+never kills work already spawned. Press `e` again to disengage.
 
 The header names what engage mode is doing:
 
@@ -289,6 +291,14 @@ The header names what engage mode is doing:
  wand cockpit · WND                                             7 waiting on you
   engaged · dispatched WND-9 (run) · next poll in 60s
 ```
+
+```
+ wand cockpit · WND                                             7 waiting on you
+  engaged · reaped WND-1 · next poll in 60s
+```
+
+A tick that both swept and dispatched reads as one line: `engaged · reaped
+WND-1, dispatched WND-9 (run) · next poll in 60s`.
 
 **Engaging is always a deliberate key press, never a default.** Bare
 `wand` opens the cockpit read-for-work but never pre-engaged — opening a
@@ -316,9 +326,11 @@ unchanged — engage mode selects a winner through the same `dispatch.Select`
 every standalone pass uses, so a gate placed there covers both without
 engage mode needing its own copy of it.
 
-Left out of this pass, deliberately: engage mode does not also run periodic
-`wand sweep` passes, and the poll interval is a flag, not a covenant
-parameter. Both are natural extensions if engage mode earns them.
+Left out, deliberately: engage mode does not act on the `parked` label — a
+parked lane is a decision only a human at the cockpit makes, by pressing
+`c`, and an engaged cockpit is by definition in front of a person who can
+press it. The poll interval is a flag, not a covenant parameter; that
+remains a natural extension if engage mode earns it.
 
 ## Looking at the interface without a terminal
 

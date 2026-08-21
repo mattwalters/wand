@@ -440,7 +440,7 @@ func runDispatchDeps(t *testing.T, teamKey string) error {
 	var out bytes.Buffer
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
-	_, _, err := dispatchDeps(cmd, teamKey, "claude-code", "", "")
+	_, _, _, err := dispatchDeps(cmd, teamKey, "claude-code", "", "")
 	return err
 }
 

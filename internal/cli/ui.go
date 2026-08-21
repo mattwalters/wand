@@ -15,6 +15,7 @@ import (
 	"github.com/mattwalters/wand/internal/dispatch"
 	"github.com/mattwalters/wand/internal/journal"
 	"github.com/mattwalters/wand/internal/screen"
+	"github.com/mattwalters/wand/internal/sweep"
 	"github.com/mattwalters/wand/internal/tui"
 )
 
@@ -57,9 +58,10 @@ func newUICmd() *cobra.Command {
 			"Running it against a real board requires LINEAR_API_KEY, and a team key —\n" +
 			"either --team-key, or [team] key in the nearest wand.toml.\n\n" +
 			"Press 'e' to engage: the cockpit then polls Todo and To Plan on --interval\n" +
-			"(default 1m) the way `wand dispatch --watch` does, spawning a winner as a\n" +
-			"detached child that survives the cockpit closing. Engaging is deliberate —\n" +
-			"it is never on by default, bare `wand` included — and needs the same\n" +
+			"(default 1m) the way `wand dispatch --watch` does, sweeping a dead lease\n" +
+			"or a re-plan/re-review/unresolved-thread hand-back before spawning a\n" +
+			"winner as a detached child that survives the cockpit closing. Engaging is\n" +
+			"deliberate — it is never on by default, bare `wand` included — and needs the same\n" +
 			"dependencies `wand dispatch` does (--harness, --model, --effort and\n" +
 			"commands.verify in wand.toml); missing them leaves the cockpit open and\n" +
 			"read-only, refusing only the 'e' key.",
@@ -224,7 +226,7 @@ func runCockpit(cmd *cobra.Command, teamKey, harness, model, effort string, widt
 // story for the moment the toggle is actually pressed, told through the same
 // flash a failed judgment already uses.
 func buildEngager(cmd *cobra.Command, teamKey, harness, model, effort string) tui.Engager {
-	d, store, err := dispatchDeps(cmd, teamKey, harness, model, effort)
+	d, cl, store, err := dispatchDeps(cmd, teamKey, harness, model, effort)
 	if err != nil {
 		return nil
 	}
@@ -236,14 +238,15 @@ func buildEngager(cmd *cobra.Command, teamKey, harness, model, effort string) tu
 	if err := os.MkdirAll(logDir, 0o755); err != nil {
 		return nil
 	}
-	return &cockpitEngager{deps: d, store: store, bin: bin, logDir: logDir}
+	return &cockpitEngager{deps: d, sweep: sweepDepsFor(cmd, cl, d), store: store, bin: bin, logDir: logDir}
 }
 
 // cockpitEngager is tui.Engager over the dispatch package: the same
-// lock/select/spawn mechanics `wand dispatch --watch` runs in its own
+// lock/select/spawn/sweep mechanics `wand dispatch --watch` runs in its own
 // process, driven one poll at a time from inside the cockpit instead.
 type cockpitEngager struct {
 	deps   dispatch.Deps
+	sweep  *sweep.Deps
 	store  *journal.Store
 	bin    string
 	logDir string
@@ -275,7 +278,7 @@ func (e *cockpitEngager) Tick(ctx context.Context) (tui.EngageResult, error) {
 	if e.lock == nil {
 		return tui.EngageResult{}, fmt.Errorf("dispatch: engage mode ticked without holding its own lock; this is a wand bug")
 	}
-	w := dispatch.WatchDeps{Deps: e.deps, Bin: e.bin, LogDir: e.logDir}
+	w := dispatch.WatchDeps{Deps: e.deps, Bin: e.bin, LogDir: e.logDir, Sweep: e.sweep}
 	res, err := w.Tick(ctx, e.store, e.pending, e.logDir)
 	if err != nil {
 		return tui.EngageResult{}, err
@@ -289,7 +292,23 @@ func (e *cockpitEngager) Tick(ctx context.Context) (tui.EngageResult, error) {
 		out.Ticket = res.Winner.Issue.Identifier
 		out.Verb = string(res.Winner.Verb)
 	}
+	if res.Swept {
+		out.Swept = true
+		out.SweptTicket = res.SweptTicket
+		out.SweptAction = sweptActionWord(res.SweptKind)
+	}
 	return out, nil
+}
+
+// sweptActionWord turns sweep's own machine-readable ActedKind into the
+// word the cockpit's header renders — "reaped" or "handed back" — so the
+// tui package never needs to import internal/sweep just to render its
+// header line.
+func sweptActionWord(kind sweep.ActedKind) string {
+	if kind == sweep.ActedReaped {
+		return "reaped"
+	}
+	return "handed back"
 }
 
 // cockpitBackend is the live I/O behind the screen: Linear for the board and

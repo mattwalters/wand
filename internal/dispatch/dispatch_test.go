@@ -15,12 +15,25 @@ import (
 )
 
 // fakeBoard implements dispatch.Board. Only TeamIssuesByState is exercised
-// by the tests here — every path that would reach the rest is refused
+// by most tests here — every path that would reach the rest is refused
 // before it gets that far (lock/nothing-to-do/unreachable), or is already
 // covered end to end in internal/run and internal/plan.
+//
+// issues, states, label and comments, when set, turn IssueByIdentifier,
+// TeamStates, CreateComment, UpdateIssue and TeamIssuesByLabel from stubs
+// into a minimal mutable board — enough to drive verbs.Handback the way
+// sweep needs to, mirroring internal/sweep/sweep_test.go's own fakeBoard —
+// which is also what makes this fakeBoard satisfy sweep.Board, for a
+// same-tick sweep+dispatch test. Left nil, every test above keeps the
+// "not implemented" refusal it already relies on.
 type fakeBoard struct {
 	todo, toPlan, inPlanning []linear.Issue
 	err                      error
+
+	issues   map[string]*linear.Issue
+	states   []linear.WorkflowState
+	label    map[string][]linear.Issue
+	comments map[string][]string
 }
 
 func (f *fakeBoard) TeamIssuesByState(_ context.Context, _, stateName string) ([]linear.Issue, error) {
@@ -37,20 +50,52 @@ func (f *fakeBoard) TeamIssuesByState(_ context.Context, _, stateName string) ([
 	}
 }
 
-func (f *fakeBoard) IssueByIdentifier(context.Context, string) (linear.Issue, error) {
-	return linear.Issue{}, errors.New("not implemented in this fake")
+func (f *fakeBoard) IssueByIdentifier(_ context.Context, id string) (linear.Issue, error) {
+	if f.issues == nil {
+		return linear.Issue{}, errors.New("not implemented in this fake")
+	}
+	issue, ok := f.issues[id]
+	if !ok {
+		return linear.Issue{}, errors.New("no such issue")
+	}
+	return *issue, nil
 }
 func (f *fakeBoard) TeamStates(context.Context, string) ([]linear.WorkflowState, error) {
-	return nil, errors.New("not implemented in this fake")
+	if f.states == nil {
+		return nil, errors.New("not implemented in this fake")
+	}
+	return f.states, nil
 }
 func (f *fakeBoard) Viewer(context.Context) (linear.User, error) {
 	return linear.User{}, errors.New("not implemented in this fake")
 }
-func (f *fakeBoard) CreateComment(context.Context, string, string) error {
-	return errors.New("not implemented in this fake")
+func (f *fakeBoard) CreateComment(_ context.Context, issueID, body string) error {
+	if f.issues == nil {
+		return errors.New("not implemented in this fake")
+	}
+	for id, issue := range f.issues {
+		if issue.ID == issueID || id == issueID {
+			f.comments[id] = append(f.comments[id], body)
+			return nil
+		}
+	}
+	return errors.New("no such issue")
 }
-func (f *fakeBoard) UpdateIssue(context.Context, string, linear.IssueUpdate) error {
-	return errors.New("not implemented in this fake")
+func (f *fakeBoard) UpdateIssue(_ context.Context, issueID string, u linear.IssueUpdate) error {
+	if f.issues == nil {
+		return errors.New("not implemented in this fake")
+	}
+	for id, issue := range f.issues {
+		if issue.ID == issueID || id == issueID {
+			for _, s := range f.states {
+				if s.ID == u.StateID {
+					issue.State = linear.IssueState{Name: s.Name, Type: s.Type}
+				}
+			}
+			return nil
+		}
+	}
+	return errors.New("no such issue")
 }
 func (f *fakeBoard) TeamByKey(context.Context, string) (linear.Team, error) {
 	return linear.Team{}, errors.New("not implemented in this fake")
@@ -75,6 +120,9 @@ func (f *fakeBoard) RemoveLabel(context.Context, string, string) error {
 }
 func (f *fakeBoard) UpsertSection(context.Context, string, string, string, string) (string, bool, error) {
 	return "", false, errors.New("not implemented in this fake")
+}
+func (f *fakeBoard) TeamIssuesByLabel(_ context.Context, _, label string) ([]linear.Issue, error) {
+	return f.label[label], nil
 }
 
 // unimplementedGit, unimplementedHub, unimplementedShell, unimplementedTree

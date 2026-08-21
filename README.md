@@ -140,11 +140,14 @@ be on it.
 walk the whole interface without an API key or a team.
 
 Press `e` to **engage**: the cockpit then polls Todo and To Plan on an
-interval, spawning a winner as a detached process — `wand dispatch --watch`'s
-own mechanics, run from inside the cockpit instead of a standalone process.
-It is always a deliberate key press, never a default: bare `wand` opens the
-cockpit, never pre-engaged, because opening a dashboard must not start
-spending money. See the engage mode section of [the `ui` command
+interval, spawning a winner as a detached process, and also drains sweep's
+four conditions — a dead lease, a re-plan or re-review hand-back, an
+unresolved PR thread on a converged ticket — the same pass `wand sweep`
+runs standalone. It is `wand dispatch --watch`'s own mechanics, run from
+inside the cockpit instead of a standalone process. It is always a
+deliberate key press, never a default: bare `wand` opens the cockpit, never
+pre-engaged, because opening a dashboard must not start spending money. See
+the engage mode section of [the `ui` command
 docs](https://wandcli.com/docs/commands/ui/) for the safety story across
 multiple engaged cockpits.
 
