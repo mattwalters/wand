@@ -161,10 +161,10 @@ func (m Model) engageLine() string {
 func (m Model) boardLines() []line {
 	var lines []line
 	idx := 0
-	width := m.identifierWidth()
+	cols := m.columns()
 
 	if len(m.board.Running) > 0 {
-		lines = append(lines, m.runningLines(width)...)
+		lines = append(lines, m.runningLines(cols)...)
 		lines = append(lines, line{row: -1})
 	}
 
@@ -181,7 +181,7 @@ func (m Model) boardLines() []line {
 			continue
 		}
 		for _, row := range section.Rows {
-			lines = append(lines, line{text: m.rowView(row, idx == m.cursor, width), row: idx})
+			lines = append(lines, line{text: m.rowView(row, idx == m.cursor, cols), row: idx})
 			idx++
 		}
 	}
@@ -196,22 +196,55 @@ func (m Model) sectionHeading(s cockpit.Section) string {
 	return head
 }
 
-// identifierWidth is the width the identifier column is padded to, taken
-// across the whole board — the five queues and the Running strip both —
-// so every ticket on screen lines up as one table.
-func (m Model) identifierWidth() int {
-	w := 0
+// columns is the width of every fixed-width column on the board. Each one
+// is measured across every row that shares it, so the board reads as a
+// table rather than as five sections that happen to be stacked.
+//
+// The ordering is the point: identifier, then the one short fact about the
+// row, then the title. Everything fixed-width sits on the left where the
+// eye can run down it, and the one variable-length field is last, free to
+// run to the edge. A short column pushed to the right margin lines up with
+// itself and with nothing else, which leaves the reader tracking a title
+// across a gap to find out what it says.
+type columns struct {
+	// id spans the five queues and the Running strip both: the identifier
+	// is the same kind of thing everywhere on screen, so it gets one width.
+	id int
+	// tag spans the five queues only — priority, status, lane kind.
+	tag int
+	// phase is the Running strip's own tag width. It is separate because a
+	// phase label ("implement (round 2)") is twice the width of a priority,
+	// and folding it into tag would open a gap on every queue row to hold a
+	// column those rows never fill.
+	phase int
+}
+
+// render lays one row out across the columns: fixed fields padded, the
+// variable one last and unpadded.
+func (c columns) render(id, tag, text string, tagWidth int) string {
+	return fmt.Sprintf("%-*s  %-*s  %s", c.id, id, tagWidth, tag, text)
+}
+
+func (m Model) columns() columns {
+	var c columns
 	for _, row := range m.rows() {
-		if row.IsLane() {
-			w = max(w, len(row.Lane.Ticket))
-			continue
-		}
-		w = max(w, len(row.Issue.Identifier))
+		c.id = max(c.id, len(rowIdentifier(row)))
+		c.tag = max(c.tag, len([]rune(m.rowTag(row))))
 	}
 	for _, a := range m.board.Running {
-		w = max(w, len(a.Ticket))
+		c.id = max(c.id, len(a.Ticket))
+		c.phase = max(c.phase, len(a.PhaseLabel()))
 	}
-	return w
+	return c
+}
+
+// rowIdentifier is the row's left column: the ticket, whether the row is a
+// ticket or a lane standing in front of one.
+func rowIdentifier(row cockpit.Row) string {
+	if row.IsLane() {
+		return row.Lane.Ticket
+	}
+	return row.Issue.Identifier
 }
 
 // --- the Active-runs strip ------------------------------------------------
@@ -223,12 +256,12 @@ func (m Model) identifierWidth() int {
 // ticket a person disposits, and resolving one, if it ever needs resolving,
 // means going to the machine — the same read-only reasoning [noJudgment]
 // already gives a lane.
-func (m Model) runningLines(idWidth int) []line {
+func (m Model) runningLines(cols columns) []line {
 	heading := m.theme.Heading.Render(pad(gutter) + "Running")
 	heading += m.theme.Muted.Render(fmt.Sprintf("  %d in flight", len(m.board.Running)))
 	lines := []line{{text: heading, row: -1}}
 	for _, a := range m.board.Running {
-		lines = append(lines, line{text: m.runningRowView(a, idWidth), row: -1})
+		lines = append(lines, line{text: m.runningRowView(a, cols), row: -1})
 	}
 	return lines
 }
@@ -241,13 +274,13 @@ func (m Model) runningLines(idWidth int) []line {
 // kept first among the free-text fields, so a narrow terminal's truncation
 // clips harness or heartbeat before it ever clips the one thing that says a
 // row may not mean what it looks like.
-func (m Model) runningRowView(a cockpit.Active, idWidth int) string {
+func (m Model) runningRowView(a cockpit.Active, cols columns) string {
 	var fields []string
 	if a.Stale() {
 		fields = append(fields, "possibly dead, sweep will confirm")
 	}
-	fields = append(fields, a.PhaseLabel(), a.HarnessLabel(), "up "+ago(m.now, a.Started), "hb "+ago(m.now, a.Heartbeat)+" ago")
-	body := fmt.Sprintf("%-*s  %s", idWidth, a.Ticket, strings.Join(fields, " · "))
+	fields = append(fields, a.HarnessLabel(), "up "+ago(m.now, a.Started), "hb "+ago(m.now, a.Heartbeat)+" ago")
+	body := cols.render(a.Ticket, a.PhaseLabel(), strings.Join(fields, " · "), cols.phase)
 	rendered := truncate(pad(gutter)+body, m.width)
 	if a.Stale() {
 		return m.theme.Warn.Render(rendered)
@@ -276,27 +309,19 @@ func ago(now, at time.Time) string {
 	}
 }
 
-func (m Model) rowView(row cockpit.Row, selected bool, idWidth int) string {
+func (m Model) rowView(row cockpit.Row, selected bool, cols columns) string {
 	marker := "  "
 	if selected {
 		marker = "› "
 	}
 
-	var left, tag string
+	text := row.Issue.Title
 	if row.IsLane() {
-		left = fmt.Sprintf("%-8s %-*s  %s", row.Lane.Kind, idWidth, row.Lane.Ticket, row.Lane.Reason)
-	} else {
-		left = fmt.Sprintf("%-*s  %s", idWidth, row.Issue.Identifier, row.Issue.Title)
-		tag = m.rowTag(row)
+		text = row.Lane.Reason
 	}
+	body := cols.render(rowIdentifier(row), m.rowTag(row), text, cols.tag)
 
-	room := max(m.width-gutter-len(tag)-2, 8)
-	body := truncate(left, room)
-	if tag != "" {
-		body = fmt.Sprintf("%-*s  %s", room, body, tag)
-	}
-
-	line := pad(gutter-len(marker)) + marker + body
+	line := pad(gutter-len(marker)) + marker + truncate(body, max(m.width-gutter, 8))
 	if selected {
 		return m.theme.Selected.Render(line)
 	}
@@ -306,17 +331,25 @@ func (m Model) rowView(row cockpit.Row, selected bool, idWidth int) string {
 	return m.theme.Body.Render(line)
 }
 
-// rowTag is the right-hand column: what you most need to know about the row
-// that its title does not say. For work you are ranking that is the rank;
-// for work already moving it is where it has got to.
+// rowTag is the middle column: the one short fact about the row that its
+// title does not say. For work you are ranking that is the rank; for work
+// already moving it is where it has got to; for a lane it is why the lane
+// is there.
+//
+// An unranked ticket gets a dash rather than a blank. Blank reads as "this
+// column does not apply here", and in Triage the absence of a rank is
+// precisely the thing being judged.
 func (m Model) rowTag(row cockpit.Row) string {
+	if row.IsLane() {
+		return string(row.Lane.Kind)
+	}
 	if row.Kind == cockpit.KindReadyForHuman {
 		return row.Issue.State.Name
 	}
 	if row.Issue.Priority != 0 {
 		return linear.PriorityName(row.Issue.Priority)
 	}
-	return ""
+	return "—"
 }
 
 func (m Model) footerView() string {
