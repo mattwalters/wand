@@ -145,6 +145,31 @@ func (c *Client) AddLabel(ctx context.Context, issueID, labelID string) error {
 	return nil
 }
 
+// RemoveLabel removes one label from an issue, leaving the rest of its
+// labels alone. Same reasoning as [Client.AddLabel]: issueRemoveLabel is
+// shaped like the intent, so removing one label cannot race another writer's
+// concurrent label change the way going through issueUpdate's full-set
+// labelIds would.
+func (c *Client) RemoveLabel(ctx context.Context, issueID, labelID string) error {
+	var out struct {
+		IssueRemoveLabel struct {
+			Success bool `json:"success"`
+		} `json:"issueRemoveLabel"`
+	}
+	err := c.Do(ctx, `
+		mutation($id: String!, $labelId: String!) {
+		  issueRemoveLabel(id: $id, labelId: $labelId) { success }
+		}`,
+		map[string]any{"id": issueID, "labelId": labelID}, &out)
+	if err != nil {
+		return err
+	}
+	if !out.IssueRemoveLabel.Success {
+		return fmt.Errorf("linear: refused the label remove")
+	}
+	return nil
+}
+
 // IssueCreate is the slice of issueCreate fields `wand file` sets. There is
 // deliberately no priority and no assignee: an agent-filed issue enters
 // Triage unowned and unranked, because ranking work is part of blessing it.

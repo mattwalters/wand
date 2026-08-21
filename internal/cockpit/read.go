@@ -21,6 +21,8 @@ type Linear interface {
 	UpdateIssue(ctx context.Context, issueID string, u linear.IssueUpdate) error
 	CreateComment(ctx context.Context, issueID, body string) error
 	CreateRelation(ctx context.Context, issueID, relatedID, relType string) error
+	LabelByName(ctx context.Context, name string) (linear.Label, bool, error)
+	RemoveLabel(ctx context.Context, issueID, labelID string) error
 }
 
 // Runs is the slice of the journal store this package uses.

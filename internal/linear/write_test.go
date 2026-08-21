@@ -121,6 +121,47 @@ func TestAddLabelSurfacesRefusal(t *testing.T) {
 	}
 }
 
+// RemoveLabel goes through issueRemoveLabel, not issueUpdate's full-set
+// labelIds, for the same reason AddLabel does: removing one label must not
+// race another writer's label changes by replacing the whole set.
+func TestRemoveLabelUsesTheRemoveMutation(t *testing.T) {
+	var query string
+	var vars map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Query     string         `json:"query"`
+			Variables map[string]any `json:"variables"`
+		}
+		json.NewDecoder(r.Body).Decode(&req)
+		query, vars = req.Query, req.Variables
+		w.Write([]byte(`{"data":{"issueRemoveLabel":{"success":true}}}`))
+	}))
+	defer srv.Close()
+
+	c := &Client{APIKey: "k", Endpoint: srv.URL}
+	if err := c.RemoveLabel(context.Background(), "issue-1", "label-1"); err != nil {
+		t.Fatalf("removeLabel: %v", err)
+	}
+	if !strings.Contains(query, "issueRemoveLabel") {
+		t.Errorf("mutation does not use issueRemoveLabel:\n%s", query)
+	}
+	if vars["id"] != "issue-1" || vars["labelId"] != "label-1" {
+		t.Errorf("variables %v", vars)
+	}
+}
+
+func TestRemoveLabelSurfacesRefusal(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"data":{"issueRemoveLabel":{"success":false}}}`))
+	}))
+	defer srv.Close()
+
+	c := &Client{APIKey: "k", Endpoint: srv.URL}
+	if err := c.RemoveLabel(context.Background(), "issue-1", "label-1"); err == nil {
+		t.Fatal("a refused label remove reported success")
+	}
+}
+
 // Priority 0 is "No priority", which the cockpit sets deliberately when a
 // human judges a ticket worth keeping and not worth ranking. A plain int
 // field would make that indistinguishable from "leave it alone", and the

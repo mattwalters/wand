@@ -328,7 +328,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		m.snap = withoutIssue(m.snap, msg.intent.Issue.ID, msg.intent.Issue.Identifier)
+		if msg.intent.Disp.Lane {
+			m.snap = withoutLane(m.snap, msg.intent.Lane.RunID)
+		} else {
+			m.snap = withoutIssue(m.snap, msg.intent.Issue.ID, msg.intent.Issue.Identifier)
+		}
 		m.board = cockpit.Build(m.snap)
 		m.clampCursor()
 		m.state = stateBoard
@@ -485,7 +489,7 @@ const readOnlyRefusal = "read-only: this is the sample board. Every key here wal
 
 // begin moves to the confirmation for one disposition.
 func (m Model) begin(row cockpit.Row, disp cockpit.Disposition) Model {
-	m.pending = cockpit.Intent{Issue: row.Issue, Disp: disp}
+	m.pending = cockpit.Intent{Issue: row.Issue, Lane: row.Lane, Disp: disp}
 	m.from = m.state
 	m.state = stateConfirm
 	m.failure = ""
@@ -648,6 +652,9 @@ func rowGone(r cockpit.Row) string {
 // names the destination, because the row vanishing is not by itself an
 // answer to what happened to it.
 func (m Model) applied(in cockpit.Intent) string {
+	if in.Disp.Lane {
+		return fmt.Sprintf("cleared the parked label on %s.", in.Lane.Ticket)
+	}
 	verb := "moved"
 	if in.Disp.Bless {
 		verb = "blessed"
@@ -697,6 +704,21 @@ func withoutIssue(s cockpit.Snapshot, id, identifier string) cockpit.Snapshot {
 	s.Scoped = dropIssue(s.Scoped, id, identifier)
 	s.NeedsInput = dropIssue(s.NeedsInput, id, identifier)
 	s.ReadyForHuman = dropIssue(s.ReadyForHuman, id, identifier)
+	return s
+}
+
+// withoutLane drops one lane from the snapshot by run ID, the same "remove
+// locally rather than re-read" reasoning [withoutIssue] uses: the write
+// returned nil, so the lane is resolved, and a board that kept showing it
+// until a refresh would invite clearing the same label twice.
+func withoutLane(s cockpit.Snapshot, runID string) cockpit.Snapshot {
+	var kept []cockpit.Lane
+	for _, lane := range s.Lanes {
+		if lane.RunID != runID {
+			kept = append(kept, lane)
+		}
+	}
+	s.Lanes = kept
 	return s
 }
 

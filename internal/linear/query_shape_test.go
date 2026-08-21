@@ -165,6 +165,7 @@ func clientCalls() []clientCall {
 		{"LabelByName", func(ctx context.Context, c *Client) { c.LabelByName(ctx, "parked") }},
 		{"Labels", func(ctx context.Context, c *Client) { c.Labels(ctx) }},
 		{"Projects", func(ctx context.Context, c *Client) { c.Projects(ctx, "WND") }},
+		{"RemoveLabel", func(ctx context.Context, c *Client) { c.RemoveLabel(ctx, "i", "l") }},
 		{"SearchIssues", func(ctx context.Context, c *Client) { c.SearchIssues(ctx, "WND", "term") }},
 		{"TeamByKey", func(ctx context.Context, c *Client) { c.TeamByKey(ctx, "WND") }},
 		{"TeamIssuesByLabel", func(ctx context.Context, c *Client) { c.TeamIssuesByLabel(ctx, "WND", "parked") }},

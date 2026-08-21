@@ -7,6 +7,7 @@ import (
 
 	"github.com/mattwalters/wand/internal/covenant"
 	"github.com/mattwalters/wand/internal/linear"
+	"github.com/mattwalters/wand/internal/queue"
 )
 
 // Apply performs one judgment.
@@ -72,6 +73,10 @@ func Apply(ctx context.Context, cl Linear, cov covenant.Covenant, in Intent) (In
 		return in, fmt.Errorf("%s: %s", in.Disp.Name, why)
 	}
 
+	if in.Disp.Lane {
+		return in, clearParkedLabel(ctx, cl, in.Lane.Ticket)
+	}
+
 	// Resolve the destination before anything is written. A board that has
 	// drifted from the covenant, or a covenant missing the status, stops
 	// the whole act here.
@@ -115,6 +120,29 @@ func Apply(ctx context.Context, cl Linear, cov covenant.Covenant, in Intent) (In
 		update.Priority = &none
 	}
 	return in, cl.UpdateIssue(ctx, in.Issue.ID, update)
+}
+
+// clearParkedLabel removes the parked label from the ticket a lane names.
+//
+// A lane carries only the ticket's identifier — it is built from the
+// journal, not from a Linear read — so this looks the issue up rather than
+// taking a UUID the way the issue dispositions above already have one. This
+// is the write [verbs.ReportPark]'s own comment instructs and, before this,
+// nothing in wand could perform: clearing the label was Linear's web UI or
+// nothing.
+func clearParkedLabel(ctx context.Context, cl Linear, ticket string) error {
+	issue, err := cl.IssueByIdentifier(ctx, ticket)
+	if err != nil {
+		return err
+	}
+	label, found, err := cl.LabelByName(ctx, queue.ParkedLabel)
+	if err != nil {
+		return err
+	}
+	if !found {
+		return fmt.Errorf("no %q label anywhere in the workspace; run `wand init` to bring the team to the covenant", queue.ParkedLabel)
+	}
+	return cl.RemoveLabel(ctx, issue.ID, label.ID)
 }
 
 // resolveState turns a covenant status key into the team's workflow state
