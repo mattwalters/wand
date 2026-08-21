@@ -166,6 +166,44 @@ func revisePrompt(ticketText, rendered, objections string, cov covenant.Covenant
 	return b.String()
 }
 
+// reviseAfterCritiquePrompt hands the critic's objections to a fresh
+// session and asks for both a whole revised plan and an accounting of what
+// happened to each objection. The accounting is what lets the run route a
+// resolved objection into the comment's reasoning trail and one the
+// reviser could not answer into an open question a human sees — a
+// distinction the revised plan's prose alone does not carry, because a
+// revision that changed nothing about an objection looks identical to one
+// that never saw it.
+func reviseAfterCritiquePrompt(ticketText, rendered string, c Critique, cov covenant.Covenant) string {
+	var b strings.Builder
+	b.WriteString("Below is a draft plan for the ticket that follows it, written by another " +
+		"session, and a cold critic's objections to it. Produce the plan that should stand now.\n\n")
+	b.WriteString("You did not write the draft and you owe it nothing. Where an objection is " +
+		"right, change the plan — including the recommendation, the steps, the estimate or the " +
+		"premise, if that is what it takes. Where it is wrong, say why, and leave that part of " +
+		"the plan standing. Read the code again for anything you change: a revision argued from " +
+		"the draft alone inherits whatever the draft got wrong.\n\n")
+	b.WriteString("Your handoff replaces the draft whole, and is validated the same way, so " +
+		"carry forward everything that still holds.\n\n")
+	b.WriteString(draftSchema(cov))
+	b.WriteString(`
+
+Add one more field to that same object:
+ "resolutions": [{"resolved": true | false, "explanation": "if resolved: what changed in the plan and why; if not: why the objection still stands and what a human should decide"}]
+
+Exactly one resolution per objection below, in the same order — the run pairs them
+positionally with the objections, not by matching text. When your premise is "wrong",
+omit "resolutions" entirely: the whole draft is being withdrawn and there is nothing
+left to resolve.`)
+	b.WriteString("\n\n--- the critic's objections ---\n\n")
+	b.WriteString(renderObjections(c))
+	b.WriteString("\n\n--- draft plan ---\n\n")
+	b.WriteString(rendered)
+	b.WriteString("\n\n--- ticket ---\n\n")
+	b.WriteString(ticketText)
+	return b.String()
+}
+
 // renderObjections prints a critique for the reviser, in the critic's own
 // terms.
 func renderObjections(c Critique) string {

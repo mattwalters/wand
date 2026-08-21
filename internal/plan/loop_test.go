@@ -266,7 +266,12 @@ func newHarness(t *testing.T, results ...workerResult) *harness {
 	tr := &tree{status: " M README.md\n"}
 	store := journal.New(t.TempDir())
 	out := &strings.Builder{}
+	// The critic defaults on in the stock covenant (WND-81), but most of
+	// this suite is about behavior the critic is orthogonal to — write
+	// order, retries, the interview — and scripts exactly the workers each
+	// test needs. Tests of the critic itself turn the toggle back on.
 	cov := covenant.Default()
+	cov.Toggles.PlanCritic = false
 	return &harness{
 		board: b, work: w, tree: tr, store: store, out: out,
 		deps: plan.Deps{
@@ -720,6 +725,9 @@ func TestAFailedEstimateParksBeforeTheStatusMove(t *testing.T) {
 func TestTheCriticRunsWhenTheCovenantAsksAndItsFindingsAreRevised(t *testing.T) {
 	revised := draftHandoff()
 	revised["recommendation"] = map[string]any{"approach": "Filter in Build", "why": "The critic was right about Vet."}
+	revised["resolutions"] = []any{
+		map[string]any{"resolved": true, "explanation": "Switched the recommendation to Filter in Build, which does see blockers."},
+	}
 
 	h := newHarness(t,
 		workerResult{handoff: draftHandoff()},
@@ -753,6 +761,52 @@ func TestTheCriticRunsWhenTheCovenantAsksAndItsFindingsAreRevised(t *testing.T) 
 	}
 	if !strings.Contains(h.board.comments[0], "1 objection(s)") {
 		t.Errorf("the provenance does not report the critic:\n%s", h.board.comments[0])
+	}
+	// The resolved objection is named in the comment as what was
+	// challenged and what changed — the reasoning trail, not just a count.
+	if !strings.Contains(h.board.comments[0], "What the critic challenged") ||
+		!strings.Contains(h.board.comments[0], "Vet cannot see blockers") ||
+		!strings.Contains(h.board.comments[0], "Switched the recommendation to Filter in Build") {
+		t.Errorf("the comment does not name what was challenged and what changed:\n%s", h.board.comments[0])
+	}
+}
+
+// An objection the reviser could not resolve does not disappear into the
+// revision the way a resolved one does — it is promoted to an open
+// question on the review comment, exactly the material a human is asked to
+// judge at Plan Review.
+func TestAnUnresolvedObjectionBecomesAnOpenQuestion(t *testing.T) {
+	revised := draftHandoff()
+	revised["resolutions"] = []any{
+		map[string]any{"resolved": false, "explanation": "Both approaches still need a lock I could not confirm is safe to drop."},
+	}
+
+	h := newHarness(t,
+		workerResult{handoff: draftHandoff()},
+		workerResult{handoff: map[string]any{"verdict": "flawed", "objections": []any{
+			map[string]any{"target": "the plan", "summary": "dropping the lock may race", "consequence": "two runs could claim the same ticket"},
+		}}},
+		workerResult{handoff: revised},
+	)
+	h.deps.Cov.Toggles.PlanCritic = true
+
+	out, err := h.run(t)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if out.Kind != journal.Converged {
+		t.Fatalf("outcome = %s (%s), want converged", out.Kind, out.Reason)
+	}
+	if strings.Contains(h.board.comments[0], "What the critic challenged") {
+		t.Errorf("nothing was resolved, so there should be nothing in the challenged section:\n%s", h.board.comments[0])
+	}
+	if !strings.Contains(h.board.comments[0], "Still open") ||
+		!strings.Contains(h.board.comments[0], "dropping the lock may race") ||
+		!strings.Contains(h.board.comments[0], "Both approaches still need a lock I could not confirm is safe to drop") {
+		t.Errorf("the unresolved objection was not promoted to an open question:\n%s", h.board.comments[0])
+	}
+	if !strings.Contains(h.board.comments[0], "1 objection(s): 0 resolved, 1 open") {
+		t.Errorf("the provenance does not report the unresolved objection:\n%s", h.board.comments[0])
 	}
 }
 

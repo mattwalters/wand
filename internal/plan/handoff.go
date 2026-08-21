@@ -429,6 +429,61 @@ func ParseCritique(raw json.RawMessage) (Critique, error) {
 	return c, nil
 }
 
+// Revision is the reviser's handoff after a critique: the same draft shape
+// plus an account of what happened to each of the critic's objections,
+// paired with them positionally rather than by re-matching text, so the
+// run can tell what the reviser resolved from what it could not without
+// trusting its prose to say which.
+type Revision struct {
+	Draft
+	// Resolutions is required one-for-one with the critique's objections,
+	// in the order the critic raised them — except when Premise is
+	// PremiseWrong, where the whole draft is being withdrawn and there is
+	// nothing left to resolve.
+	Resolutions []Resolution `json:"resolutions,omitempty"`
+}
+
+// Resolution is what the reviser did with one objection: changed the plan
+// and said what changed, or left the objection standing and said why.
+type Resolution struct {
+	Resolved bool `json:"resolved"`
+	// Explanation is quoted verbatim to a human either way: what changed in
+	// the plan when resolved, or why the objection still stands when not.
+	Explanation string `json:"explanation"`
+}
+
+// ParseRevision validates a reviser's handoff to a critique: the draft
+// exactly as strictly as ParseDraft, plus one resolution per objection the
+// critic raised, in order — required so a resolved objection can be told
+// from one the reviser could not answer either, which is exactly the
+// distinction between the reasoning trail and a human's open questions.
+func ParseRevision(raw json.RawMessage, cov covenant.Covenant, objections int) (Revision, error) {
+	if len(raw) == 0 {
+		return Revision{}, errors.New("the reviser wrote no handoff")
+	}
+	var r Revision
+	if err := strictUnmarshal(raw, &r); err != nil {
+		return Revision{}, err
+	}
+	if err := r.Draft.validate(cov); err != nil {
+		return Revision{}, err
+	}
+	if r.Premise == PremiseWrong {
+		return r, nil
+	}
+	if len(r.Resolutions) != objections {
+		return Revision{}, fmt.Errorf(
+			"the reviser reported %d resolution(s) for %d objection(s); one is required for each, in the order the critic raised them",
+			len(r.Resolutions), objections)
+	}
+	for i, res := range r.Resolutions {
+		if strings.TrimSpace(res.Explanation) == "" {
+			return Revision{}, fmt.Errorf("resolution %d gives no explanation — required whether the objection was resolved or not", i+1)
+		}
+	}
+	return r, nil
+}
+
 // strictUnmarshal decodes one JSON object, refusing unknown fields. A
 // worker that misspells a field name should fail loudly here rather than
 // have that half of its work silently read as absent — a plan missing its

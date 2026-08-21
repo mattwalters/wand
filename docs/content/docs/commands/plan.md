@@ -143,17 +143,26 @@ load-bearing.
 
 ## The critic
 
-`toggles.plan_critic = true` in [`wand.toml`](../../covenant/) inserts a
-cold critic between the draft and the interview: a fresh session prompted to
-attack the draft, whose objections are validated like any other handoff and
-handed to a reviser. An objection must state what it costs if the draft
-ships as written; an objection with no consequence is a preference, and a
-revision round is too expensive to spend on one. A critic that finds nothing
-costs one call and changes nothing.
+`toggles.plan_critic` (on by default; turn it off with `toggles.plan_critic
+= false` in [`wand.toml`](../../covenant/)) inserts a cold critic between
+the draft and the interview: a fresh session prompted to attack the draft,
+whose objections are validated like any other handoff and handed to a
+reviser. An objection must state what it costs if the draft ships as
+written; an objection with no consequence is a preference, and a revision
+round is too expensive to spend on one. A critic that finds nothing costs
+one call and changes nothing.
 
-It is off by default. It spends a whole extra model call per plan run, and
-unlike the rest of the covenant it is not a rule the reference system has
-finished paying for.
+It spends a whole extra model call per plan run. It is on by default anyway
+because a plan is a decision paid for over the whole life of the work it
+describes, which makes that call the cheapest place in the lifecycle to
+spend it — and because the build side already runs an adversarial pass as a
+matter of course, so an unchallenged plan was the asymmetry.
+
+What the reviser does with each objection is routed, not just folded into
+the new draft: one it resolves is named in the options comment as what was
+challenged and what changed, part of the reasoning trail; one it cannot
+resolve is promoted to an open question on that same comment, for you to
+judge at Plan Review.
 
 The footer of the options comment says which stages ran, so you can tell a
 first draft from a plan that survived a critic and an interview.

@@ -232,8 +232,10 @@ and a run whose worker touched the tree parks with the change left in front
 of you. `--interactive` grills you over the draft first — questions ordered
 worst-consequence first, each quoting the draft — and hands your answers to
 a second, fresh session, because a session that has just argued for an
-approach defends it. `toggles.plan_critic` adds a cold critic ahead of
-that.
+approach defends it. A cold critic (`toggles.plan_critic`, on by default)
+runs ahead of that: what it resolves is named in the options comment as
+what was challenged and what changed, and what it cannot resolve becomes an
+open question there for you to judge.
 
 Exit codes are a scheduler contract: `0` planned, `2` handed back (the scout
 judged the ticket's premise wrong), `3` parked, `1` never started.

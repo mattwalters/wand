@@ -69,6 +69,7 @@ func OptionsComment(d Draft, scale, statusName string, prov Provenance) string {
 	var b strings.Builder
 	b.WriteString("## Plan\n\n")
 	b.WriteString(Argument(d, scale))
+	b.WriteString(challengesSection(prov.Challenges))
 	b.WriteString("\n### Over to you\n\n")
 	fmt.Fprintf(&b, "The plan is in this ticket's description, in the region `wand plan` owns. "+
 		"This ticket is now in %s: promoting it to Todo is what blesses building it, "+
@@ -125,6 +126,32 @@ func Argument(d Draft, scale string) string {
 	return b.String()
 }
 
+// Challenge is one objection the critic raised that the reviser answered:
+// what was challenged and what changed in response, quoted into the
+// options comment as the reasoning trail a human reads instead of
+// re-deriving whether an objection that shaped the plan was ever settled.
+type Challenge struct {
+	Target      string
+	Summary     string
+	Explanation string
+}
+
+// challengesSection renders what the critic challenged and what the
+// reviser changed in response. Empty when nothing was resolved — a plan
+// the critic left untouched, or one where every objection stuck and went
+// to open questions instead, has nothing to report here.
+func challengesSection(challenges []Challenge) string {
+	if len(challenges) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\n### What the critic challenged\n\n")
+	for _, c := range challenges {
+		fmt.Fprintf(&b, "- **%s** — %s\n\n  %s\n", strings.TrimSpace(c.Target), strings.TrimSpace(c.Summary), strings.TrimSpace(c.Explanation))
+	}
+	return b.String()
+}
+
 // Provenance is how the draft got here, printed under the argument. A
 // human weighing a plan wants to know whether anything argued with it:
 // one cold scout's first draft and a draft that survived a critic and an
@@ -136,6 +163,11 @@ type Provenance struct {
 	// Answers say how much came back from them.
 	Critic     bool
 	Objections int
+	// Challenges is the subset of Objections the reviser resolved, with
+	// what changed — rendered as its own section by [challengesSection]. An
+	// objection not among these was one the reviser could not answer
+	// either, and it travels instead as one of the draft's open questions.
+	Challenges []Challenge
 	Interview  bool
 	Answers    int
 	Harness    string
@@ -145,7 +177,9 @@ func (p Provenance) line() string {
 	parts := []string{"drafted by a cold " + p.Harness + " scout"}
 	switch {
 	case p.Critic && p.Objections > 0:
-		parts = append(parts, fmt.Sprintf("attacked by a cold critic (%d objection(s), revised)", p.Objections))
+		unresolved := p.Objections - len(p.Challenges)
+		parts = append(parts, fmt.Sprintf("attacked by a cold critic (%d objection(s): %d resolved, %d open)",
+			p.Objections, len(p.Challenges), unresolved))
 	case p.Critic:
 		parts = append(parts, "attacked by a cold critic (nothing stuck)")
 	}

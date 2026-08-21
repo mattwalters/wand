@@ -58,6 +58,15 @@ func TestEstimateValuesFollowTheScale(t *testing.T) {
 	}
 }
 
+// The critic is on by default: the build side already runs an adversarial
+// pass as a matter of course, and a plan nobody challenged is the
+// asymmetry a covenant fresh out of the box should not ship with.
+func TestPlanCriticDefaultsOn(t *testing.T) {
+	if !Default().Toggles.PlanCritic {
+		t.Error("Toggles.PlanCritic = false, want the default covenant to run the critic")
+	}
+}
+
 // Plan Review is the research-side analog of In Review: the plan is written
 // and a human has to judge it. It is `unstarted` — blessing it
 // re-authorizes the work rather than resuming it — and it sits between
