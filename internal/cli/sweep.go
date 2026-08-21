@@ -17,13 +17,14 @@ func newSweepCmd() *cobra.Command {
 		Use:   "sweep",
 		Short: "Act on one thing left over after a run ended",
 		Long: "sweep is everything that happens after wand run or wand plan exits.\n" +
-			"It ranks and vets three conditions the same way dispatch picks a\n" +
+			"It ranks and vets four conditions the same way dispatch picks a\n" +
 			"winner, and acts on at most one, first-refused-skipped: a lease whose\n" +
 			"owner is provably dead (the run's journal is parked and the ticket\n" +
-			"handed back), a re-review label (a human asked for another cycle), or\n" +
-			"an unresolved review thread on a ready-for-human PR — necessarily left\n" +
-			"after convergence, since wand run's own check catches one standing\n" +
-			"before that.\n\n" +
+			"handed back), a re-review label (a human asked for another review\n" +
+			"cycle) or a re-plan label (the planning-side twin, handed back into\n" +
+			"In Planning rather than Needs Input), or an unresolved review thread\n" +
+			"on a ready-for-human PR — necessarily left after convergence, since\n" +
+			"wand run's own check catches one standing before that.\n\n" +
 			"It also reports, read-only, tickets sitting In Progress with no run\n" +
 			"behind them at all — not even a dead one. There is nothing there to\n" +
 			"act on, only something that looks stuck for a person to judge.\n\n" +

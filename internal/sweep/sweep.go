@@ -6,6 +6,11 @@
 //
 //   - a human labeled a converged ticket [ReReviewLabel]: another cycle,
 //     asked for explicitly;
+//   - a human labeled a Plan Review ticket [verbs.RePlanLabel]: the
+//     planning-side twin of the above, another planning cycle asked for
+//     explicitly — sweep hands it back into In Planning rather than Needs
+//     Input, because the human's comments already answered the question a
+//     re-plan resumes over;
 //   - a converged ticket's PR carries an unresolved human review thread —
 //     necessarily left *after* convergence, because run.Execute's own
 //     check at the moment of converging would have caught one standing
@@ -95,6 +100,10 @@ func Execute(ctx context.Context, d Deps, store *journal.Store) (Result, error) 
 	if err != nil {
 		return Result{}, fmt.Errorf("sweep: reading %s: %w", ReReviewLabel, err)
 	}
+	rePlan, err := d.Board.TeamIssuesByLabel(ctx, d.TeamKey, verbs.RePlanLabel)
+	if err != nil {
+		return Result{}, fmt.Errorf("sweep: reading %s: %w", verbs.RePlanLabel, err)
+	}
 	readyForHuman, err := d.Board.TeamIssuesByLabel(ctx, d.TeamKey, run.ReadyForHumanLabel)
 	if err != nil {
 		return Result{}, fmt.Errorf("sweep: reading %s: %w", run.ReadyForHumanLabel, err)
@@ -113,9 +122,10 @@ func Execute(ctx context.Context, d Deps, store *journal.Store) (Result, error) 
 		fmt.Fprintf(d.Out, "sweep: %s is In Progress with no run behind it — looks stuck, reported only\n", z.Ticket)
 	}
 
-	candidates := Rank(append(append(
+	candidates := Rank(append(append(append(
 		DeadLeaseCandidates(reports, d.Repo),
 		ReReviewCandidates(openIssues(reReview))...),
+		RePlanCandidates(openIssues(rePlan))...),
 		unresolved...))
 
 	for _, c := range candidates {
@@ -157,6 +167,8 @@ func (d Deps) act(ctx context.Context, store *journal.Store, c Candidate) (acted
 		return d.reap(ctx, store, c)
 	case KindReReview:
 		return d.actReReview(ctx, c)
+	case KindRePlan:
+		return d.actRePlan(ctx, c)
 	case KindUnresolvedThreads:
 		return d.actUnresolvedThreads(ctx, c)
 	default:
@@ -215,6 +227,29 @@ func (d Deps) actReReview(ctx context.Context, c Candidate) (bool, error) {
 		"This ticket is labeled %s: a human asked for another cycle. wand sweep is handing it back so it can be picked up again.",
 		ReReviewLabel)
 	if _, err := verbs.Handback(ctx, d.Board, d.Cov, c.Ticket, comment); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// actRePlan re-checks the label is still there, then hands the ticket back
+// into In Planning — the planning-side twin of [Deps.actReReview]. Unlike a
+// re-review, this does not go through [verbs.Handback]: a re-plan resumes a
+// cycle the human's comments on Plan Review already answered, so it returns
+// to the started status a live plan run claims, via [verbs.ReturnToPlanning],
+// rather than asking a fresh question through Needs Input.
+func (d Deps) actRePlan(ctx context.Context, c Candidate) (bool, error) {
+	issue, err := d.Board.IssueByIdentifier(ctx, c.Ticket)
+	if err != nil {
+		return false, fmt.Errorf("could not re-read the ticket: %w", err)
+	}
+	if !hasLabel(issue, verbs.RePlanLabel) {
+		return false, nil // resolved since the read: the label is gone
+	}
+	comment := fmt.Sprintf(
+		"This ticket is labeled %s: a human asked for another planning cycle. wand sweep is handing it back into %s so the cycle can resume.",
+		verbs.RePlanLabel, d.Cov.StatusName("in_planning"))
+	if _, err := verbs.ReturnToPlanning(ctx, d.Board, d.Cov, c.Ticket, comment); err != nil {
 		return false, err
 	}
 	return true, nil

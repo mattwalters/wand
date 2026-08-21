@@ -150,11 +150,19 @@ func Execute(ctx context.Context, d Deps, store *journal.Store, identifier strin
 	// even a run directory. Mirrors run.Execute's ordering (verbs.Claim);
 	// see the package doc for why this package now claims a started status
 	// instead of taking a machine-local lock.
-	issue, err := verbs.ClaimForPlanning(ctx, d.Board, d.Cov, identifier, Vet)
+	//
+	// claimEither decides whether identifier names a fresh plan or a
+	// re-plan and claims it the matching way; see its own doc for why a
+	// ticket already In Planning is not automatically the latter.
+	issue, isReplan, err := claimEither(ctx, d, identifier)
 	if err != nil {
 		return Outcome{}, err
 	}
-	fmt.Fprintf(d.Out, "claimed %s: %s\n", issue.Identifier, d.Cov.StatusName("in_planning"))
+	if isReplan {
+		fmt.Fprintf(d.Out, "resumed %s for a re-plan: %s\n", issue.Identifier, d.Cov.StatusName("in_planning"))
+	} else {
+		fmt.Fprintf(d.Out, "claimed %s: %s\n", issue.Identifier, d.Cov.StatusName("in_planning"))
+	}
 
 	// The journal's Verb keeps writing "plan" only — a journal run predates
 	// this rename and may still carry "scope", but nothing here reads that
@@ -185,11 +193,44 @@ func Execute(ctx context.Context, d Deps, store *journal.Store, identifier strin
 	defer r.Close()
 	fmt.Fprintf(d.Out, "planning %s, journaling to %s\n", issue.Identifier, r.Dir())
 
-	s := &planning{d: d, r: r, issue: issue, prov: Provenance{RunID: r.ID(), Harness: d.Harness}}
+	s := &planning{d: d, r: r, issue: issue, isReplan: isReplan, prov: Provenance{RunID: r.ID(), Harness: d.Harness}}
 	out := s.run(ctx)
 	out.RunID = r.ID()
 	fmt.Fprintf(d.Out, "run %s ended: %s — %s\n", r.ID(), out.Kind, out.Reason)
 	return out, nil
+}
+
+// claimEither reads identifier once and claims it as a fresh plan (To Plan,
+// via verbs.ClaimForPlanning) or a re-plan (already In Planning, carrying
+// verbs.RePlanLabel — the ticket verbs.ReturnToPlanning already handed
+// back — via verbs.ClaimForReplanning), returning which it was.
+//
+// A ticket In Planning with no re-plan label is not treated as either: that
+// is what a live plan run's own claim leaves behind, and ClaimForPlanning's
+// own "not yours to plan" refusal is the right answer for it — the same
+// protection [TestASecondPlanOfOneTicketRefuses] already checks, unchanged
+// by this function existing.
+func claimEither(ctx context.Context, d Deps, identifier string) (linear.Issue, bool, error) {
+	peek, err := d.Board.IssueByIdentifier(ctx, identifier)
+	if err != nil {
+		return linear.Issue{}, false, err
+	}
+	if strings.EqualFold(peek.State.Name, d.Cov.StatusName("in_planning")) && hasLabel(peek, verbs.RePlanLabel) {
+		issue, err := verbs.ClaimForReplanning(ctx, d.Board, d.Cov, identifier, Vet)
+		return issue, true, err
+	}
+	issue, err := verbs.ClaimForPlanning(ctx, d.Board, d.Cov, identifier, Vet)
+	return issue, false, err
+}
+
+// hasLabel reports whether issue carries name, case-insensitively.
+func hasLabel(issue linear.Issue, name string) bool {
+	for _, l := range issue.Labels {
+		if strings.EqualFold(l, name) {
+			return true
+		}
+	}
+	return false
 }
 
 // Vet returns why an issue in To Plan may not be planned, or "" when it may.
@@ -229,6 +270,12 @@ type planning struct {
 
 	ticketText string
 	treeBefore string
+
+	// isReplan marks a run claimed via claimEither's re-plan branch: the
+	// ticket was already In Planning, carrying a plan a human commented on,
+	// and s.run takes the revise-in-place path (s.runReplan) instead of the
+	// first-plan pipeline.
+	isReplan bool
 }
 
 // phaseDetail is what EndPhase journals about a worker, bounded so the
@@ -300,6 +347,10 @@ func (s *planning) run(ctx context.Context) Outcome {
 		return *s.park(ctx, fmt.Sprintf("could not read the repository's state: %v", err))
 	}
 	s.treeBefore = before
+
+	if s.isReplan {
+		return s.runReplan(ctx, comments)
+	}
 
 	// --- the draft ----------------------------------------------------
 	draft, out := s.draft(ctx)
@@ -629,6 +680,163 @@ func (s *planning) preservePriorPlan(ctx context.Context) *Outcome {
 	}
 	fmt.Fprintln(s.d.Out, "preserved the ticket's previous plan as a comment before replacing it")
 	return nil
+}
+
+// runReplan is the re-plan cycle's own path through the loop: read the plan
+// already on the ticket and everything a human said about it since, hand
+// both to a fresh cold reviser, and revise the plan in place rather than
+// drafting one from nothing. No critic, no interview — a re-plan is meant
+// to converge on the plan a human is already looking at, not spend another
+// full research pass arguing with itself.
+//
+// No round cap, deliberately, unlike the build loop's review-round and
+// CI-attempt caps: each cycle here costs one human act (a comment and the
+// re-plan label) before a cycle even starts, where the build loop's rounds
+// are machine-paced and need a cap to stop exhaustion becoming a false
+// convergence. A human still typing "re-plan" after the third round is not
+// runaway machinery; it is the loop working as designed.
+func (s *planning) runReplan(ctx context.Context, comments []linear.Comment) Outcome {
+	prior, ok, err := linear.ReadSection(s.issue.Description, PlanSectionID)
+	if err != nil {
+		return *s.park(ctx, fmt.Sprintf("could not read the description's plan region: %v", err))
+	}
+	if !ok || strings.TrimSpace(prior) == "" {
+		return *s.park(ctx, "this ticket is a re-plan, already in "+s.d.Cov.StatusName("in_planning")+
+			", but its description carries no plan to revise")
+	}
+
+	since := sinceLastPlan(comments)
+	if len(since) == 0 {
+		return *s.park(ctx, "this ticket was labeled for a re-plan, but no comment followed the plan already "+
+			"on it — there is nothing to revise against")
+	}
+	s.prov.RePlan = true
+	s.prov.Comments = len(since)
+
+	res, out := s.work(ctx, "replan", 1, scoutRules(), replanPrompt(s.ticketText, prior, repliesTranscript(since), s.d.Cov))
+	if out != nil {
+		return *out
+	}
+	rev, out := s.parseReplan(ctx, res.Handoff)
+	if out != nil {
+		return *out
+	}
+	if out := s.wrongPremise(ctx, rev.Draft); out != nil {
+		return *out
+	}
+	return s.writeReplan(ctx, rev)
+}
+
+// parseReplan validates a reviser's re-plan handoff the same way
+// [planning.parse] validates a first draft — persisting a rejected handoff
+// before parking, journaling what came back, then checking the tree —
+// except against [ParseReplan], which additionally demands the changes
+// account a re-plan comment is built from.
+func (s *planning) parseReplan(ctx context.Context, raw json.RawMessage) (Replan, *Outcome) {
+	rev, err := ParseReplan(raw, s.d.Cov)
+	if err != nil {
+		if werr := os.WriteFile(s.r.RejectedHandoffPath(), raw, 0o644); werr != nil {
+			fmt.Fprintf(s.d.Out, "could not persist the rejected reviser handoff: %v\n", werr)
+		}
+		return Replan{}, s.park(ctx, fmt.Sprintf("the reviser's handoff is unusable, so nothing was written to the ticket: %v", err))
+	}
+	if len(rev.Dropped) > 0 {
+		s.note("reviser citations dropped for carrying no line", rev.Dropped)
+	}
+	s.note("replan handoff", rev)
+	if out := s.requireUntouched(ctx, "reviser"); out != nil {
+		return Replan{}, out
+	}
+	return rev, nil
+}
+
+// writeReplan lands the re-plan's deliverables: the revised plan region in
+// place — no preservePriorPlan, deliberately (see the package doc's note on
+// WND-77) — then the changes comment, the estimate, and Plan Review last,
+// the same before-the-transition-that-advertises-it ordering [planning.write]
+// uses for a first plan.
+func (s *planning) writeReplan(ctx context.Context, rev Replan) Outcome {
+	stateID, err := verbs.ResolveState(ctx, s.d.Board, s.d.Cov, s.issue.TeamID, "plan_review")
+	if err != nil {
+		return *s.park(ctx, fmt.Sprintf("could not resolve the %s status: %v", s.d.Cov.StatusName("plan_review"), err))
+	}
+
+	if _, _, err := s.d.Board.UpsertSection(ctx, s.issue.ID, s.issue.Description, PlanSectionID, PlanMarkdown(rev.Draft)); err != nil {
+		return *s.park(ctx, fmt.Sprintf("the revised plan could not be written into the description: %v", err))
+	}
+	fmt.Fprintln(s.d.Out, "revised the plan in place")
+
+	comment := RePlanComment(rev.Draft, s.d.Cov.IssueEstimationType, s.d.Cov.StatusName("plan_review"), rev.Changes, s.prov)
+	if err := s.d.Board.CreateComment(ctx, s.issue.ID, comment); err != nil {
+		return *s.park(ctx, fmt.Sprintf("the revised plan is in the description, but the comment naming what changed failed: %v — the ticket is still in %s, carrying a plan nothing explains", err, s.issue.State.Name))
+	}
+	fmt.Fprintln(s.d.Out, "posted what changed and why")
+
+	if rev.Draft.Estimate != nil {
+		if err := s.d.Board.UpdateIssue(ctx, s.issue.ID, linear.IssueUpdate{Estimate: rev.Draft.Estimate}); err != nil {
+			return *s.park(ctx, fmt.Sprintf("the revised plan and its account are on the ticket, but the estimate failed: %v", err))
+		}
+		fmt.Fprintf(s.d.Out, "set the estimate to %d\n", *rev.Draft.Estimate)
+	}
+
+	if err := s.d.Board.UpdateIssue(ctx, s.issue.ID, linear.IssueUpdate{StateID: stateID}); err != nil {
+		return *s.park(ctx, fmt.Sprintf("every deliverable is on the ticket, but the move to %s failed: %v — the revised plan is readable, it just is not on anyone's desk", s.d.Cov.StatusName("plan_review"), err))
+	}
+
+	reason := fmt.Sprintf("re-plan: %s recommended, plan revised in place, %s for a human to judge",
+		strings.TrimSpace(rev.Draft.Recommendation.Approach), s.d.Cov.StatusName("plan_review"))
+	if err := s.r.Converged(reason); err != nil {
+		fmt.Fprintf(s.d.Out, "journal: %v\n", err)
+	}
+	return Outcome{Kind: journal.Converged, Reason: reason}
+}
+
+// optionsCommentHeader and rePlanCommentHeader are how OptionsComment and
+// RePlanComment respectively open — the two comment shapes [sinceLastPlan]
+// recognizes as "a plan was posted here" when it looks for the most recent
+// one. supersededComment's own header ("## Plan superseded, ...") never
+// matches either: it is a snapshot of a plan that has already been
+// replaced, not the argument for the one currently on the ticket.
+const (
+	optionsCommentHeader = "## Plan\n\n"
+	rePlanCommentHeader  = "## Plan revised\n\n"
+)
+
+// sinceLastPlan returns the comments posted after the most recent plan
+// comment this package itself posted — the human's answers to the plan
+// currently on the ticket, and nothing this package already argued. Comments
+// arrive oldest first (see linear.Client.IssueComments), so the last match
+// by index is the most recent.
+func sinceLastPlan(comments []linear.Comment) []linear.Comment {
+	last := -1
+	for i, c := range comments {
+		if strings.HasPrefix(c.Body, optionsCommentHeader) || strings.HasPrefix(c.Body, rePlanCommentHeader) {
+			last = i
+		}
+	}
+	if last < 0 {
+		return nil
+	}
+	return comments[last+1:]
+}
+
+// repliesTranscript renders the human's comments since the last plan for
+// the reviser: who said it and what, in order — the re-plan cycle's
+// equivalent of [Transcript], sourced from the board instead of an
+// interactive session.
+func repliesTranscript(comments []linear.Comment) string {
+	var b strings.Builder
+	for i, c := range comments {
+		if i > 0 {
+			b.WriteString("\n")
+		}
+		author := c.Author
+		if author == "" {
+			author = "a human"
+		}
+		fmt.Fprintf(&b, "%s wrote:\n\n%s\n", author, blockquote(c.Body))
+	}
+	return b.String()
 }
 
 // work journals a phase, spawns its worker, and journals what came back. A

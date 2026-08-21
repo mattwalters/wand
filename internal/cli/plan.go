@@ -24,9 +24,13 @@ func newPlanCmd() *cobra.Command {
 			"their trade-offs as a comment, the estimate, and Plan Review last — so\n" +
 			"every deliverable has landed before the status that advertises it.\n" +
 			"Nothing is written unless the whole handoff passes validation.\n\n" +
-			"The ticket must be in To Plan. Blessing research is a human act, the same\n" +
-			"way blessing building is, and plan will not take a ticket nobody blessed.\n" +
-			"It ends in Plan Review: promoting the plan to Todo is yours.\n\n" +
+			"The ticket must be in To Plan, or already In Planning carrying the\n" +
+			"re-plan label wand sweep's own hand-back leaves — a re-plan, which\n" +
+			"reads the comments left on the plan since and revises it in place\n" +
+			"instead of drafting from nothing. Blessing research is a human act,\n" +
+			"the same way blessing building is, and plan will not take a ticket\n" +
+			"nobody blessed. It ends in Plan Review: promoting the plan to Todo is\n" +
+			"yours — that promotion is what approves it.\n\n" +
 			"There is no worktree, no branch and no CI: the scout reads the checkout you\n" +
 			"run this from and may not change it. If it does, the run parks and leaves\n" +
 			"the change for you to look at.\n\n" +

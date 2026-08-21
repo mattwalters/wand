@@ -204,6 +204,42 @@ left to resolve.`)
 	return b.String()
 }
 
+// replanPrompt hands the plan currently on the ticket and everything a
+// human said about it in comments since to a fresh session, and asks for
+// the plan that should stand now plus a diff-shaped account of what
+// changed — the re-plan cycle's own revision, distinct from
+// [revisePrompt]'s interview-answers round in what it is revising against
+// (comments on the board, not an interactive transcript) and in what it
+// asks back (an account for a comment, not a resolution per objection).
+func replanPrompt(ticketText, rendered, transcript string, cov covenant.Covenant) string {
+	var b strings.Builder
+	b.WriteString("Below is the plan currently on this ticket, and everything a human has said " +
+		"about it in comments since it was posted. This is a re-plan: converge on the plan " +
+		"already here to reflect what they said, rather than starting over.\n\n")
+	b.WriteString("You did not write the plan and you owe it nothing. Where the human is right, " +
+		"change the plan — including the recommendation, the steps, the estimate or the premise, " +
+		"if that is what it takes. Where they are asking for something the plan already does, or " +
+		"something that does not hold up, say why and leave that part standing. Read the code " +
+		"again for anything you change: a revision argued from the plan alone inherits whatever " +
+		"it got wrong.\n\n")
+	b.WriteString("Your handoff replaces the plan whole, and is validated the same way, so carry " +
+		"forward everything that still holds.\n\n")
+	b.WriteString(draftSchema(cov))
+	b.WriteString(`
+
+Add one more field to that same object:
+ "changes": "a diff-shaped account for the ticket's own comment stream: what the human asked, what moved in this revision and why, and what you deliberately left alone and why — an account of what changed, not a verdict on the plan"
+
+Omit "changes" only when your premise is "wrong": the whole draft is being withdrawn and there is nothing to account for.`)
+	b.WriteString("\n\n--- comments since the last plan ---\n\n")
+	b.WriteString(transcript)
+	b.WriteString("\n\n--- the current plan ---\n\n")
+	b.WriteString(rendered)
+	b.WriteString("\n\n--- ticket ---\n\n")
+	b.WriteString(ticketText)
+	return b.String()
+}
+
 // renderObjections prints a critique for the reviser, in the critic's own
 // terms.
 func renderObjections(c Critique) string {

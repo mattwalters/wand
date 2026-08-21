@@ -484,6 +484,46 @@ func ParseRevision(raw json.RawMessage, cov covenant.Covenant, objections int) (
 	return r, nil
 }
 
+// Replan is the reviser's handoff for a re-plan cycle: the same draft shape
+// [Revision] carries for a critique, plus a diff-shaped account of what
+// changed and why. That account is what the re-plan comment is built from
+// — WND-82's replacement for the full-snapshot supersede comment a re-plan
+// through To Plan still gets (see [supersededComment]): the normal path
+// through this cycle converges on the plan already there, and a snapshot on
+// every round would bury the reasoning trail under dead plans.
+type Replan struct {
+	Draft
+	// Changes is quoted verbatim into the re-plan comment: what the human
+	// asked, what moved in this revision and why, and what stayed the same
+	// and why. Required when the premise is sound; when it is wrong the
+	// whole draft is withdrawn and there is nothing to account for.
+	Changes string `json:"changes,omitempty"`
+}
+
+// ParseReplan validates a reviser's handoff to a re-plan cycle: the draft
+// exactly as strictly as [ParseDraft], plus the changes narrative a re-plan
+// comment cannot be built without.
+func ParseReplan(raw json.RawMessage, cov covenant.Covenant) (Replan, error) {
+	if len(raw) == 0 {
+		return Replan{}, errors.New("the reviser wrote no handoff")
+	}
+	var r Replan
+	if err := strictUnmarshal(raw, &r); err != nil {
+		return Replan{}, err
+	}
+	if err := r.Draft.validate(cov); err != nil {
+		return Replan{}, err
+	}
+	if r.Premise == PremiseWrong {
+		return r, nil
+	}
+	if strings.TrimSpace(r.Changes) == "" {
+		return Replan{}, errors.New(
+			"the handoff carries no account of what changed; that is the whole point of a re-plan comment, quoted verbatim to a human comparing this revision to the one they just answered")
+	}
+	return r, nil
+}
+
 // strictUnmarshal decodes one JSON object, refusing unknown fields. A
 // worker that misspells a field name should fail loudly here rather than
 // have that half of its work silently read as absent — a plan missing its

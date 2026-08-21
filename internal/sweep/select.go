@@ -7,6 +7,7 @@ import (
 
 	"github.com/mattwalters/wand/internal/journal"
 	"github.com/mattwalters/wand/internal/linear"
+	"github.com/mattwalters/wand/internal/verbs"
 )
 
 // Kind names the condition a candidate was found for.
@@ -19,6 +20,9 @@ const (
 	KindDeadLease Kind = "dead_lease"
 	// KindReReview: a human labeled a converged ticket for another cycle.
 	KindReReview Kind = "re_review"
+	// KindRePlan: a human labeled a Plan Review ticket for another
+	// planning cycle — the planning-side twin of KindReReview.
+	KindRePlan Kind = "re_plan"
 	// KindUnresolvedThreads: a converged ticket's PR carries an unresolved
 	// human review thread — necessarily left after the run itself ended,
 	// because run.Execute's own convergence check would have caught one
@@ -50,6 +54,7 @@ type Candidate struct {
 var severity = map[Kind]int{
 	KindDeadLease:         0,
 	KindReReview:          1,
+	KindRePlan:            1,
 	KindUnresolvedThreads: 2,
 }
 
@@ -107,6 +112,23 @@ func ReReviewCandidates(issues []linear.Issue) []Candidate {
 			Kind:   KindReReview,
 			Ticket: issue.Identifier,
 			Reason: "labeled " + ReReviewLabel + ": a human asked for another cycle",
+			Since:  issue.CreatedAt,
+		})
+	}
+	return out
+}
+
+// RePlanCandidates turns every issue labeled [verbs.RePlanLabel] into a
+// candidate — the planning-side twin of [ReReviewCandidates]. Filtering to
+// open work is the caller's, the same discipline ReReviewCandidates leaves
+// to it.
+func RePlanCandidates(issues []linear.Issue) []Candidate {
+	out := make([]Candidate, 0, len(issues))
+	for _, issue := range issues {
+		out = append(out, Candidate{
+			Kind:   KindRePlan,
+			Ticket: issue.Identifier,
+			Reason: "labeled " + verbs.RePlanLabel + ": a human asked for another planning cycle",
 			Since:  issue.CreatedAt,
 		})
 	}

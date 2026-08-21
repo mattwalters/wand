@@ -304,3 +304,50 @@ func TestParseCritique(t *testing.T) {
 		})
 	}
 }
+
+func withChanges(d map[string]any, changes string) map[string]any {
+	out := map[string]any{}
+	for k, v := range d {
+		out[k] = v
+	}
+	out["changes"] = changes
+	return out
+}
+
+func TestParseReplanAcceptsADraftWithAnAccountOfWhatChanged(t *testing.T) {
+	rev, err := plan.ParseReplan(raw(t, withChanges(goodDraft(), "Switched the recommendation because the human said Filter in Build was already tried.")), covenant.Default())
+	if err != nil {
+		t.Fatalf("ParseReplan: %v", err)
+	}
+	if rev.Changes == "" {
+		t.Error("the changes account was lost")
+	}
+	if rev.Recommendation.Approach != "Filter in Vet" {
+		t.Errorf("the draft itself was lost: recommendation = %q", rev.Recommendation.Approach)
+	}
+}
+
+// The changes account is the whole point of a re-plan comment: without it
+// there is nothing to quote a human comparing this revision to the one
+// they just answered.
+func TestParseReplanRequiresTheChangesAccountWhenThePremiseIsSound(t *testing.T) {
+	_, err := plan.ParseReplan(raw(t, goodDraft()), covenant.Default())
+	if err == nil || !strings.Contains(err.Error(), "no account of what changed") {
+		t.Fatalf("err = %v, want a refusal naming the missing changes account", err)
+	}
+}
+
+// A wrong premise withdraws the whole draft; there is nothing left to
+// account for, so no changes field is required.
+func TestParseReplanAllowsAWrongPremiseWithNoChangesAccount(t *testing.T) {
+	rev, err := plan.ParseReplan(raw(t, map[string]any{
+		"premise": "wrong",
+		"reason":  "This landed already, in WND-4.",
+	}), covenant.Default())
+	if err != nil {
+		t.Fatalf("ParseReplan: %v", err)
+	}
+	if rev.Premise != plan.PremiseWrong {
+		t.Errorf("premise = %q, want wrong", rev.Premise)
+	}
+}

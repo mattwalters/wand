@@ -160,6 +160,25 @@ func readAnswer(r *bufio.Reader) (string, error) {
 	return strings.TrimSpace(strings.Join(lines, "\n")), nil
 }
 
+// QuestionsMarkdown renders the interview's questions for the Plan Review
+// comment: same questions, same blast-radius order, same verbatim quoting
+// [Interview] puts on a terminal — a different destination, the board,
+// for the run that has nobody at a desk to grill. This is the primary
+// channel now: a human answers in a comment on their own time, and a
+// re-plan reads the answer back ([sinceLastPlan]) rather than requiring
+// someone to be holding a terminal open when the plan lands.
+func QuestionsMarkdown(qs []Question) string {
+	if len(qs) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("\n### Questions\n\n")
+	for i, q := range qs {
+		fmt.Fprintf(&b, "**[%d/%d] %s**\n\n%s\n\n%s\n\n", i+1, len(qs), q.Topic, blockquote(q.Quote), q.Ask)
+	}
+	return b.String()
+}
+
 // Transcript renders the answered questions for the reviser: the draft's
 // own words, then the human's, kept apart so the reviser can tell which is
 // which and treat the human's as the authority.

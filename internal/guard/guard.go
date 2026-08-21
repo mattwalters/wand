@@ -95,7 +95,9 @@ var saveIssue = regexp.MustCompile(`^mcp__.+__save_issue$`)
 const (
 	reasonTodo = "Moving a ticket to **Todo** is the human's call. Todo is the gate between " +
 		"\"written down\" and \"a bot may act on this unattended\", so an agent never " +
-		"promotes one — its own included.\n\n" +
+		"promotes one — its own included. Promotion to Todo is approval of the plan: " +
+		"the cleanest one-line statement of what this product is, restated here rather " +
+		"than left implicit.\n\n" +
 		"If you got here because a transition to **Needs Input** failed, Todo is the " +
 		"worst available answer: the ticket rejoins the queue looking startable, " +
 		"carrying no comment and no branch, and the next dispatcher pass spends a " +

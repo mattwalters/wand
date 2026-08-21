@@ -68,7 +68,7 @@ func existingSchema1Team() Current {
 		Labels: []linear.Label{
 			{ID: "l1", Name: "human-only"}, {ID: "l2", Name: "agent-filed"},
 			{ID: "l3", Name: "ready-for-human"}, {ID: "l4", Name: "re-review"},
-			{ID: "l5", Name: "parked"},
+			{ID: "l6", Name: "re-plan"}, {ID: "l5", Name: "parked"},
 		},
 		Automations: []linear.GitAutomation{
 			{ID: "ga-draft", Event: "draft", State: &struct {
@@ -146,6 +146,7 @@ func TestPlanFreshTeam(t *testing.T) {
 		`create label "agent-filed"`,
 		`create label "ready-for-human"`,
 		`create label "re-review"`,
+		`create label "re-plan"`,
 		`create label "parked"`,
 		`create PR automation: draft → In Progress`,
 	}
@@ -163,7 +164,7 @@ func TestPlanIsIdempotentOnceSatisfied(t *testing.T) {
 		linear.WorkflowState{ID: "st-PlanReview", Name: "Plan Review", Type: "unstarted"},
 		linear.WorkflowState{ID: "st-NI", Name: "Needs Input", Type: "unstarted"},
 	)
-	for _, name := range []string{"human-only", "agent-filed", "ready-for-human", "re-review", "parked"} {
+	for _, name := range []string{"human-only", "agent-filed", "ready-for-human", "re-review", "re-plan", "parked"} {
 		current.Labels = append(current.Labels, linear.Label{ID: "l-" + name, Name: name})
 	}
 	draft := linear.GitAutomation{ID: "ga-draft", Event: "draft"}

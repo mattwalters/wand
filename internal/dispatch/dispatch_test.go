@@ -19,18 +19,22 @@ import (
 // before it gets that far (lock/nothing-to-do/unreachable), or is already
 // covered end to end in internal/run and internal/plan.
 type fakeBoard struct {
-	todo, toPlan []linear.Issue
-	err          error
+	todo, toPlan, inPlanning []linear.Issue
+	err                      error
 }
 
 func (f *fakeBoard) TeamIssuesByState(_ context.Context, _, stateName string) ([]linear.Issue, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
-	if stateName == "Todo" {
+	switch stateName {
+	case "Todo":
 		return f.todo, nil
+	case "In Planning":
+		return f.inPlanning, nil
+	default:
+		return f.toPlan, nil
 	}
-	return f.toPlan, nil
 }
 
 func (f *fakeBoard) IssueByIdentifier(context.Context, string) (linear.Issue, error) {
@@ -64,6 +68,9 @@ func (f *fakeBoard) IssueComments(context.Context, string) ([]linear.Comment, er
 	return nil, errors.New("not implemented in this fake")
 }
 func (f *fakeBoard) AddLabel(context.Context, string, string) error {
+	return errors.New("not implemented in this fake")
+}
+func (f *fakeBoard) RemoveLabel(context.Context, string, string) error {
 	return errors.New("not implemented in this fake")
 }
 func (f *fakeBoard) UpsertSection(context.Context, string, string, string, string) (string, bool, error) {
@@ -197,6 +204,30 @@ func TestExecuteRefusesInvalidDeps(t *testing.T) {
 
 	if _, err := Execute(context.Background(), d, store); err == nil {
 		t.Fatal("expected a validation error")
+	}
+}
+
+// WND-82. A re-plan-labeled In Planning ticket dispatches through plan,
+// the same as a fresh To Plan ticket — sweep's own hand-back is enough to
+// resume the cycle, with no further human blessing needed before dispatch
+// picks it back up.
+func TestExecuteDispatchesARePlanEligibleInPlanningTicket(t *testing.T) {
+	store := newStore(t)
+	board := &fakeBoard{inPlanning: []linear.Issue{{Identifier: "WND-9", State: linear.IssueState{Name: "In Planning"}, Labels: []string{"re-plan"}}}}
+	d := baseDeps(t, board, &fakeRuns{})
+
+	res, err := Execute(context.Background(), d, store)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if res.Winner.Verb != VerbPlan || res.Winner.Issue.Identifier != "WND-9" {
+		t.Fatalf("winner = %+v, want the re-plan-eligible ticket dispatched via plan", res.Winner)
+	}
+	// fakeBoard.IssueByIdentifier is unimplemented, so the claim itself
+	// refuses — this test is about which ticket dispatch reached for, not
+	// what plan.Execute does with it once it gets there.
+	if res.Kind != KindRefused {
+		t.Errorf("Kind = %s, want %s", res.Kind, KindRefused)
 	}
 }
 

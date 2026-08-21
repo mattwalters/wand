@@ -10,7 +10,9 @@
 //
 // A pass is: take the repo's own lock (lock.go — one selector at a time),
 // gc dead leases out of the lane count (read-only; see [LanesUsed]), read
-// Todo and To Plan, rank and vet each through the read layer, pick the one
+// Todo, To Plan and the re-plan-labeled slice of In Planning (a ticket wand
+// sweep has already handed back for another planning cycle — see
+// [rePlanEligible]), rank and vet each through the read layer, pick the one
 // winner ([Select]), and run its loop to a terminal state — one ticket per
 // pass. The lock is held for the whole of it: a single-shot pass commits to
 // running one loop to completion, and a second concurrent pass against the
@@ -25,11 +27,14 @@ import (
 	"fmt"
 	"io"
 	"net/url"
+	"strings"
 
 	"github.com/mattwalters/wand/internal/journal"
+	"github.com/mattwalters/wand/internal/linear"
 	"github.com/mattwalters/wand/internal/plan"
 	"github.com/mattwalters/wand/internal/queue"
 	"github.com/mattwalters/wand/internal/run"
+	"github.com/mattwalters/wand/internal/verbs"
 )
 
 // Kind is how a dispatch pass ended, for the caller and the scheduler.
@@ -156,6 +161,17 @@ func (d Deps) selectWinner(ctx context.Context, store *journal.Store) (Winner, b
 	if err != nil {
 		return Winner{}, false, fmt.Errorf("dispatch: reading To Plan: %w", err)
 	}
+	inPlanning, err := d.Board.TeamIssuesByState(ctx, d.TeamKey, d.Cov.StatusName("in_planning"))
+	if err != nil {
+		return Winner{}, false, fmt.Errorf("dispatch: reading In Planning: %w", err)
+	}
+	// A ticket In Planning carrying the re-plan label is one wand sweep has
+	// already handed back for another cycle (verbs.ReturnToPlanning) —
+	// resuming it needs no fresh blessing, unlike a re-review's trip
+	// through Needs Input back to Todo, because the human's comments on
+	// Plan Review already are the answer. One without the label is a live
+	// plan run's own claim and is not a candidate for anything here.
+	toPlan = append(toPlan, rePlanEligible(inPlanning)...)
 
 	winner, ok, todoSkips, toPlanSkips := Select(todo, toPlan, laneFree)
 	for _, s := range append(append([]queue.Skip{}, todoSkips...), toPlanSkips...) {
@@ -165,6 +181,22 @@ func (d Deps) selectWinner(ctx context.Context, store *journal.Store) (Winner, b
 		fmt.Fprintf(d.Out, "dispatch: %d/%d lanes in use; only a To Plan ticket may dispatch\n", used, d.Cov.Caps.Lanes)
 	}
 	return winner, ok, nil
+}
+
+// rePlanEligible filters In Planning issues down to the ones carrying
+// verbs.RePlanLabel — a ticket wand sweep has handed back for another
+// planning cycle, not one a live plan run currently holds.
+func rePlanEligible(issues []linear.Issue) []linear.Issue {
+	var out []linear.Issue
+	for _, issue := range issues {
+		for _, l := range issue.Labels {
+			if strings.EqualFold(l, verbs.RePlanLabel) {
+				out = append(out, issue)
+				break
+			}
+		}
+	}
+	return out
 }
 
 // runWinner hands the winner to the orchestrator it belongs to. An error

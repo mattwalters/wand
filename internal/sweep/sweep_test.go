@@ -13,6 +13,7 @@ import (
 	"github.com/mattwalters/wand/internal/journal"
 	"github.com/mattwalters/wand/internal/linear"
 	"github.com/mattwalters/wand/internal/run"
+	"github.com/mattwalters/wand/internal/verbs"
 )
 
 // fakeBoard is a minimal, mutable stand-in for sweep.Board: enough to drive
@@ -36,6 +37,8 @@ func newFakeBoard() *fakeBoard {
 			{ID: "st-needs-input", Name: "Needs Input", Type: "unstarted"},
 			{ID: "st-in-review", Name: "In Review", Type: "started"},
 			{ID: "st-in-progress", Name: "In Progress", Type: "started"},
+			{ID: "st-in-planning", Name: "In Planning", Type: "started"},
+			{ID: "st-plan-review", Name: "Plan Review", Type: "unstarted"},
 		},
 	}
 }
@@ -169,6 +172,49 @@ func TestExecuteSkipsAReReviewCandidateWhoseLabelWasRemoved(t *testing.T) {
 	// removed the label — resolved in the interim, nothing to do for it.
 	board.addIssue(linear.Issue{ID: "id-1", Identifier: "WND-1", State: linear.IssueState{Name: "In Review", Type: "started"}})
 	board.label[ReReviewLabel] = []linear.Issue{{ID: "id-1", Identifier: "WND-1", CreatedAt: time.Now()}}
+
+	d := baseSweepDeps(t, board, &fakeHub{}, store)
+	res, err := Execute(context.Background(), d, store)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if res.Acted != ActedNothing {
+		t.Fatalf("Acted = %s, want %s: the label was gone by the time sweep acted", res.Acted, ActedNothing)
+	}
+}
+
+// The planning-side twin of TestExecuteReReviewHandsBackAndMovesStatus: a
+// re-plan label hands the ticket back the same way, aimed at In Planning
+// instead of Needs Input.
+func TestExecuteRePlanHandsBackAndMovesStatus(t *testing.T) {
+	store := newSweepStore(t)
+	board := newFakeBoard()
+	board.addIssue(linear.Issue{ID: "id-1", Identifier: "WND-1", State: linear.IssueState{Name: "Plan Review", Type: "unstarted"}, Labels: []string{verbs.RePlanLabel}})
+	board.label[verbs.RePlanLabel] = []linear.Issue{{ID: "id-1", Identifier: "WND-1", State: linear.IssueState{Type: "unstarted"}, CreatedAt: time.Now()}}
+
+	d := baseSweepDeps(t, board, &fakeHub{}, store)
+	res, err := Execute(context.Background(), d, store)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if res.Acted != ActedHandback || res.Candidate.Kind != KindRePlan {
+		t.Fatalf("res = %+v, want a re-plan hand-back", res)
+	}
+	if got := board.issues["WND-1"].State.Name; got != "In Planning" {
+		t.Errorf("issue state = %q, want In Planning", got)
+	}
+	if len(board.comments["WND-1"]) != 1 {
+		t.Errorf("comments = %v, want exactly one", board.comments["WND-1"])
+	}
+}
+
+func TestExecuteSkipsARePlanCandidateWhoseLabelWasRemoved(t *testing.T) {
+	store := newSweepStore(t)
+	board := newFakeBoard()
+	// The read found it labeled; by the time act() re-reads it, the human
+	// removed the label — resolved in the interim, nothing to do for it.
+	board.addIssue(linear.Issue{ID: "id-1", Identifier: "WND-1", State: linear.IssueState{Name: "Plan Review", Type: "unstarted"}})
+	board.label[verbs.RePlanLabel] = []linear.Issue{{ID: "id-1", Identifier: "WND-1", CreatedAt: time.Now()}}
 
 	d := baseSweepDeps(t, board, &fakeHub{}, store)
 	res, err := Execute(context.Background(), d, store)

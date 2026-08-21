@@ -30,15 +30,22 @@ the highest-ranked whose preflight does not refuse it:
 2. **A re-review label.** A human labeled a converged ticket
    `re-review` — another cycle, asked for explicitly. Sweep hands it back
    to a human with a comment naming the label.
-3. **An unresolved thread on a ready-for-human PR.** Necessarily left
+3. **A re-plan label.** The planning-side twin of the above: a human
+   labeled a Plan Review ticket `re-plan` after answering the plan's
+   questions in a comment. Sweep hands it back into In Planning, not Needs
+   Input — the comments already are the answer, so the next `wand plan`
+   pass (or `wand dispatch`, which now treats a re-plan-labeled In Planning
+   ticket the same as a fresh To Plan one) resumes the cycle without a
+   second blessing, reads what was said, and revises the plan in place.
+4. **An unresolved thread on a ready-for-human PR.** Necessarily left
    *after* convergence: `wand run`'s own check for this runs only at the
    moment of converging, so a human review posted afterward is exactly
    what nothing else catches. Sweep hands the ticket back, quoting the
    thread count and the PR.
 
-Ranked by severity, then oldest first: a dead lease before a re-review
-before an unresolved thread, because a zombie is the one state actively
-lying about itself on the board. A candidate whose preflight refuses it —
+Ranked by severity, then oldest first: a dead lease before a re-review or a
+re-plan before an unresolved thread, because a zombie is the one state
+actively lying about itself on the board. A candidate whose preflight refuses it —
 resolved in the interim, or the ticket closed — is skipped in the same
 pass, never retried within it, so one unstartable candidate cannot starve
 every other one behind it forever. The next pass re-evaluates everything
@@ -77,6 +84,7 @@ key comes from unless `--team-key` overrides it.
 
 [`wand dispatch`](../dispatch/) is the selector that runs a ticket in the
 first place; [`wand run`](../run/) is where the re-review and
-unresolved-thread conditions originate; the `re-review` label is covenant
-topology, created by [`wand init`](../init/) like `ready-for-human`,
-`human-only` and `parked`.
+unresolved-thread conditions originate, and [`wand plan`](../plan/) is
+where a re-plan cycle reads the comments this hand-back makes possible; the
+`re-review` and `re-plan` labels are covenant topology, created by
+[`wand init`](../init/) like `ready-for-human`, `human-only` and `parked`.

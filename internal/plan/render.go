@@ -5,6 +5,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/mattwalters/wand/internal/verbs"
 )
 
 // The two deliverables, composed pure.
@@ -70,11 +72,37 @@ func OptionsComment(d Draft, scale, statusName string, prov Provenance) string {
 	b.WriteString("## Plan\n\n")
 	b.WriteString(Argument(d, scale))
 	b.WriteString(challengesSection(prov.Challenges))
+	b.WriteString(QuestionsMarkdown(Questions(d)))
 	b.WriteString("\n### Over to you\n\n")
 	fmt.Fprintf(&b, "The plan is in this ticket's description, in the region `wand plan` owns. "+
 		"This ticket is now in %s: promoting it to Todo is what blesses building it, "+
 		"and that is a human's act — an agent does not bless its own plan. "+
-		"If the recommendation is wrong, say so here and plan it again.\n", statusName)
+		"Answer any of the questions above in a comment, then label the ticket `%s` — "+
+		"wand sweep hands it back for a cycle that reads what you said and revises the "+
+		"plan in place. Blessing to Todo with a question left unanswered is a legitimate "+
+		"choice too; the implementer is told it went unanswered.\n", statusName, verbs.RePlanLabel)
+	b.WriteString("\n")
+	b.WriteString(prov.line())
+	return b.String()
+}
+
+// RePlanComment renders the argument for a revised plan: what changed and
+// why, first — the whole point of a re-plan cycle — then the same case
+// OptionsComment makes for a first plan: the reading of the ticket, every
+// approach, the recommendation, what is still open, and the ask. Distinct
+// from OptionsComment because the changes account belongs ahead of the case
+// for a plan a human has already read once, not folded into it.
+func RePlanComment(d Draft, scale, statusName, changes string, prov Provenance) string {
+	var b strings.Builder
+	b.WriteString("## Plan revised\n\n")
+	b.WriteString(strings.TrimSpace(changes))
+	b.WriteString("\n\n")
+	b.WriteString(Argument(d, scale))
+	b.WriteString(QuestionsMarkdown(Questions(d)))
+	b.WriteString("\n### Over to you\n\n")
+	fmt.Fprintf(&b, "The revised plan is in this ticket's description, in the region `wand plan` "+
+		"owns. This ticket is back in %s: promoting it to Todo is what blesses building it. "+
+		"If it still is not right, answer above and label the ticket `%s` again.\n", statusName, verbs.RePlanLabel)
 	b.WriteString("\n")
 	b.WriteString(prov.line())
 	return b.String()
@@ -171,10 +199,22 @@ type Provenance struct {
 	Interview  bool
 	Answers    int
 	Harness    string
+
+	// RePlan marks a re-plan cycle's footer rather than a first plan's —
+	// see [planning.runReplan]. Comments is how many the human left since
+	// the plan being revised, the input [replanPrompt] read instead of a
+	// fresh scout's own research.
+	RePlan   bool
+	Comments int
 }
 
 func (p Provenance) line() string {
-	parts := []string{"drafted by a cold " + p.Harness + " scout"}
+	var parts []string
+	if p.RePlan {
+		parts = append(parts, fmt.Sprintf("revised by a cold %s reviser after %d comment(s) since the last plan", p.Harness, p.Comments))
+	} else {
+		parts = append(parts, "drafted by a cold "+p.Harness+" scout")
+	}
 	switch {
 	case p.Critic && p.Objections > 0:
 		unresolved := p.Objections - len(p.Challenges)

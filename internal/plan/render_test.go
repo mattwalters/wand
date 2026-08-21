@@ -123,6 +123,38 @@ func TestProvenanceSaysWhatArguedWithTheDraft(t *testing.T) {
 	}
 }
 
+// WND-82. The interview's questions go into the review comment now instead
+// of stdin — same questions, same blast-radius order, same verbatim
+// quoting, a different destination: a run with nobody at a desk still puts
+// the questions somewhere a human can answer, asynchronously, in a comment.
+func TestOptionsCommentPostsTheQuestionsInBlastRadiusOrder(t *testing.T) {
+	d := parsedDraft(t)
+	got := plan.OptionsComment(d, "fibonacci", "Plan Review", plan.Provenance{RunID: "r", Harness: "codex"})
+
+	asks := []string{
+		"Is that the problem you want solved?",                                            // the ticket itself
+		"Do you want it done that way?",                                                   // the recommendation
+		"Does that hold? If it does not: Every vet needs a second API call. (high cost).", // the costliest assumption
+		"Do you know the answer, or should the implementer find out?",                     // the open question
+	}
+	var last int
+	for _, want := range asks {
+		idx := strings.Index(got, want)
+		if idx < 0 {
+			t.Fatalf("the review comment does not carry %q:\n%s", want, got)
+		}
+		if idx < last {
+			t.Errorf("%q appears out of blast-radius order in:\n%s", want, got)
+		}
+		last = idx
+	}
+	// The quote each question is asked over is the draft's own words,
+	// verbatim — a paraphrase asks about a claim the draft does not make.
+	if !strings.Contains(got, "Blockers arrive on the issue read.") {
+		t.Errorf("the assumption question does not quote the draft verbatim:\n%s", got)
+	}
+}
+
 // A team that does not estimate gets no estimate section, rather than a
 // heading with nothing under it.
 func TestOptionsCommentOmitsAnEstimateThereIsNone(t *testing.T) {
