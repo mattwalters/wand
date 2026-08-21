@@ -231,9 +231,9 @@ process refuses, locked, exactly as a single-shot pass would.</p>
 the run journal&rsquo;s state directory, one file per child, since the journal
 itself only carries the structured half of that account.</p>
 <p><a href="../ui/"><code>wand ui</code></a>&rsquo;s engage mode (the <code>e</code> key) is this exact mechanism run
-from inside the cockpit instead of a standalone process — the same lock,
-the same lane accounting, the same detached spawn. An engaged cockpit and a
-<code>--watch</code> process, or two engaged cockpits, arbitrate through the one
+from inside home instead of a standalone process — the same lock,
+the same lane accounting, the same detached spawn. An engaged home and a
+<code>--watch</code> process, or two engaged homes, arbitrate through the one
 dispatch lock exactly as two <code>--watch</code> processes would: the loser of a
 pass refuses and no-ops rather than racing the winner&rsquo;s selection.</p>
 <h2 id="exit-codes">Exit codes</h2>

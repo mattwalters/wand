@@ -174,7 +174,7 @@
       
 
 <h1 class="cmd">wand ui</h1>
-<p><code>ui</code> opens wand&rsquo;s cockpit: one screen answering one question — <em>what is
+<p><code>ui</code> opens home: one screen answering one question — <em>what is
 waiting on me?</em></p>
 <p>Bare <code>wand</code>, with a terminal attached and no flags, does the same thing:
 <code>wand</code> and <code>wand ui</code> are equivalent. <code>ui</code> is the explicit spelling — the one
@@ -186,14 +186,14 @@ wand ui --team-key WND [--harness &lt;name&gt;] [--model &lt;m&gt;] [--effort &l
 wand ui --sample
 wand ui --dump-screen [--script KEYS] [--width N] [--height N]
 </code></pre><h2 id="the-five-queues">The five queues</h2>
-<pre tabindex="0"><code> wand cockpit · WND                                             7 waiting on you
+<pre tabindex="0"><code> wand · WND                                                     7 waiting on you
 
   Triage  2 to judge
 › WND-42  Low        doctor prints an empty drift section on a clean board
   WND-41  —          guard: a raw state UUID is not matched
 
   Plan Review  1 to bless
-  WND-44  Urgent     cockpit: a fifth queue for plans awaiting blessing
+  WND-44  Urgent     home: a fifth queue for plans awaiting blessing
 
   Needs Input  1 to answer
   WND-38  High       Second harness adapter: which one?
@@ -255,8 +255,8 @@ stalled run is one that needs you, and a <code>stuck</code> one holds no lane at
 when it drained would teach you to stop looking for it, and the day it
 refilled you would not notice.</p>
 <p><strong>Backlog is deliberately absent.</strong> A Backlog ticket is not waiting on you;
-it is the pool, and browsing a pool is Linear&rsquo;s job, done better there. The
-cockpit shows what has <em>stopped</em>, not what exists.</p>
+it is the pool, and browsing a pool is Linear&rsquo;s job, done better there. Home
+shows what has <em>stopped</em>, not what exists.</p>
 <p><code>enter</code> opens the row under the cursor; <code>r</code> re-reads the whole board. The
 two compose: refreshing while a row is open re-resolves that row against
 what came back, so the key you pressed to get current data cannot be the
@@ -283,10 +283,10 @@ does not read as stale the moment it passes a minute). A harness shown as
 fixing one for the whole run.</p>
 <p><strong>Nothing here is waiting on you</strong>, so nothing here counts toward the
 header&rsquo;s count or takes a cursor: hand-launched <code>wand run</code> and <code>wand plan</code>
-invocations journal identically to an engaged cockpit&rsquo;s own, and appear here
+invocations journal identically to an engaged home&rsquo;s own, and appear here
 identically, whether or not engage mode is on. The strip is read-only and
-disappears entirely when nothing is running — a cockpit nobody has pointed
-at a live run still reads exactly as it did before this existed.</p>
+disappears entirely when nothing is running — a home screen nobody has
+pointed at a live run still reads exactly as it did before this existed.</p>
 <p>A run whose own liveness judgment says its holder is gone reads
 <code>possibly dead, sweep will confirm</code> rather than being dropped or guessed at
 a second time: that judgment is the same one <a href="#the-four-queues">Stalled</a>
@@ -298,7 +298,7 @@ can be both at once until sweep reaps it.</p>
 <h2 id="blessing">Blessing</h2>
 <p>Promoting a ticket to <strong>Todo</strong> or <strong>To Plan</strong> is the transition
 <a href="../guard/"><code>wand guard</code></a> refuses everywhere else, because it hands out
-authorization an agent does not have. The cockpit is the one place a person
+authorization an agent does not have. Home is the one place a person
 grants it — and it is a moment, not a keystroke:</p>
 <pre tabindex="0"><code>  ✦ Blessing
 
@@ -324,7 +324,7 @@ original body, and not the scout&rsquo;s argued-options comment (the approaches 
 weighed, the trade-offs, the estimate): that stays in Linear, one click away
 from a ticket you already have open, and this screen exists to put your
 judgment on the plan itself rather than the argument for it.</p>
-<pre tabindex="0"><code> WND-44  cockpit: a fifth queue for plans awaiting blessing
+<pre tabindex="0"><code> WND-44  home: a fifth queue for plans awaiting blessing
 
   status    Plan Review
   priority  Urgent
@@ -343,7 +343,7 @@ judgment on the plan itself rather than the argument for it.</p>
 
   ### How it is proven
 
-  Golden screens at two widths, plus the existing cockpit test tiers.
+  Golden screens at two widths, plus the existing home test tiers.
   … 8 more lines; read it in Linear
 
   judge  t ✦Todo  b Backlog
@@ -361,7 +361,7 @@ explain — and so the next plan run over this ticket starts from why the last
 one did not land instead of guessing:</p>
 <pre tabindex="0"><code>  Backlog, with reason
 
-    WND-44  cockpit: a fifth queue for plans awaiting blessing
+    WND-44  home: a fifth queue for plans awaiting blessing
     Plan Review → Backlog
 
     Backlog is the pool. The reason is posted as a comment before the status
@@ -459,7 +459,7 @@ through the only screen that can complete it.</p>
 <p>Every status is named by what it <em>means</em>, so a covenant that renames <code>todo</code>
 to <code>Ready</code> gets a screen that says <code>→ Ready</code>.</p>
 <h2 id="engage-mode">Engage mode</h2>
-<p>Press <code>e</code> to engage. While engaged, the cockpit polls Todo and To Plan on
+<p>Press <code>e</code> to engage. While engaged, home polls Todo and To Plan on
 <code>--interval</code> (default <code>1m</code>) exactly the way <code>wand dispatch --watch</code> (see
 <a href="../dispatch/"><code>wand dispatch</code></a>) does — because it <em>is</em> that mechanism,
 reused rather than reimplemented: each poll runs a sweep pass first — the
@@ -468,32 +468,32 @@ back a re-plan or re-review label, or draining an unresolved PR thread on a
 converged ticket, then counts lanes, ranks and vets Todo and To Plan, and
 when a winner exists spawns it as a <strong>detached child process</strong> through
 <code>wand run</code> or <code>wand scope</code>, the same way <code>--watch</code> does. That child
-survives the cockpit: closing the UI, or the whole terminal it runs in,
+survives home: closing the UI, or the whole terminal it runs in,
 never kills work already spawned. Press <code>e</code> again to disengage.</p>
 <p>The header names what engage mode is doing:</p>
-<pre tabindex="0"><code> wand cockpit · WND                                             7 waiting on you
+<pre tabindex="0"><code> wand · WND                                                     7 waiting on you
   engaged · idle · next poll in 40s
-</code></pre><pre tabindex="0"><code> wand cockpit · WND                                             7 waiting on you
+</code></pre><pre tabindex="0"><code> wand · WND                                                     7 waiting on you
   engaged · dispatched WND-9 (run) · next poll in 60s
-</code></pre><pre tabindex="0"><code> wand cockpit · WND                                             7 waiting on you
+</code></pre><pre tabindex="0"><code> wand · WND                                                     7 waiting on you
   engaged · reaped WND-1 · next poll in 60s
 </code></pre><p>A tick that both swept and dispatched reads as one line: <code>engaged · reaped WND-1, dispatched WND-9 (run) · next poll in 60s</code>.</p>
 <p><strong>Engaging is always a deliberate key press, never a default.</strong> Bare
-<code>wand</code> opens the cockpit read-for-work but never pre-engaged — opening a
+<code>wand</code> opens home read-for-work but never pre-engaged — opening a
 dashboard must not start spending money. Nothing engages it for you.</p>
-<p><strong>Multiple engaged cockpits, and an engaged cockpit alongside a standalone
+<p><strong>Multiple engaged homes, and an engaged home alongside a standalone
 <code>wand dispatch</code>, are all safe together.</strong> Engaging acquires the same
 per-repo dispatch lock <code>wand dispatch</code> itself arbitrates: the loser of a
 pass — whichever process asks for the lock second — simply cannot toggle
-on, and the <code>e</code> key says why. Disengaging, or quitting the cockpit while
+on, and the <code>e</code> key says why. Disengaging, or quitting home while
 engaged, releases the lock; a killed terminal releases it the same way
 <code>--watch</code> does, through the lock&rsquo;s own dead-holder reclaim rather than
-through any code in the cockpit.</p>
+through any code in home.</p>
 <p>Engage mode needs the same dependencies <code>wand dispatch</code> needs to run a
 winner — <code>LINEAR_API_KEY</code>, an authenticated <code>gh</code>, <code>commands.verify</code> in
 <code>wand.toml</code>, and a resolvable team key — plus whichever of <code>--harness</code>,
 <code>--model</code> and <code>--effort</code> you want a spawned winner to run with. Missing any
-of them does not stop the cockpit from opening: it opens exactly as it
+of them does not stop home from opening: it opens exactly as it
 always has, read and judge still work, and only the <code>e</code> key refuses, saying
 why.</p>
 <p><code>wand dispatch</code>&rsquo;s own conformance gate, wherever it lands, applies here
@@ -501,8 +501,8 @@ unchanged — engage mode selects a winner through the same <code>dispatch.Selec
 every standalone pass uses, so a gate placed there covers both without
 engage mode needing its own copy of it.</p>
 <p>Left out, deliberately: engage mode does not act on the <code>parked</code> label — a
-parked lane is a decision only a human at the cockpit makes, by pressing
-<code>c</code>, and an engaged cockpit is by definition in front of a person who can
+parked lane is a decision only a human at home makes, by pressing
+<code>c</code>, and an engaged home is by definition in front of a person who can
 press it. The poll interval is a flag, not a covenant parameter; that
 remains a natural extension if engage mode earns it.</p>
 <h2 id="looking-at-the-interface-without-a-terminal">Looking at the interface without a terminal</h2>
@@ -628,7 +628,7 @@ whatever width the window happens to be.</p>
 	<tbody>
 			<tr>
 					<td><code>0</code></td>
-					<td>The cockpit exited cleanly, or the screen was printed.</td>
+					<td>Home exited cleanly, or the screen was printed.</td>
 			</tr>
 			<tr>
 					<td><code>1</code></td>

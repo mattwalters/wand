@@ -177,14 +177,14 @@
 from the command definitions, not from memory: flags, help text and exit
 codes match what the binary does.</p>
 <p>There is no standalone <code>bless</code> page, because promoting a ticket is a human
-act with a human door: it lives in the cockpit, <a href="../ui/"><code>wand ui</code></a>. A
+act with a human door: it lives in home, <a href="../ui/"><code>wand ui</code></a>. A
 one-shot CLI verb that promoted a ticket to Todo would be a verb an agent
 could call, which is the whole thing the guard exists to prevent.
 <a href="../pm/"><code>wand pm bless</code></a> is not that verb: it never sets a guarded status,
 only files a validated, human-reviewed proposal into Triage — the same
 status <a href="../file/"><code>wand file</code></a> already lands an agent&rsquo;s own findings in —
 so it is documented on <code>pm</code>&rsquo;s own page rather than getting one of its own.</p>
-<p>Bare <code>wand</code>, with a terminal attached, opens that same cockpit — it is what
+<p>Bare <code>wand</code>, with a terminal attached, opens that same home screen — it is what
 typing the tool&rsquo;s name gets you. <code>wand help</code> is the documented way to get
 help instead; <code>wand --help</code> and <code>-h</code> work everywhere they always did.
 Without a terminal (a pipe, a script, CI), bare <code>wand</code> falls back to the
@@ -266,7 +266,7 @@ vocabulary — a scheduler&rsquo;s whole view of a pass is a status and a log.</
   <dd>Aggregate reports over the run journal — token velocity, per-harness x per-phase, convergence, and per-ticket totals.</dd>
   
   <dt><a href="../../docs/commands/ui/"><code>wand ui</code></a></dt>
-  <dd>The cockpit — everything waiting on a human, and the one place blessing happens.</dd>
+  <dd>Home — everything waiting on a human, and the one place blessing happens.</dd>
   
   <dt><a href="../../docs/commands/version/"><code>wand version</code></a></dt>
   <dd>Report the build and the covenant schema this binary speaks.</dd>
