@@ -54,7 +54,13 @@ and should feel like one.
    spawned through a small adapter interface (spawn, prompt, handoff,
    isolation), so different agent CLIs can run the same lifecycle under the
    same guardrails — which also makes results comparable across them.
-   Everything else stays opinionated.
+   Everything else stays opinionated. What a *particular* harness says about
+   itself — its token accounting, its own verdict on why a turn ended —
+   arrives through optional interfaces an adapter may implement, and every
+   one of them fails soft: an adapter that cannot answer leaves the
+   orchestrator exactly where it was without one. That is what keeps the
+   seam generic while still letting the orchestrator act on what only a
+   harness can know.
 
 ## How rules are enforced
 
@@ -157,7 +163,10 @@ by vigilance:
   people and are invisible unless surfaced. Answer: that is the cockpit's
   entire job — and, for parks specifically, the board's too. A park writes
   its reason to the ticket and marks it `parked`, because a queue you have
-  to run a command to see is one you find out about an hour late.
+  to run a command to see is one you find out about an hour late. The
+  cheapest park is the one that never happens: a failure the harness itself
+  blames on infrastructure retries instead, so a closed laptop lid does not
+  become a queue entry at all.
 
 ## Risks worth naming
 

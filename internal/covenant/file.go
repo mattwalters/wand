@@ -90,11 +90,18 @@ func (s FileStatuses) overrides() map[string]string {
 
 // FileCaps are the run-loop limits. Zero means unset; an explicit zero or a
 // negative is refused, because a cap of nothing is a request to loop forever.
+//
+// WorkerRetries is the one exception, and a pointer for the same reason
+// FileToggles are: it bounds *extra* attempts on top of the one spawn every
+// phase gets, so zero is not "loop forever" but "never retry" — a coherent
+// answer, and the behavior wand had before retries existed. A pointer is
+// what keeps that answer distinguishable from not mentioning the key.
 type FileCaps struct {
-	ReviewRounds         int `toml:"review_rounds"`
-	CIAttempts           int `toml:"ci_attempts"`
-	WorkerTimeoutMinutes int `toml:"worker_timeout_minutes"`
-	Lanes                int `toml:"lanes"`
+	ReviewRounds         int  `toml:"review_rounds"`
+	CIAttempts           int  `toml:"ci_attempts"`
+	WorkerTimeoutMinutes int  `toml:"worker_timeout_minutes"`
+	Lanes                int  `toml:"lanes"`
+	WorkerRetries        *int `toml:"worker_retries"`
 }
 
 // FileEstimates carries the estimate scale, in Linear's own vocabulary.
@@ -222,6 +229,12 @@ func validateCaps(md toml.MetaData, c FileCaps) error {
 			return fmt.Errorf("caps.%s must be at least 1, got %d — a cap of nothing is a request to loop forever", key, v)
 		}
 	}
+	// Not folded into the loop above: this cap counts retries rather than
+	// attempts, so its floor is zero — "never retry" — and only a negative
+	// is meaningless.
+	if c.WorkerRetries != nil && *c.WorkerRetries < 0 {
+		return fmt.Errorf("caps.worker_retries must be at least 0, got %d — 0 means never retry", *c.WorkerRetries)
+	}
 	return nil
 }
 
@@ -278,6 +291,9 @@ func (f File) Covenant() Covenant {
 	}
 	if f.Caps.Lanes > 0 {
 		cov.Caps.Lanes = f.Caps.Lanes
+	}
+	if f.Caps.WorkerRetries != nil {
+		cov.Caps.WorkerRetries = *f.Caps.WorkerRetries
 	}
 	if f.Toggles.ScopeInterview != nil {
 		cov.Toggles.ScopeInterview = *f.Toggles.ScopeInterview

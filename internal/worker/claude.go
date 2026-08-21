@@ -109,3 +109,47 @@ func (c ClaudeCode) ParseUsage(output string) *Usage {
 	}
 	return nil
 }
+
+// claudeAPIErrorReason is the value claude -p puts in terminal_reason when
+// its own turn ended on a provider or transport failure rather than on the
+// work. Recorded from a live park, not guessed: run
+// WND-68-20260820T101039Z ended an implement phase with
+//
+//	"terminal_reason":"api_error","subtype":"success","api_error_status":null,
+//	"result":"API Error: Your computer went to sleep mid-response. …"
+//
+// after 1.19M input tokens. The laptop had suspended. Nothing about that
+// says anything about the ticket.
+const claudeAPIErrorReason = "api_error"
+
+// Transient reports whether claude -p's own JSON result blamed the failure
+// on infrastructure. It reads the same result line ParseUsage does, with
+// the same discipline — scan line by line, skip anything that does not
+// parse, never treat the whole tail as one document — because stderr
+// shares the captured Tail and can land beside the JSON.
+//
+// Only terminal_reason is consulted. The prose in "result" is a
+// human-facing sentence that changes freely between releases; matching on
+// it would be a string-compare against a changelog. A tail with no
+// recognizable result line yields false: not transient, so the caller
+// parks. That is the pre-existing behavior, which is what makes a parse
+// miss safe.
+func (c ClaudeCode) Transient(res Result) bool {
+	for _, line := range strings.Split(res.Output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || line[0] != '{' {
+			continue
+		}
+		var r struct {
+			Type           string `json:"type"`
+			TerminalReason string `json:"terminal_reason"`
+		}
+		if err := json.Unmarshal([]byte(line), &r); err != nil {
+			continue
+		}
+		if r.Type == "result" && r.TerminalReason == claudeAPIErrorReason {
+			return true
+		}
+	}
+	return false
+}

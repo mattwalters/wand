@@ -226,6 +226,25 @@ type phaseDetail struct {
 	TokensIn  *int64 `json:"tokens_in,omitempty"`
 	TokensOut *int64 `json:"tokens_out,omitempty"`
 	WallClock string `json:"wall_clock,omitempty"`
+	// Attempt is which spawn of this phase this record ends, counting from
+	// 1; above 1 only after a transient failure was retried.
+	Attempt int `json:"attempt,omitempty"`
+	// Transient is what the adapter made of a failure: true when the
+	// harness itself reported infrastructure rather than the work.
+	Transient bool `json:"transient,omitempty"`
+}
+
+// retryNote is the detail on the journal note a transient failure writes —
+// see the run package's twin. Written whether or not the retry happens.
+type retryNote struct {
+	Phase   string `json:"phase"`
+	Round   int    `json:"round"`
+	Attempt int    `json:"attempt"`
+	Retries int    `json:"retries"`
+	Error   string `json:"error"`
+	// Tree says why the untouched-checkout check refused the retry;
+	// absent when the checkout was not what stopped it.
+	Tree string `json:"tree,omitempty"`
 }
 
 // journalTail bounds the output tail a journal record keeps.
@@ -474,59 +493,129 @@ func (s *scoping) write(ctx context.Context, draft Draft) Outcome {
 // work journals a phase, spawns its worker, and journals what came back. A
 // worker failure — no handoff, a timeout, a spawn error — parks: without
 // the report there is nothing to tell a crash from a success.
+//
+// The one exception is a failure the harness itself reported as
+// infrastructure rather than as anything about the research (see
+// [worker.Retryable]), which respawns the scout up to Caps.WorkerRetries
+// times at the same round. A scout costs a whole model call and produces
+// nothing until it hands off, so a provider error is the most expensive
+// possible thing to treat as a verdict.
 func (s *scoping) work(ctx context.Context, phase string, round int, rules []string, prompt string) (worker.Result, *Outcome) {
-	fmt.Fprintf(s.d.Out, "phase %s: spawning a cold worker (%s)\n", phase, s.d.Harness)
-	if err := s.r.StartPhase(phase, round); err != nil {
-		// An unjournaled phase must not run; that is the journal's one rule.
-		return worker.Result{}, s.park(ctx, fmt.Sprintf("could not journal phase %s: %v", phase, err))
+	for attempt := 0; ; attempt++ {
+		if attempt == 0 {
+			fmt.Fprintf(s.d.Out, "phase %s: spawning a cold worker (%s)\n", phase, s.d.Harness)
+		} else {
+			fmt.Fprintf(s.d.Out, "phase %s: respawning a cold worker (%s), retry %d of %d\n",
+				phase, s.d.Harness, attempt, s.d.Cov.Caps.WorkerRetries)
+		}
+		if err := s.r.StartPhase(phase, round); err != nil {
+			// An unjournaled phase must not run; that is the journal's one rule.
+			return worker.Result{}, s.park(ctx, fmt.Sprintf("could not journal phase %s: %v", phase, err))
+		}
+		// Built after StartPhase, every time round: HandoffPath is named
+		// for the journal's *open* phase and round, so a spec built before
+		// the phase opened would point the scout at the previous phase's
+		// handoff file.
+		spec := worker.Spec{
+			Mode:        phase + " (read-only research; no worktree, no branch, no CI)",
+			Rules:       rules,
+			Prompt:      prompt,
+			Dir:         s.d.Repo,
+			ScratchDir:  s.r.ScratchDir(),
+			HandoffPath: s.r.HandoffPath(),
+			Timeout:     s.d.Cov.Caps.WorkerTimeout,
+			Model:       s.d.Model,
+			Effort:      s.d.Effort,
+			Out:         s.d.Out,
+			Label:       fmt.Sprintf("%s round %d", phase, round),
+			OnHeartbeat: s.heartbeat(phase, round),
+		}
+		start := time.Now()
+		res, err := s.d.Workers.Run(ctx, spec)
+		elapsed := time.Since(start)
+		detail := phaseDetail{
+			ExitCode:  res.ExitCode,
+			TimedOut:  res.TimedOut,
+			Handoff:   res.Handoff != nil,
+			Harness:   s.d.Harness,
+			Model:     s.d.Model,
+			WallClock: elapsed.String(),
+			Attempt:   attempt + 1,
+		}
+		if res.Usage != nil {
+			detail.TokensIn = res.Usage.InputTokens
+			detail.TokensOut = res.Usage.OutputTokens
+		}
+		if err != nil {
+			detail.Error = err.Error()
+			detail.OutputTail = tailOf(res.Output)
+			detail.Transient = res.Transient
+		}
+		if jerr := s.r.EndPhase(detail); jerr != nil {
+			return res, s.park(ctx, fmt.Sprintf("could not journal the end of phase %s: %v", phase, jerr))
+		}
+		if ctx.Err() != nil {
+			// Load-bearing even though park re-derives the same sentence: a
+			// worker that returned cleanly just as the cancel landed has a nil
+			// err, and falling through would report success for a run the
+			// operator already stopped.
+			return res, s.park(ctx, context.Cause(ctx).Error())
+		}
+		if err == nil {
+			return res, nil
+		}
+		if !s.mayRetry(ctx, phase, round, attempt, res, err) {
+			return res, s.park(ctx, fmt.Sprintf("the %s worker failed: %v", phase, err))
+		}
 	}
-	spec := worker.Spec{
-		Mode:        phase + " (read-only research; no worktree, no branch, no CI)",
-		Rules:       rules,
-		Prompt:      prompt,
-		Dir:         s.d.Repo,
-		ScratchDir:  s.r.ScratchDir(),
-		HandoffPath: s.r.HandoffPath(),
-		Timeout:     s.d.Cov.Caps.WorkerTimeout,
-		Model:       s.d.Model,
-		Effort:      s.d.Effort,
-		Out:         s.d.Out,
-		Label:       fmt.Sprintf("%s round %d", phase, round),
-		OnHeartbeat: s.heartbeat(phase, round),
+}
+
+// mayRetry decides whether a failed phase gets another scout, and says so in
+// both the journal and the narration either way. [worker.Retryable] answers
+// "was this failure about the work"; everything here is about whether
+// retrying is safe in this repository.
+//
+// The safety check is scope's own: a scout is told to read, not write, and
+// s.d.Repo is usually a person's own checkout rather than a worktree this
+// run owns. If a dying scout left a change behind, requireUntouched is
+// going to park and hand that checkout back to its owner — so respawning a
+// second scout into it first would be writing more into a directory
+// somebody is about to be asked to look at. A status git cannot read counts
+// as changed: an unknown checkout is not an untouched one.
+func (s *scoping) mayRetry(ctx context.Context, phase string, round, attempt int, res worker.Result, err error) bool {
+	if !worker.Retryable(res, err, ctx.Err() != nil) {
+		return false
 	}
-	start := time.Now()
-	res, err := s.d.Workers.Run(ctx, spec)
-	elapsed := time.Since(start)
-	detail := phaseDetail{
-		ExitCode:  res.ExitCode,
-		TimedOut:  res.TimedOut,
-		Handoff:   res.Handoff != nil,
-		Harness:   s.d.Harness,
-		Model:     s.d.Model,
-		WallClock: elapsed.String(),
+	left := s.d.Cov.Caps.WorkerRetries - attempt
+	if left <= 0 {
+		fmt.Fprintf(s.d.Out, "phase %s: the harness called this failure infrastructure, but %d retries are already spent; parking\n",
+			phase, s.d.Cov.Caps.WorkerRetries)
+		s.note("transient worker failure, out of retries", retryNote{
+			Phase: phase, Round: round, Attempt: attempt + 1,
+			Retries: s.d.Cov.Caps.WorkerRetries, Error: err.Error(),
+		})
+		return false
 	}
-	if res.Usage != nil {
-		detail.TokensIn = res.Usage.InputTokens
-		detail.TokensOut = res.Usage.OutputTokens
+	after, serr := s.d.Tree.Status(ctx, s.d.Repo)
+	if serr != nil || after != s.treeBefore {
+		why := "the checkout is no longer as the scout found it"
+		if serr != nil {
+			why = fmt.Sprintf("the checkout could not be read (%v)", serr)
+		}
+		fmt.Fprintf(s.d.Out, "phase %s: the harness called this failure infrastructure, but %s, so nothing is respawned into %s; parking\n",
+			phase, why, s.d.Repo)
+		s.note("transient worker failure, checkout not untouched", retryNote{
+			Phase: phase, Round: round, Attempt: attempt + 1,
+			Retries: s.d.Cov.Caps.WorkerRetries, Error: err.Error(), Tree: why,
+		})
+		return false
 	}
-	if err != nil {
-		detail.Error = err.Error()
-		detail.OutputTail = tailOf(res.Output)
-	}
-	if jerr := s.r.EndPhase(detail); jerr != nil {
-		return res, s.park(ctx, fmt.Sprintf("could not journal the end of phase %s: %v", phase, jerr))
-	}
-	if ctx.Err() != nil {
-		// Load-bearing even though park re-derives the same sentence: a
-		// worker that returned cleanly just as the cancel landed has a nil
-		// err, and falling through would report success for a run the
-		// operator already stopped.
-		return res, s.park(ctx, context.Cause(ctx).Error())
-	}
-	if err != nil {
-		return res, s.park(ctx, fmt.Sprintf("the %s worker failed: %v", phase, err))
-	}
-	return res, nil
+	fmt.Fprintf(s.d.Out, "phase %s: the harness reported infrastructure, not the research; retrying (%d left)\n", phase, left)
+	s.note("transient worker failure, retrying", retryNote{
+		Phase: phase, Round: round, Attempt: attempt + 1,
+		Retries: s.d.Cov.Caps.WorkerRetries, Error: err.Error(),
+	})
+	return true
 }
 
 // heartbeat returns the worker.Spec.OnHeartbeat callback for one phase: a

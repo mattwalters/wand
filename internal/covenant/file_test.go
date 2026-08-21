@@ -23,6 +23,7 @@ needs_input = "Waiting on Human"
 review_rounds = 5
 ci_attempts = 2
 worker_timeout_minutes = 45
+worker_retries = 2
 
 [estimates]
 scale = "linear"
@@ -65,7 +66,7 @@ func TestParseFullFile(t *testing.T) {
 		t.Errorf("in_progress = %q, want the stock name kept", byKey["in_progress"])
 	}
 
-	want := Caps{ReviewRounds: 5, CIAttempts: 2, WorkerTimeout: 45 * time.Minute, Lanes: 1}
+	want := Caps{ReviewRounds: 5, CIAttempts: 2, WorkerTimeout: 45 * time.Minute, Lanes: 1, WorkerRetries: 2}
 	if cov.Caps != want {
 		t.Errorf("Caps = %+v, want %+v", cov.Caps, want)
 	}
@@ -146,6 +147,7 @@ func TestParseRefuses(t *testing.T) {
 		{"unknown estimate scale", "schema = 1\n[estimates]\nscale = \"points\"\n", "estimates.scale"},
 		{"cap of zero", "schema = 1\n[caps]\nreview_rounds = 0\n", "caps.review_rounds"},
 		{"negative cap", "schema = 1\n[caps]\nworker_timeout_minutes = -5\n", "caps.worker_timeout_minutes"},
+		{"negative retries", "schema = 1\n[caps]\nworker_retries = -1\n", "caps.worker_retries"},
 		{"empty status name", "schema = 1\n[statuses]\ntodo = \"\"\n", "statuses.todo"},
 		{"colliding status names", "schema = 1\n[statuses]\ntodo = \"Backlog\"\n", `share the name "Backlog"`},
 		{"empty command", "schema = 1\n[commands]\nverify = \"\"\n", "commands.verify"},
@@ -239,5 +241,30 @@ func TestRepoCovenantFileIsLoadable(t *testing.T) {
 	}
 	if teamKey != "WND" {
 		t.Errorf("teamKey = %q, want %q", teamKey, "WND")
+	}
+}
+
+// worker_retries is the one cap whose floor is zero, and zero is a real
+// answer rather than an unset one: "never retry a worker", which is what
+// wand did before retries existed. An int would make that answer
+// indistinguishable from not writing the key, so FileCaps holds a pointer —
+// this is the test that keeps it one.
+func TestWorkerRetriesZeroIsAnAnswer(t *testing.T) {
+	f, err := Parse([]byte("schema = 1\n[caps]\nworker_retries = 0\n"))
+	if err != nil {
+		t.Fatalf("Parse rejected an explicit zero: %v", err)
+	}
+	if got := f.Covenant().Caps.WorkerRetries; got != 0 {
+		t.Errorf("worker_retries = 0 produced %d; an explicit zero must survive, not fall back to the default", got)
+	}
+
+	// And the other direction: silence keeps the stock default, so a repo
+	// that never mentions the key still gets one retry.
+	silent, err := Parse([]byte("schema = 1\n"))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if got, want := silent.Covenant().Caps.WorkerRetries, Default().Caps.WorkerRetries; got != want {
+		t.Errorf("an unset worker_retries = %d, want the default %d", got, want)
 	}
 }

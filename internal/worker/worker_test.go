@@ -470,3 +470,74 @@ func splitLines(s string) []string {
 	}
 	return out
 }
+
+// transientAdapter is an shAdapter that also answers the transience
+// question, with a canned verdict. It exists to prove the wiring — that Run
+// asks an adapter that implements the interface, and does not invent an
+// answer for one that does not.
+type transientAdapter struct {
+	shAdapter
+	verdict bool
+	asked   bool
+}
+
+func (a *transientAdapter) Transient(res worker.Result) bool {
+	a.asked = true
+	return a.verdict
+}
+
+func TestRunAsksTheAdapterAboutTransience(t *testing.T) {
+	a := &transientAdapter{shAdapter: shAdapter{script: "exit 3"}, verdict: true}
+	res, err := worker.Run(context.Background(), a, specFor(t))
+	if err == nil {
+		t.Fatal("Run reported success for a worker that handed nothing off")
+	}
+	if !a.asked {
+		t.Error("Run never asked the adapter; a TransienceAdapter that is not consulted is not wired in")
+	}
+	if !res.Transient {
+		t.Error("Result.Transient = false, want the adapter's verdict carried back to the caller")
+	}
+}
+
+// The fail-soft direction, and the one that matters: an adapter with no
+// opinion leaves Transient false, so every caller parks exactly as it did
+// before this interface existed.
+func TestRunTransienceAbsentWithoutTheInterface(t *testing.T) {
+	res, err := worker.Run(context.Background(), &shAdapter{script: "exit 3"}, specFor(t))
+	if err == nil {
+		t.Fatal("Run reported success for a worker that handed nothing off")
+	}
+	if res.Transient {
+		t.Error("Result.Transient = true from an adapter that cannot answer; absent must mean not transient")
+	}
+}
+
+// Retryable is the whole "is this worth another try" policy, so the table is
+// the specification. Each false is a decision with a reason, stated in the
+// name.
+func TestRetryable(t *testing.T) {
+	boom := errors.New("worker: claude-code exited 1 without a usable handoff")
+
+	cases := []struct {
+		name        string
+		res         worker.Result
+		err         error
+		interrupted bool
+		want        bool
+	}{
+		{"a transient failure is the whole point", worker.Result{Transient: true}, boom, false, true},
+		{"no error is not a failure", worker.Result{Transient: true}, nil, false, false},
+		{"an interrupt is a person saying stop", worker.Result{Transient: true}, boom, true, false},
+		{"a timeout is ambiguous, and a retry costs another whole one", worker.Result{Transient: true, TimedOut: true}, boom, false, false},
+		{"a failure the harness did not call infrastructure might be the work", worker.Result{}, boom, false, false},
+		{"an interrupt during a timeout is still an interrupt", worker.Result{Transient: true, TimedOut: true}, boom, true, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := worker.Retryable(tc.res, tc.err, tc.interrupted); got != tc.want {
+				t.Errorf("Retryable = %v, want %v", got, tc.want)
+			}
+		})
+	}
+}

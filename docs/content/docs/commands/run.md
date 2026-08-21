@@ -97,6 +97,39 @@ nothing to do with the ticket, like a host that slept mid-phase — so the
 ticket keeps its place and its blessing. Remove the label once you have
 looked and the ticket is dispatchable again.
 
+### The failure that retries instead
+
+A host that sleeps mid-phase is the one failure that does not park on the
+first try. When the harness's own report says the failure was
+infrastructure — a provider error, a suspended machine — the phase respawns
+a fresh cold worker, up to `caps.worker_retries` times (one by default; set
+it to `0` to switch retries off entirely). Past the cap the run parks,
+carrying the worker's original error rather than anything about the retry.
+
+Four rules keep that narrow:
+
+- **Only the harness's own verdict counts.** Recognising a transient
+  failure means reading a specific harness's output, so it lives with the
+  adapter, behind an optional interface. A harness that does not implement
+  it, or output nothing recognised, means "not transient" and the run parks
+  exactly as it did before. The failure is always toward parking.
+- **The retry reuses its round.** A retried `implement` is still round 1,
+  journaled as a second attempt with a note saying why. Bumping the round
+  would spend `caps.review_rounds` or `caps.ci_attempts` budget on a closed
+  laptop lid.
+- **Timeouts are not retried.** A timeout cannot tell a wedged worker from
+  a job genuinely bigger than the cap, and on either reading a respawn buys
+  another full timeout for nothing.
+- **Interrupts are never retried.** ctrl-c means stop, whatever the harness
+  printed on its way down.
+
+And a retry only ever happens into a clean tree. Work phases commit, so a
+worker that died mid-edit leaves uncommitted changes — work at risk, which
+is what parking preserves. Respawning into it would write a second worker's
+edits over the first one's half-finished ones in a tree nobody has looked
+at. A tree git cannot read counts as dirty: an unknown tree is not a clean
+one.
+
 A later run of the same ticket resumes its branch: a preserved worktree
 that is clean (everything committed on the branch) is removed and replaced;
 one holding uncommitted work makes the new run refuse, naming the old
@@ -153,9 +186,9 @@ exiting.
   start without it, because it cannot tell green from red.
 - Run from inside the repository the ticket is about.
 
-The caps come from the covenant: `caps.review_rounds`, `caps.ci_attempts`
-and `caps.worker_timeout_minutes`, with the stock values applying absent a
-covenant file.
+The caps come from the covenant: `caps.review_rounds`, `caps.ci_attempts`,
+`caps.worker_timeout_minutes` and `caps.worker_retries`, with the stock
+values applying absent a covenant file.
 
 ## Examples
 

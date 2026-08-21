@@ -237,12 +237,25 @@ rather than evidence — a round cap quietly running out, a crashed
 reviewer, a review thread outdated by a partial revision. Under the
 covenant, terminal success is reached only on positive evidence;
 exhaustion is a hand-back that says so. A cap set to zero is refused
-outright, because a cap of nothing is a request to loop forever.
+outright, because a cap of nothing is a request to loop forever — with the
+single exception of `caps.worker_retries`, below, which counts retries
+rather than attempts and so has a meaningful zero.
 
 `caps.lanes` (default `1`) is a different kind of limit: how many
 `wand run` loops [`wand dispatch`](../commands/dispatch/) runs against this
 repository at once. A Scoping ticket never counts against it — research
 needs no lane — so raising it only ever buys more concurrent building.
+
+`caps.worker_retries` (default `1`) is the one cap whose floor is zero, and
+the one whose zero is a real answer rather than a refusal. It counts
+*retries* rather than attempts: every phase gets its one worker regardless,
+and this is how many extra times that phase may respawn after a failure the
+harness itself reported as infrastructure — a provider error, a host that
+suspended mid-response. So `0` does not mean "loop forever"; it means
+"never retry", which is what wand did before the cap existed. Nothing else
+is ever retried: a failure that might be about the work, a timeout, and an
+interrupt all park on the first attempt. See
+[`wand run`](../commands/run/) for the rules that keep it narrow.
 
 ## Toggles
 

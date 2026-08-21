@@ -197,6 +197,25 @@ journaled, the ticket gets the same sentence as a comment and the `parked`
 label, best-effort: a scope never owns its ticket's status, so the mark is
 a label and the ticket stays in Scoping where a human put it.
 
+### The failure that retries instead
+
+A scout that died of infrastructure — a provider error, a host suspended
+mid-response — does not park on the first try. When the harness's own
+report says the failure was about the machine rather than the research, the
+phase respawns a fresh cold scout, up to `caps.worker_retries` times (one by
+default; `0` switches it off). A scout costs a whole model call and produces
+nothing at all until it hands off, so a provider error is the most
+expensive possible thing to mistake for a verdict.
+
+The rules are [`wand run`](../run/)'s, with one that is scope's own: no
+retry ever happens into a checkout the scout changed. `scope` reads the
+repository you ran it in — usually your own working copy, not a worktree the
+run owns — so a stray edit is about to be handed back to you untouched.
+Respawning a second scout into it first would write more into a directory
+you are about to be asked to look at. Timeouts and interrupts are not
+retried either, and a harness that cannot report transience parks exactly as
+before.
+
 ## Requirements
 
 `LINEAR_API_KEY` in the environment, the harness on `PATH`, and a git
