@@ -38,6 +38,14 @@ type board struct {
 	failEstimate bool
 	failState    bool
 	failLabel    bool
+
+	// claimed marks whether the first StateID write — plan.Execute's claim
+	// into In Planning, mirroring run's claim-before-filesystem ordering —
+	// has already happened. It is logged distinctly ("claim:state=...")
+	// so the many tests asserting the *rest* of a run's writes do not have
+	// to repeat the claim in every want list; TestPlanClaimsInPlanning
+	// checks the claim itself.
+	claimed bool
 }
 
 func (b *board) log(call string) { b.calls = append(b.calls, call) }
@@ -53,8 +61,9 @@ func (b *board) IssueComments(ctx context.Context, issueID string) ([]linear.Com
 func (b *board) TeamStates(ctx context.Context, teamID string) ([]linear.WorkflowState, error) {
 	return []linear.WorkflowState{
 		{ID: "state-needs-input", Name: "Needs Input", Type: "unstarted"},
-		{ID: "state-scoping", Name: "Scoping", Type: "unstarted"},
-		{ID: "state-scoped", Name: "Scoped", Type: "unstarted"},
+		{ID: "state-to-plan", Name: "To Plan", Type: "unstarted"},
+		{ID: "state-in-planning", Name: "In Planning", Type: "started"},
+		{ID: "state-plan-review", Name: "Plan Review", Type: "unstarted"},
 	}, nil
 }
 
@@ -84,11 +93,11 @@ func (b *board) CreateComment(ctx context.Context, issueID, body string) error {
 const parkedCommentPrefix = "**This run parked.**"
 
 // deliverables is everything the scout wrote as a plan — plan, options,
-// estimate, status — with the park report filtered out.
+// estimate, status — with the park report and the entry claim filtered out.
 func (b *board) deliverables() []string {
 	var out []string
 	for _, c := range b.calls {
-		if strings.HasPrefix(c, "park:") {
+		if strings.HasPrefix(c, "park:") || strings.HasPrefix(c, "claim:") {
 			continue
 		}
 		out = append(out, c)
@@ -107,6 +116,16 @@ func (b *board) UpdateIssue(ctx context.Context, issueID string, u linear.IssueU
 	case u.StateID != "":
 		if b.failState {
 			return fmt.Errorf("linear is down")
+		}
+		// The very first status write of a run is plan.Execute's claim
+		// into In Planning — logged distinctly so it reads apart from the
+		// terminal status move a run may make later, the same ticket's
+		// two status writes otherwise being indistinguishable in this log.
+		if !b.claimed {
+			b.claimed = true
+			b.log("claim:state=" + u.StateID)
+			b.stateID = u.StateID
+			return nil
 		}
 		b.log("state=" + u.StateID)
 		b.stateID = u.StateID
@@ -217,14 +236,14 @@ func (t *tree) Status(ctx context.Context, dir string) (string, error) {
 	return t.status, nil
 }
 
-func scopingIssue() linear.Issue {
+func toPlanIssue() linear.Issue {
 	return linear.Issue{
 		ID:          "issue-1",
 		Identifier:  "WND-9",
 		Title:       "wand plan",
 		Description: "A human wrote this.\n",
 		TeamID:      "team",
-		State:       linear.IssueState{Name: "Scoping", Type: "unstarted"},
+		State:       linear.IssueState{Name: "To Plan", Type: "unstarted"},
 	}
 }
 
@@ -242,7 +261,7 @@ type harness struct {
 
 func newHarness(t *testing.T, results ...workerResult) *harness {
 	t.Helper()
-	b := &board{issue: scopingIssue()}
+	b := &board{issue: toPlanIssue()}
 	w := &workers{results: results}
 	tr := &tree{status: " M README.md\n"}
 	store := journal.New(t.TempDir())
@@ -270,8 +289,8 @@ func (h *harness) run(t *testing.T) (plan.Outcome, error) {
 func draftHandoff() map[string]any { return goodDraft() }
 
 // The deliverables land in one order, and the status that advertises them
-// lands last. A ticket in Scoped promises a finished plan to judge; every
-// earlier write is part of that plan, and the comment precedes the
+// lands last. A ticket in Plan Review promises a finished plan to judge;
+// every earlier write is part of that plan, and the comment precedes the
 // estimate because a number nothing explains is worse than an argument
 // with no number.
 func TestPlanWritesInTheFixedOrder(t *testing.T) {
@@ -284,11 +303,11 @@ func TestPlanWritesInTheFixedOrder(t *testing.T) {
 	if out.Kind != journal.Converged {
 		t.Fatalf("outcome = %s (%s), want converged", out.Kind, out.Reason)
 	}
-	if out.ExitCode() != plan.ExitScoped {
-		t.Errorf("exit code = %d, want %d", out.ExitCode(), plan.ExitScoped)
+	if out.ExitCode() != plan.ExitPlanReviewed {
+		t.Errorf("exit code = %d, want %d", out.ExitCode(), plan.ExitPlanReviewed)
 	}
 
-	want := []string{"section=plan", "comment", "estimate", "state=state-scoped"}
+	want := []string{"claim:state=state-in-planning", "section=plan", "comment", "estimate", "state=state-plan-review"}
 	if strings.Join(h.board.calls, ",") != strings.Join(want, ",") {
 		t.Fatalf("writes = %v\nwant  %v", h.board.calls, want)
 	}
@@ -437,7 +456,7 @@ func TestAWrongPremiseHandsBackWithoutAPlan(t *testing.T) {
 	if out.ExitCode() != plan.ExitHandedBack {
 		t.Errorf("exit code = %d, want %d", out.ExitCode(), plan.ExitHandedBack)
 	}
-	want := []string{"comment", "state=state-needs-input"}
+	want := []string{"claim:state=state-in-planning", "comment", "state=state-needs-input"}
 	if strings.Join(h.board.calls, ",") != strings.Join(want, ",") {
 		t.Fatalf("writes = %v\nwant  %v", h.board.calls, want)
 	}
@@ -488,9 +507,9 @@ func TestAWorkerThatTouchesTheCheckoutParks(t *testing.T) {
 	}
 }
 
-// Blessing research is a human act. A ticket nobody moved into Scoping is
+// Blessing research is a human act. A ticket nobody moved into To Plan is
 // not a ticket to plan, and refusing costs nothing: no run, no journal, no
-// lock.
+// claim.
 func TestPlanRefusesATicketNobodyBlessed(t *testing.T) {
 	h := newHarness(t)
 	h.board.issue.State = linear.IssueState{Name: "Backlog", Type: "backlog"}
@@ -538,31 +557,31 @@ func TestPlanTakesABlockedTicket(t *testing.T) {
 
 // Two plan runs over one ticket write two plans into one fenced region and
 // argue two recommendations at a human who cannot tell which the estimate
-// belongs to. The ticket's status never moves while a plan run works, so the
-// board cannot be the mutex and the lock is.
+// belongs to. The claim is what stops the second one now: the first run's
+// claim moves the ticket out of To Plan and into In Planning, so a second
+// run finds it no longer blessed for a *fresh* plan — the same status-is-
+// the-mutex mechanism `run` uses for Todo, given to research now that
+// In Planning exists for it to move into (WND-79; this package used to take
+// an explicit per-ticket lock instead, since removed).
 func TestASecondPlanOfOneTicketRefuses(t *testing.T) {
 	h := newHarness(t, workerResult{handoff: draftHandoff()})
-	held, err := h.store.LockTicket("WND-9")
-	if err != nil {
-		t.Fatalf("LockTicket: %v", err)
-	}
-	defer held.Release()
+	h.board.issue.State = linear.IssueState{Name: "In Planning", Type: "started"} // another run already claimed it
 
-	_, err = h.run(t)
+	_, err := h.run(t)
 	if err == nil {
-		t.Fatal("a second plan run of the same ticket started")
+		t.Fatal("a second plan run of the already-claimed ticket started")
 	}
-	if !strings.Contains(err.Error(), "already being worked") {
+	if !strings.Contains(err.Error(), "not yours to plan") {
 		t.Errorf("error = %v", err)
 	}
 	if len(h.board.calls) != 0 {
-		t.Errorf("the refused plan run wrote to the ticket: %v", h.board.deliverables())
+		t.Errorf("the refused plan run wrote to the ticket: %v", h.board.calls)
 	}
 }
 
-// A re-plan is a legitimate, deliberate human act — moving a Scoped ticket
-// back to Scoping asks for a fresh look, and that has to keep working. What
-// it must not do is destroy the plan already there: render.go says every
+// A re-plan is a legitimate, deliberate human act — moving a Plan Review
+// ticket back to To Plan asks for a fresh look, and that has to keep
+// working. What it must not do is destroy the plan already there: render.go says every
 // plan run rewrites the plan region whole, so the previous plan is posted as a
 // comment — before the region that held it is overwritten — or it survives
 // nowhere but a closed PR.
@@ -585,7 +604,7 @@ func TestAReplanPreservesThePriorPlanAsACommentBeforeReplacingIt(t *testing.T) {
 
 	// The prior plan is safe on the ticket before the write that would
 	// destroy it runs, not after.
-	want := []string{"comment", "section=plan", "comment", "estimate", "state=state-scoped"}
+	want := []string{"claim:state=state-in-planning", "comment", "section=plan", "comment", "estimate", "state=state-plan-review"}
 	if strings.Join(h.board.calls, ",") != strings.Join(want, ",") {
 		t.Fatalf("writes = %v\nwant  %v", h.board.calls, want)
 	}
@@ -650,7 +669,7 @@ func TestAFailedPriorPlanCommentParksBeforeTheDescriptionIsTouched(t *testing.T)
 	if out.Kind != journal.Parked {
 		t.Fatalf("outcome = %s, want parked", out.Kind)
 	}
-	if len(h.board.calls) != 0 {
+	if len(h.board.calls) != 1 || h.board.calls[0] != "claim:state=state-in-planning" {
 		t.Errorf("the ticket was written to before the prior plan could be preserved: %v", h.board.calls)
 	}
 	if h.board.description != "" {
@@ -659,7 +678,7 @@ func TestAFailedPriorPlanCommentParksBeforeTheDescriptionIsTouched(t *testing.T)
 }
 
 // The plan landed and the argument for it did not. The ticket stays in
-// Scoping — nothing advertises a plan that is not there — and the park
+// In Planning — nothing advertises a plan that is not there — and the park
 // says exactly what a human will find.
 func TestAFailedCommentParksAfterThePlanLanded(t *testing.T) {
 	h := newHarness(t, workerResult{handoff: draftHandoff()})
@@ -672,8 +691,8 @@ func TestAFailedCommentParksAfterThePlanLanded(t *testing.T) {
 	if out.Kind != journal.Parked {
 		t.Fatalf("outcome = %s, want parked", out.Kind)
 	}
-	if strings.Join(h.board.calls, ",") != "section=plan" {
-		t.Fatalf("writes = %v, want the plan alone", h.board.calls)
+	if strings.Join(h.board.calls, ",") != "claim:state=state-in-planning,section=plan" {
+		t.Fatalf("writes = %v, want the claim then the plan alone", h.board.calls)
 	}
 	if !strings.Contains(out.Reason, "plan is in the description") {
 		t.Errorf("the park does not say what landed: %s", out.Reason)
@@ -691,8 +710,8 @@ func TestAFailedEstimateParksBeforeTheStatusMove(t *testing.T) {
 	if out.Kind != journal.Parked {
 		t.Fatalf("outcome = %s, want parked", out.Kind)
 	}
-	if h.board.stateID != "" {
-		t.Error("the ticket was moved to Scoped with a deliverable missing")
+	if h.board.stateID != "state-in-planning" {
+		t.Error("the ticket was moved to Plan Review with a deliverable missing")
 	}
 }
 
@@ -908,7 +927,7 @@ func TestARevisionCanFindThePremiseWrong(t *testing.T) {
 	if out.Kind != journal.HandedBack {
 		t.Fatalf("outcome = %s (%s), want handed back", out.Kind, out.Reason)
 	}
-	want := []string{"comment", "state=state-needs-input"}
+	want := []string{"claim:state=state-in-planning", "comment", "state=state-needs-input"}
 	if strings.Join(h.board.calls, ",") != strings.Join(want, ",") {
 		t.Fatalf("writes = %v\nwant  %v", h.board.calls, want)
 	}
@@ -952,7 +971,7 @@ func TestACriticsRevisionThatFindsThePremiseWrongSkipsTheInterview(t *testing.T)
 	if strings.Contains(h.out.String(), "question(s) about the draft") {
 		t.Errorf("a human was grilled over a draft the reviser had already withdrawn:\n%s", h.out.String())
 	}
-	want := []string{"comment", "state=state-needs-input"}
+	want := []string{"claim:state=state-in-planning", "comment", "state=state-needs-input"}
 	if strings.Join(h.board.calls, ",") != strings.Join(want, ",") {
 		t.Fatalf("writes = %v\nwant  %v", h.board.calls, want)
 	}
@@ -1012,10 +1031,14 @@ func TestAnInterruptParksWithItsOwnReason(t *testing.T) {
 }
 
 // WND-69. Seventeen of the twenty-four parks in the reference journal were
-// scopes rejected at the handoff gate, and every one of them left the
-// ticket exactly as it found it — sitting in Scoping with no sign a run had
-// ever happened, so the next dispatch pass picked it up and paid for the
-// same failure again.
+// scopes rejected at the handoff gate. Under the topology this package
+// shipped with then, every one of them left the ticket exactly as it found
+// it — sitting in Scoping with no sign a run had ever happened, so the next
+// dispatch pass picked it up and paid for the same failure again. WND-79
+// changes what "as it found it" means: the claim into In Planning happens
+// before the worker runs, so a park now leaves the ticket visibly claimed
+// (not reverted to To Plan) in addition to the label and the comment — the
+// same shape a parked build run leaves In Progress in.
 func TestAParkIsReportedOnTheTicket(t *testing.T) {
 	h := newHarness(t, workerResult{err: fmt.Errorf("claude: exited 1 without a usable handoff")})
 
@@ -1026,16 +1049,16 @@ func TestAParkIsReportedOnTheTicket(t *testing.T) {
 	if out.Kind != journal.Parked {
 		t.Fatalf("outcome = %s (%s), want parked", out.Kind, out.Reason)
 	}
-	if got := strings.Join(h.board.calls, ","); got != "park:comment,park:label" {
-		t.Fatalf("board calls = %q, want the park report", got)
+	if got := strings.Join(h.board.calls, ","); got != "claim:state=state-in-planning,park:comment,park:label" {
+		t.Fatalf("board calls = %q, want the claim then the park report", got)
 	}
 	if c := h.board.comments[0]; !strings.Contains(c, "without a usable handoff") {
 		t.Errorf("the report does not quote the reason:\n%s", c)
 	}
-	// A plan run never owns its ticket's status, so the mark has to be a
-	// label — the ticket stays in Scoping, where a human put it.
-	if h.board.stateID != "" {
-		t.Errorf("a parked plan run moved the ticket's status to %q", h.board.stateID)
+	// The ticket stays claimed (In Planning) where the run left it; a plan
+	// run never advances its own status past the claim on a park.
+	if h.board.stateID != "state-in-planning" {
+		t.Errorf("a parked plan run's ticket status = %q, want it to stay claimed", h.board.stateID)
 	}
 }
 
@@ -1055,7 +1078,7 @@ func TestAnInterruptStillReportsThePark(t *testing.T) {
 	if out.Kind != journal.Parked {
 		t.Fatalf("outcome = %s (%s), want parked", out.Kind, out.Reason)
 	}
-	if got := strings.Join(h.board.calls, ","); got != "park:comment,park:label" {
+	if got := strings.Join(h.board.calls, ","); got != "claim:state=state-in-planning,park:comment,park:label" {
 		t.Fatalf("an interrupted run could not report its park: calls = %q", got)
 	}
 	if c := h.board.comments[0]; !strings.Contains(c, "interrupted by terminated") {
@@ -1255,4 +1278,35 @@ func hasSubstring(haystack []string, needle string) bool {
 		}
 	}
 	return false
+}
+
+// A journal store that fails after the claim must not leave the ticket
+// silently claimed (In Planning) behind an error a caller could mistake for
+// "nothing happened": the claim is handed straight back, comment before
+// status, the same branch run.Execute takes for the identical failure
+// against Todo/In Progress. This is new failure surface for this package —
+// WND-79 gave it a claim to fail after, where the machine-local lock it
+// used to take instead had no such window: losing the lock cost nothing.
+func TestJournalFailureHandsThePlanningClaimBack(t *testing.T) {
+	h := newHarness(t, workerResult{handoff: draftHandoff()})
+	blocker := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(blocker, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	h.store.Root = filepath.Join(blocker, "state") // Create must fail
+
+	_, err := h.run(t)
+	if err == nil {
+		t.Fatal("Execute succeeded with a store that cannot open")
+	}
+	if !strings.Contains(err.Error(), "handed back") {
+		t.Errorf("the error does not say the claim was handed back: %v", err)
+	}
+	want := []string{"claim:state=state-in-planning", "comment", "state=state-needs-input"}
+	if strings.Join(h.board.calls, ",") != strings.Join(want, ",") {
+		t.Fatalf("writes = %v\nwant  %v", h.board.calls, want)
+	}
+	if c := h.board.comments[0]; !strings.Contains(c, "run journal") {
+		t.Errorf("the hand-back comment does not name the journal failure:\n%s", c)
+	}
 }

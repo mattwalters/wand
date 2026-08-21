@@ -38,25 +38,28 @@ written. So the rule is a program instead.
 | Blocked | Why |
 |---|---|
 | `Todo`, `To do` | Todo blesses work — the gate between "written down" and "a bot may act on this unattended". |
-| `Scoping` | The same blessing one rung lower: a ticket in Scoping is one a dispatcher may spend a scout on unattended. |
+| `To Plan` | The same blessing one rung lower: a ticket in To Plan is one a dispatcher may spend a scout on unattended. |
 | `Done`, `Canceled`, `Cancelled`, `Duplicate` | Closing a ticket is a human's call, however obsolete the ticket looks. |
 
 Matching is on the trimmed, whitespace-collapsed, lowercased value, and
 covers Linear's state *types* as well as its names: `completed` and
 `canceled` block, and `unstarted` blocks with a message asking the caller
-to name the status instead, since it covers Todo, Needs Input, Scoping and
-Scoped alike.
+to name the status instead, since it covers Todo, Needs Input, To Plan and
+Plan Review alike.
 
 Every status an agent legitimately sets passes: **In Progress**, **In
-Review**, **Needs Input**, **Scoped**, **Backlog**, **Triage**. So does
-every write that is not a status move — assigning, relabelling, editing a
-description. A guard that blocked ordinary work would be routed around
-within a day.
+Review**, **Needs Input**, **In Planning**, **Plan Review**, **Backlog**,
+**Triage**. So does every write that is not a status move — assigning,
+relabelling, editing a description. A guard that blocked ordinary work
+would be routed around within a day.
 
-Note the direction. Moving a ticket *into* Scoping is a promotion and is
-refused; moving one *out* of Scoping is what every plan run ends with,
-either way it ends — to Needs Input, a blocking question, or to Scoped, a
-finished plan — and both are allowed. The guard sees only the destination.
+Note the direction. Moving a ticket *into* To Plan is a promotion and is
+refused; moving one *out* of To Plan is the claim `wand plan` makes into
+In Planning before anything else — the same WND-47 rule restated: agents
+may enter a state they do not bless, only humans may leave one that
+authorizes something. From In Planning, a plan run ends either way it
+ends — to Needs Input, a blocking question, or to Plan Review, a finished
+plan — and both are allowed. The guard sees only the destination.
 
 ### The block message is most of the value
 

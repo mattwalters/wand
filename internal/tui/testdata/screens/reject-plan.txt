@@ -1,7 +1,7 @@
   Backlog, with reason
 
     WND-44  cockpit: a fifth queue for plans awaiting blessing
-    Scoped → Backlog
+    Plan Review → Backlog
 
     Backlog is the pool. The reason is posted as a comment before the status
     moves, because a rejected plan with no reason on it leaves the next plan run

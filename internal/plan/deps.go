@@ -87,8 +87,8 @@ func (d Deps) validate() error {
 		return fmt.Errorf("plan: Deps.Repo must be absolute, got %q", d.Repo)
 	case d.Cov.Caps.WorkerTimeout <= 0:
 		return errors.New("plan: the covenant's worker timeout is unset; this is a wand bug — covenant.Default and the file loader both guarantee it")
-	case d.Cov.StatusName("scoping") == "":
-		return errors.New("plan: the covenant has no scoping status; this is a wand bug")
+	case d.Cov.StatusName("to_plan") == "":
+		return errors.New("plan: the covenant has no to_plan status; this is a wand bug")
 	}
 	if d.Interactive {
 		// The toggle and the flag answer different questions: the covenant

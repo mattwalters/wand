@@ -494,13 +494,13 @@ func (m Model) detailView() string {
 }
 
 // body is what the detail screen shows under the header block: the plan
-// `wand plan` wrote, for a Scoped row, or the ticket's own description for
-// every other kind. A Scoped row shows only the fenced region — the thing
-// this screen exists to put a human's judgment on — not the description
-// around it, which is the ticket as it stood before the plan run that just
-// ended.
+// `wand plan` wrote, for a Plan Review row, or the ticket's own description
+// for every other kind. A Plan Review row shows only the fenced region —
+// the thing this screen exists to put a human's judgment on — not the
+// description around it, which is the ticket as it stood before the plan
+// run that just ended.
 func (m Model) body(row cockpit.Row) string {
-	if row.Kind == cockpit.KindScoped {
+	if row.Kind == cockpit.KindPlanReview {
 		text, ok, err := cockpit.PlanSection(row.Issue)
 		switch {
 		case err != nil:

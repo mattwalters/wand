@@ -10,7 +10,7 @@
 //
 // A pass is: take the repo's own lock (lock.go — one selector at a time),
 // gc dead leases out of the lane count (read-only; see [LanesUsed]), read
-// Todo and Scoping, rank and vet each through the read layer, pick the one
+// Todo and To Plan, rank and vet each through the read layer, pick the one
 // winner ([Select]), and run its loop to a terminal state — one ticket per
 // pass. The lock is held for the whole of it: a single-shot pass commits to
 // running one loop to completion, and a second concurrent pass against the
@@ -115,14 +115,14 @@ func Execute(ctx context.Context, d Deps, store *journal.Store) (Result, error) 
 		return Result{}, err
 	}
 	if !ok {
-		return Result{Kind: KindNothingToDo, Reason: "Todo and Scoping are both empty or fully vetted out"}, nil
+		return Result{Kind: KindNothingToDo, Reason: "Todo and To Plan are both empty or fully vetted out"}, nil
 	}
 	fmt.Fprintf(d.Out, "dispatch: selected %s %s (%s)\n", winner.Verb, winner.Issue.Identifier, winner.Issue.Title)
 
 	return d.runWinner(ctx, store, winner)
 }
 
-// selectWinner reads Todo and Scoping and gc's dead leases out of the lane
+// selectWinner reads Todo and To Plan and gc's dead leases out of the lane
 // count, then hands the read to [Select]. All reads, and the one place a
 // Linear transport failure is told apart from every other error — the
 // caller needs that distinction, and nowhere past this point does.
@@ -152,17 +152,17 @@ func (d Deps) selectWinner(ctx context.Context, store *journal.Store) (Winner, b
 	if err != nil {
 		return Winner{}, false, fmt.Errorf("dispatch: reading Todo: %w", err)
 	}
-	scoping, err := d.Board.TeamIssuesByState(ctx, d.TeamKey, d.Cov.StatusName("scoping"))
+	toPlan, err := d.Board.TeamIssuesByState(ctx, d.TeamKey, d.Cov.StatusName("to_plan"))
 	if err != nil {
-		return Winner{}, false, fmt.Errorf("dispatch: reading Scoping: %w", err)
+		return Winner{}, false, fmt.Errorf("dispatch: reading To Plan: %w", err)
 	}
 
-	winner, ok, todoSkips, scopingSkips := Select(todo, scoping, laneFree)
-	for _, s := range append(append([]queue.Skip{}, todoSkips...), scopingSkips...) {
+	winner, ok, todoSkips, toPlanSkips := Select(todo, toPlan, laneFree)
+	for _, s := range append(append([]queue.Skip{}, todoSkips...), toPlanSkips...) {
 		fmt.Fprintf(d.Out, "dispatch: skipped %s: %s\n", s.Issue.Identifier, s.Reason)
 	}
 	if !laneFree {
-		fmt.Fprintf(d.Out, "dispatch: %d/%d lanes in use; only a Scoping ticket may dispatch\n", used, d.Cov.Caps.Lanes)
+		fmt.Fprintf(d.Out, "dispatch: %d/%d lanes in use; only a To Plan ticket may dispatch\n", used, d.Cov.Caps.Lanes)
 	}
 	return winner, ok, nil
 }

@@ -15,7 +15,7 @@ func newGuardCmd() *cobra.Command {
 		Long: "guard is the harness hook: it reads a pending tool call as JSON on stdin\n" +
 			"(the Claude Code PreToolUse protocol) and blocks — exit 2, reason on\n" +
 			"stderr — any Linear save_issue that sets a status only a human may set:\n" +
-			"Todo, Scoping, Done, Canceled or Duplicate, by name or by state type.\n" +
+			"Todo, To Plan, Done, Canceled or Duplicate, by name or by state type.\n" +
 			"Everything else passes, and input that does not parse passes too: a\n" +
 			"broken guard must never wedge a session.\n\n" +
 			"wand init installs the hook entry that routes save_issue calls here.",

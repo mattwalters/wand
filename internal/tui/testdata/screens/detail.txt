@@ -8,5 +8,5 @@
   40; the known-gap note in guard.go argues it is acceptable, so this may be a
   duplicate of the note rather than a bug.
 
-  judge  t ✦Todo  s ✦Scoping  b Backlog  u unranked  d duplicate  x cancel
+  judge  t ✦Todo  s ✦To Plan  b Backlog  u unranked  d duplicate  x cancel
   esc back • q quit

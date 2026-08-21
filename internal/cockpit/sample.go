@@ -39,10 +39,10 @@ func Sample() Snapshot {
 				Labels: []string{"agent-filed"}, CreatedAt: at(3),
 			},
 		},
-		Scoped: []linear.Issue{
+		PlanReview: []linear.Issue{
 			{
 				Identifier: "WND-44", Title: "cockpit: a fifth queue for plans awaiting blessing",
-				State: linear.IssueState{Name: "Scoped", Type: "unstarted"}, Priority: 1,
+				State: linear.IssueState{Name: "Plan Review", Type: "unstarted"}, Priority: 1,
 				Assignee: "Matt Walters", CreatedAt: at(2),
 				Description: samplePlanDescription(),
 			},

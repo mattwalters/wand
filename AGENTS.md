@@ -9,7 +9,7 @@ checked-in `wand.toml` when present) and installs the guard's hook shim;
 `guard` is the status verdict oracle the shim routes Linear writes through;
 `doctor` diffs the live team against the covenant and reports drift (exit 0
 clean, 1 drift, 2 could not check); `plan` is the first orchestrator — a
-cold read-only scout over one Scoping ticket, whose hard-validated handoff
+cold read-only scout over one To Plan ticket, claimed into In Planning first,, whose hard-validated handoff
 becomes a plan in the ticket body and argued options in a comment, ending
 at Needs Input; `run` is the core orchestrator — implement → CI → review →
 revise over cold workers, exit 0 converged, 2 handed back, 3 parked, 1
@@ -53,7 +53,7 @@ internal/run/        the core orchestrator behind `wand run`: implement → CI �
                      revise, a cold worker per phase, every external write the
                      orchestrator's, exactly one journaled terminal state per run
 internal/dispatch/   the selector behind `wand dispatch`: lock, gc dead leases, rank
-                     and vet Todo and Scoping, run the winner through run/plan
+                     and vet Todo and To Plan, run the winner through run/plan
 internal/sweep/      everything behind `wand sweep`: re-review labels, unresolved PR
                      threads and dead leases, ranked, one write per pass
 internal/tui/        Bubble Tea models — the cockpit itself
@@ -139,9 +139,10 @@ lifecycle — the one it ships — so sessions here follow it:
 - **Take work only from Todo**, highest priority first, oldest first to
   break ties. Skip `human-only` and anything with an unresolved blocker.
   An empty Todo means: nothing for you right now.
-- **Never move a ticket to Todo, Scoping, Done, Canceled or Duplicate.**
+- **Never move a ticket to Todo, To Plan, Done, Canceled or Duplicate.**
   Those grant or revoke authorization, and that is a human's act. Agents
-  may set In Progress, In Review, Needs Input, Backlog and Triage.
+  may set In Progress, In Review, In Planning, Plan Review, Needs Input,
+  Backlog and Triage.
 - **Found something that isn't your ticket?** File it into Triage with the
   `agent-filed` label and carry on. Search for a duplicate first.
 - **Branch from the ticket's own branch name** (Linear provides it), and

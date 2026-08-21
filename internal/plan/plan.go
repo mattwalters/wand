@@ -5,11 +5,12 @@
 // worktree, no branch, no PR, no CI — and it still exercises every hard
 // mechanism the loop needs: spawning cold workers, validating what they
 // hand back, writing a fenced region of a description, writing comments
-// and a status, and holding a lock nobody else may take.
+// and a status, and claiming the ticket nobody else may take at the same
+// time.
 //
 // The rules, and what each is against:
 //
-//   - **Scoping or nothing.** Research is blessed the same way building
+//   - **To Plan or nothing.** Research is blessed the same way building
 //     is, by a human moving the ticket. A plan run over an unblessed
 //     ticket is an agent choosing what the team works on next.
 //
@@ -22,7 +23,7 @@
 //
 //   - **The deliverables land before the transition that advertises
 //     them.** Plan into the description's fenced region, then the options
-//     comment, then the estimate, and Scoped last. Each write is
+//     comment, then the estimate, and Plan Review last. Each write is
 //     something the next one refers to; the status move says "there is a
 //     plan here to read", and it is made only once there is.
 //
@@ -47,13 +48,21 @@
 //     it, and what comes back is the same plan with the objections
 //     explained away.
 //
-//   - **One plan run per ticket at a time.** `wand run` claims its ticket
-//     out of Todo, so the board is its mutex; a plan run's ticket sits in
-//     Scoping from the first read to the last write, so it has no such
-//     move and takes an explicit per-ticket lock instead
-//     (journal.Store.LockTicket). Two plan runs over one ticket write two
-//     plans into one fenced region and argue two recommendations at a
-//     human who cannot tell which the estimate belongs to.
+//   - **One plan run per ticket at a time.** `wand plan` claims its ticket
+//     out of To Plan into In Planning before it touches anything else, the
+//     same claim-before-filesystem ordering `wand run` uses for Todo and
+//     In Progress (see verbs.Claim and verbs.ClaimForPlanning) — the board
+//     is the mutex on both sides now. This is a deliberate reversal of the
+//     topology this package originally shipped with, which held its ticket
+//     in Scoping (a single unstarted status) for the whole research phase
+//     and took an explicit per-ticket lock instead
+//     (journal.Store.LockTicket) because it had no board move to lose a
+//     race on. That lock was machine-local — it could not stop two
+//     machines planning one ticket, which a board claim can — and it is
+//     gone now that the board can do the job; see WND-79 and PLAN.md. Two
+//     plan runs over one ticket write two plans into one fenced region and
+//     argue two recommendations at a human who cannot tell which the
+//     estimate belongs to.
 //
 // Parking writes only the journal, deliberately: a park has to be
 // reachable when Linear itself is what failed.
@@ -86,11 +95,11 @@ type Outcome struct {
 
 // Exit codes, the same contract `wand run` publishes, so one scheduler can
 // read both. 1 is deliberately absent: it means the command failed before
-// a run existed (bad flags, a ticket outside Scoping, no journal), which is
+// a run existed (bad flags, a ticket outside To Plan, no journal), which is
 // fang's generic failure exit.
 const (
-	// ExitScoped: the plan landed and the ticket is on a human's desk.
-	ExitScoped = 0
+	// ExitPlanReviewed: the plan landed and the ticket is on a human's desk.
+	ExitPlanReviewed = 0
 	// ExitHandedBack: the scout found the ticket's premise wrong; its
 	// account is on the ticket and no plan was written.
 	ExitHandedBack = 2
@@ -102,7 +111,7 @@ const (
 func (o Outcome) ExitCode() int {
 	switch o.Kind {
 	case journal.Converged:
-		return ExitScoped
+		return ExitPlanReviewed
 	case journal.HandedBack:
 		return ExitHandedBack
 	default:
@@ -110,12 +119,14 @@ func (o Outcome) ExitCode() int {
 	}
 }
 
-// Execute scopes one ticket.
+// Execute researches one ticket.
 //
-// An error return means no run happened — the ticket was not in Scoping,
-// another process holds it, or the journal would not open — and nothing was
-// written. Once a run exists, every path ends in exactly one Outcome
-// instead, including interrupts, which park with the signal as the reason.
+// An error return means no run happened — the ticket was not in To Plan, the
+// claim raced and lost, or the journal would not open — and nothing was
+// written except possibly the claim itself, which a journal failure hands
+// straight back (see the comment on that branch below). Once a run exists,
+// every path ends in exactly one Outcome instead, including interrupts,
+// which park with the signal as the reason.
 func Execute(ctx context.Context, d Deps, store *journal.Store, identifier string) (Outcome, error) {
 	if err := d.validate(); err != nil {
 		return Outcome{}, err
@@ -124,21 +135,16 @@ func Execute(ctx context.Context, d Deps, store *journal.Store, identifier strin
 		d.Out = io.Discard
 	}
 
-	issue, err := d.Board.IssueByIdentifier(ctx, identifier)
+	// Claim before anything touches the filesystem: the status move is the
+	// cheapest place to lose a race, and losing it here costs nothing — not
+	// even a run directory. Mirrors run.Execute's ordering (verbs.Claim);
+	// see the package doc for why this package now claims a started status
+	// instead of taking a machine-local lock.
+	issue, err := verbs.ClaimForPlanning(ctx, d.Board, d.Cov, identifier, Vet)
 	if err != nil {
 		return Outcome{}, err
 	}
-	if err := vet(issue, d.Cov.StatusName("scoping")); err != nil {
-		return Outcome{}, err
-	}
-
-	// The lock before the journal: a refusal here must cost nothing, not
-	// leave a run directory behind for a plan run that never began.
-	lock, err := store.LockTicket(issue.Identifier)
-	if err != nil {
-		return Outcome{}, err
-	}
-	defer lock.Release()
+	fmt.Fprintf(d.Out, "claimed %s: %s\n", issue.Identifier, d.Cov.StatusName("in_planning"))
 
 	// The journal's Verb keeps writing "plan" only — a journal run predates
 	// this rename and may still carry "scope", but nothing here reads that
@@ -153,10 +159,21 @@ func Execute(ctx context.Context, d Deps, store *journal.Store, identifier strin
 		Harness: d.Harness,
 	})
 	if err != nil {
-		return Outcome{}, err
+		// The claim already landed, and exit 1 promises a scheduler there is
+		// nothing to sweep — so nothing may stay silently claimed. Hand the
+		// ticket back with the journal failure as the reason, the same
+		// branch run.Execute takes for the same failure.
+		comment := fmt.Sprintf("This run claimed the ticket but could not open its run journal, so it stopped before doing any research. The store must be fixed before a rerun: %v", err)
+		if _, herr := verbs.Handback(ctx, d.Board, d.Cov, issue.Identifier, comment); herr != nil {
+			return Outcome{}, fmt.Errorf(
+				"%s is claimed (%s) but the run journal would not open: %w — and the hand-back failed too (%v); hand the ticket back or fix the store before retrying",
+				issue.Identifier, d.Cov.StatusName("in_planning"), err, herr)
+		}
+		return Outcome{}, fmt.Errorf(
+			"the run journal would not open: %w — %s was handed back (%s) with that as the reason", err, issue.Identifier, d.Cov.StatusName("needs_input"))
 	}
 	defer r.Close()
-	fmt.Fprintf(d.Out, "planning %s (%s), journaling to %s\n", issue.Identifier, issue.State.Name, r.Dir())
+	fmt.Fprintf(d.Out, "planning %s, journaling to %s\n", issue.Identifier, r.Dir())
 
 	s := &planning{d: d, r: r, issue: issue, prov: Provenance{RunID: r.ID(), Harness: d.Harness}}
 	out := s.run(ctx)
@@ -165,30 +182,15 @@ func Execute(ctx context.Context, d Deps, store *journal.Store, identifier strin
 	return out, nil
 }
 
-// vet refuses the tickets a plan run may not take. It is deliberately not
-// queue.Vet: that function answers "may an agent start building this?",
-// and the two questions differ on blockers. A ticket blocked by another is
-// exactly the ticket worth planning early — the blocker stops the building,
-// not the reading — so only the human-only label refuses here, and it
-// refuses absolutely.
-func vet(issue linear.Issue, scoping string) error {
-	if !strings.EqualFold(issue.State.Name, scoping) {
-		return fmt.Errorf(
-			"%s is in %q, not %q: wand plan researches blessed work, and blessing research is a human act — an issue outside %q is not yours to plan",
-			issue.Identifier, issue.State.Name, scoping, scoping)
-	}
-	if reason := Vet(issue); reason != "" {
-		return fmt.Errorf("%s may not be planned: %s", issue.Identifier, reason)
-	}
-	return nil
-}
-
-// Vet returns why an issue in Scoping may not be planned, or "" when it may.
-// Exported so `wand dispatch` can select Scoping candidates the same way
-// `wand queue` selects Todo ones: ranked, then vetted, skips never silent.
-// Deliberately not queue.Vet, for the same reason [vet] is not: a ticket
-// blocked by another is exactly the ticket worth planning early, so only the
-// human-only label refuses here.
+// Vet returns why an issue in To Plan may not be planned, or "" when it may.
+// Exported so `wand dispatch` can select To Plan candidates the same way
+// `wand queue` selects Todo ones: ranked, then vetted, skips never silent —
+// and so verbs.ClaimForPlanning can call it before the claim's own write.
+// Deliberately not queue.Vet: that function answers "may an agent start
+// building this?", and the two questions differ on blockers. A ticket
+// blocked by another is exactly the ticket worth planning early — the
+// blocker stops the building, not the reading — so only the human-only and
+// parked labels refuse here.
 func Vet(issue linear.Issue) string {
 	for _, label := range issue.Labels {
 		if strings.EqualFold(label, queue.HumanOnlyLabel) {
@@ -459,21 +461,21 @@ func (s *planning) revise(ctx context.Context, draft Draft, round int, objection
 
 // write lands the deliverables in the fixed order, each before the
 // transition that advertises it. Every failure past the first write parks
-// naming exactly what did land: the ticket is still in Scoping, so nothing
-// is advertised that is not there, and a human reading the journal knows
-// what to expect on the ticket.
+// naming exactly what did land: the ticket is still in In Planning, so
+// nothing is advertised that is not there, and a human reading the journal
+// knows what to expect on the ticket.
 func (s *planning) write(ctx context.Context, draft Draft) Outcome {
 	// Resolve the status first. It is a pure read, and it is the one thing
 	// that can refuse for reasons nothing here can fix — a drifted board,
-	// or the guard — so it happens while nothing has been written. Scoped,
-	// never Needs Input: that status is the scout's other ending, reserved
-	// for a blocking question ([wrongPremise], through verbs.Handback). A
-	// finished plan is a different kind of "ask a human" — judge, not
-	// answer — and Scoped is what tells the cockpit which queue it belongs
-	// in.
-	stateID, err := verbs.ResolveState(ctx, s.d.Board, s.d.Cov, s.issue.TeamID, "scoped")
+	// or the guard — so it happens while nothing has been written. Plan
+	// Review, never Needs Input: that status is the scout's other ending,
+	// reserved for a blocking question ([wrongPremise], through
+	// verbs.Handback). A finished plan is a different kind of "ask a
+	// human" — judge, not answer — and Plan Review is what tells the
+	// cockpit which queue it belongs in.
+	stateID, err := verbs.ResolveState(ctx, s.d.Board, s.d.Cov, s.issue.TeamID, "plan_review")
 	if err != nil {
-		return *s.park(ctx, fmt.Sprintf("could not resolve the %s status: %v", s.d.Cov.StatusName("scoped"), err))
+		return *s.park(ctx, fmt.Sprintf("could not resolve the %s status: %v", s.d.Cov.StatusName("plan_review"), err))
 	}
 
 	if out := s.preservePriorPlan(ctx); out != nil {
@@ -485,7 +487,7 @@ func (s *planning) write(ctx context.Context, draft Draft) Outcome {
 	}
 	fmt.Fprintln(s.d.Out, "wrote the plan into the ticket's description")
 
-	comment := OptionsComment(draft, s.d.Cov.IssueEstimationType, s.d.Cov.StatusName("scoped"), s.prov)
+	comment := OptionsComment(draft, s.d.Cov.IssueEstimationType, s.d.Cov.StatusName("plan_review"), s.prov)
 	if err := s.d.Board.CreateComment(ctx, s.issue.ID, comment); err != nil {
 		return *s.park(ctx, fmt.Sprintf("the plan is in the description, but the options comment failed: %v — the ticket is still in %s, carrying a plan nothing argues for", err, s.issue.State.Name))
 	}
@@ -499,11 +501,11 @@ func (s *planning) write(ctx context.Context, draft Draft) Outcome {
 	}
 
 	if err := s.d.Board.UpdateIssue(ctx, s.issue.ID, linear.IssueUpdate{StateID: stateID}); err != nil {
-		return *s.park(ctx, fmt.Sprintf("every deliverable is on the ticket, but the move to %s failed: %v — the plan is readable, it just is not on anyone's desk", s.d.Cov.StatusName("scoped"), err))
+		return *s.park(ctx, fmt.Sprintf("every deliverable is on the ticket, but the move to %s failed: %v — the plan is readable, it just is not on anyone's desk", s.d.Cov.StatusName("plan_review"), err))
 	}
 
-	reason := fmt.Sprintf("scoped: %s recommended, plan and options on the ticket, %s for a human to judge",
-		strings.TrimSpace(draft.Recommendation.Approach), s.d.Cov.StatusName("scoped"))
+	reason := fmt.Sprintf("plan review: %s recommended, plan and options on the ticket, %s for a human to judge",
+		strings.TrimSpace(draft.Recommendation.Approach), s.d.Cov.StatusName("plan_review"))
 	if err := s.r.Converged(reason); err != nil {
 		fmt.Fprintf(s.d.Out, "journal: %v\n", err)
 	}
@@ -512,14 +514,15 @@ func (s *planning) write(ctx context.Context, draft Draft) Outcome {
 
 // preservePriorPlan posts the description's existing plan region as a dated,
 // superseded comment before the write that is about to replace it. A plan
-// run over an already-scoped ticket is a legitimate, deliberate human act —
-// that is what re-opens Scoping — but the plan region is rewritten whole on
-// every plan run, so without this step the plan a human read and blessed
-// vanishes the moment the new one lands, leaving no trace on the ticket
-// that it ever existed. Called before [Board.UpsertSection], the same
-// comment-before-write discipline [planning.write] uses everywhere else:
-// what could be destroyed is made safe before the write that would destroy
-// it runs. A ticket with no prior plan posts nothing.
+// run over a ticket that already carries a plan is a legitimate, deliberate
+// human act — moving it back to To Plan and letting a fresh plan run claim
+// it — but the plan region is rewritten whole on every plan run, so without
+// this step the plan a human read and blessed vanishes the moment the new
+// one lands, leaving no trace on the ticket that it ever existed. Called
+// before [Board.UpsertSection], the same comment-before-write discipline
+// [planning.write] uses everywhere else: what could be destroyed is made
+// safe before the write that would destroy it runs. A ticket with no prior
+// plan posts nothing.
 func (s *planning) preservePriorPlan(ctx context.Context) *Outcome {
 	prior, ok, err := linear.ReadSection(s.issue.Description, PlanSectionID)
 	if err != nil {

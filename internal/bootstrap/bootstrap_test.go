@@ -42,10 +42,13 @@ func freshTeam() Current {
 }
 
 // existingSchema1Team is what a team bootstrapped under WND-32's original
-// covenant — before Scoped existed — looks like today: every status the
-// pre-Scoped covenant created, Scoped absent. This is the team WND-48 is
-// about: an existing team converging onto a topology addition, not a fresh
-// one being created.
+// covenant — before Scoped existed, and before WND-79's To Plan/In
+// Planning/Plan Review topology replaced Scoping/Scoped entirely — looks
+// like today: every status the earliest covenant created, none of the
+// research-track additions since. This is the shape both WND-48 (Scoped's
+// addition) and WND-79 (this file's own topology change) are about: an
+// existing team converging onto a topology addition, not a fresh one being
+// created.
 func existingSchema1Team() Current {
 	states := []linear.WorkflowState{}
 	for _, s := range []struct {
@@ -84,28 +87,42 @@ func existingSchema1Team() Current {
 	}
 }
 
-func TestPlanAddsScopedToExistingSchema1Team(t *testing.T) {
+// The team's old "Scoping" status shares no name with any status the
+// current covenant wants, so it is simply ignored — Plan is purely
+// additive and never renames or removes a status a team already has (see
+// Plan's own doc comment). That is what makes this the same fixture WND-48
+// used for the Scoped addition and WND-79 uses for this one: the topology
+// changed twice under it and it never had to.
+func TestPlanAddsToPlanInPlanningAndPlanReviewToAnExistingTeam(t *testing.T) {
 	actions := Plan(covenant.Default(), existingSchema1Team())
 
-	if len(actions) != 1 {
-		t.Fatalf("plan for existing schema-1 team: got %d actions (%s), want 1", len(actions), ops(actions))
+	want := []string{
+		`create status "To Plan" (unstarted)`,
+		`create status "In Planning" (started)`,
+		`create status "Plan Review" (unstarted)`,
 	}
-	a := actions[0]
-	if a.Op != CreateStatus || a.Status.Name != "Scoped" {
-		t.Errorf("plan for existing schema-1 team: got %s, want create status \"Scoped\"", a)
+	if got := ops(actions); got != strings.Join(want, "; ") {
+		t.Fatalf("plan for existing schema-1 team:\n got %s\nwant %s", got, strings.Join(want, "; "))
 	}
-	if a.Status.Position != -25 {
-		t.Errorf("Scoped planned at position %v, want -25 (between Scoping's -50 and Todo's 1)", a.Status.Position)
+	for _, a := range actions {
+		if a.Status.Name == "Plan Review" && a.Status.Position != -25 {
+			t.Errorf("Plan Review planned at position %v, want -25 (between In Planning's -40 and Todo's 1)", a.Status.Position)
+		}
+		if a.Status.Name == "In Planning" && a.Status.Position != -40 {
+			t.Errorf("In Planning planned at position %v, want -40 (between To Plan's -50 and Plan Review's -25)", a.Status.Position)
+		}
 	}
 }
 
-func TestPlanIsIdempotentOnceScopedExists(t *testing.T) {
+func TestPlanIsIdempotentOnceToPlanInPlanningAndPlanReviewExist(t *testing.T) {
 	current := existingSchema1Team()
 	current.States = append(current.States,
-		linear.WorkflowState{ID: "st-Scoped", Name: "Scoped", Type: "unstarted", Position: -25})
+		linear.WorkflowState{ID: "st-ToPlan", Name: "To Plan", Type: "unstarted", Position: -50},
+		linear.WorkflowState{ID: "st-InPlanning", Name: "In Planning", Type: "started", Position: -40},
+		linear.WorkflowState{ID: "st-PlanReview", Name: "Plan Review", Type: "unstarted", Position: -25})
 
 	if actions := Plan(covenant.Default(), current); len(actions) != 0 {
-		t.Errorf("team already carrying Scoped should plan nothing, planned: %s", ops(actions))
+		t.Errorf("team already carrying To Plan/In Planning/Plan Review should plan nothing, planned: %s", ops(actions))
 	}
 }
 
@@ -121,8 +138,9 @@ func TestPlanFreshTeam(t *testing.T) {
 	actions := Plan(covenant.Default(), freshTeam())
 
 	want := []string{
-		`create status "Scoping" (unstarted)`,
-		`create status "Scoped" (unstarted)`,
+		`create status "To Plan" (unstarted)`,
+		`create status "In Planning" (started)`,
+		`create status "Plan Review" (unstarted)`,
 		`create status "Needs Input" (unstarted)`,
 		`create label "human-only"`,
 		`create label "agent-filed"`,
@@ -140,8 +158,9 @@ func TestPlanIsIdempotentOnceSatisfied(t *testing.T) {
 	// A team that already satisfies the covenant plans zero actions.
 	current := freshTeam()
 	current.States = append(current.States,
-		linear.WorkflowState{ID: "st-Scoping", Name: "Scoping", Type: "unstarted"},
-		linear.WorkflowState{ID: "st-Scoped", Name: "Scoped", Type: "unstarted"},
+		linear.WorkflowState{ID: "st-ToPlan", Name: "To Plan", Type: "unstarted"},
+		linear.WorkflowState{ID: "st-InPlanning", Name: "In Planning", Type: "started"},
+		linear.WorkflowState{ID: "st-PlanReview", Name: "Plan Review", Type: "unstarted"},
 		linear.WorkflowState{ID: "st-NI", Name: "Needs Input", Type: "unstarted"},
 	)
 	for _, name := range []string{"human-only", "agent-filed", "ready-for-human", "re-review", "parked"} {
@@ -208,8 +227,9 @@ func TestPlanMatchesNamesCaseInsensitively(t *testing.T) {
 	current := freshTeam()
 	current.States = append(current.States,
 		linear.WorkflowState{ID: "st-x", Name: "needs input", Type: "unstarted"},
-		linear.WorkflowState{ID: "st-y", Name: "SCOPING", Type: "unstarted"},
-		linear.WorkflowState{ID: "st-z", Name: "scoped", Type: "unstarted"},
+		linear.WorkflowState{ID: "st-y", Name: "TO PLAN", Type: "unstarted"},
+		linear.WorkflowState{ID: "st-w", Name: "in planning", Type: "started"},
+		linear.WorkflowState{ID: "st-z", Name: "plan review", Type: "unstarted"},
 	)
 	for _, a := range Plan(covenant.Default(), current) {
 		if a.Op == CreateStatus {
@@ -271,13 +291,13 @@ func TestApplyResolvesStatusCreatedBySamePlan(t *testing.T) {
 	// failing the run.
 	fake := &fakeClient{states: freshTeam().States}
 	actions := []Action{
-		{Op: CreateStatus, Status: covenant.Status{Name: "Scoping", Type: "unstarted"}},
-		{Op: CreateAutomation, Event: "draft", StatusName: "Scoping"},
+		{Op: CreateStatus, Status: covenant.Status{Name: "To Plan", Type: "unstarted"}},
+		{Op: CreateAutomation, Event: "draft", StatusName: "To Plan"},
 	}
 	if err := Apply(context.Background(), fake, "team-1", actions); err != nil {
 		t.Fatalf("apply: %v", err)
 	}
-	want := "CreateGitAutomation:draft→new-Scoping"
+	want := "CreateGitAutomation:draft→new-To Plan"
 	found := false
 	for _, c := range fake.calls {
 		if c == want {

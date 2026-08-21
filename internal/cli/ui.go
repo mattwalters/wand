@@ -43,7 +43,7 @@ func newUICmd() *cobra.Command {
 		Long: "Open wand's cockpit — one screen answering one question: what is\n" +
 			"waiting on me? Triage to judge, Needs Input to answer, ready-for-human\n" +
 			"work to look at, and lanes no process is driving any more.\n\n" +
-			"Blessing lives here. Promotion to Todo and to Scoping is the transition\n" +
+			"Blessing lives here. Promotion to Todo and to To Plan is the transition\n" +
 			"the guard refuses everywhere else, because it hands out authorization an\n" +
 			"agent does not have; this screen is the one place a person grants it.\n\n" +
 			"With --dump-screen, a built-in sample board is rendered to plain text and\n" +
@@ -56,7 +56,7 @@ func newUICmd() *cobra.Command {
 			"can be walked through without an API key or a team.\n\n" +
 			"Running it against a real board requires LINEAR_API_KEY, and a team key —\n" +
 			"either --team-key, or [team] key in the nearest wand.toml.\n\n" +
-			"Press 'e' to engage: the cockpit then polls Todo and Scoping on --interval\n" +
+			"Press 'e' to engage: the cockpit then polls Todo and To Plan on --interval\n" +
 			"(default 1m) the way `wand dispatch --watch` does, spawning a winner as a\n" +
 			"detached child that survives the cockpit closing. Engaging is deliberate —\n" +
 			"it is never on by default, bare `wand` included — and needs the same\n" +

@@ -120,6 +120,8 @@ var wndStates = []linear.WorkflowState{
 	{ID: "st-triage", Name: "Triage", Type: "triage"},
 	{ID: "st-backlog", Name: "Backlog", Type: "backlog"},
 	{ID: "st-todo", Name: "Todo", Type: "unstarted"},
+	{ID: "st-to-plan", Name: "To Plan", Type: "unstarted"},
+	{ID: "st-in-planning", Name: "In Planning", Type: "started"},
 	{ID: "st-needs-input", Name: "Needs Input", Type: "unstarted"},
 	{ID: "st-in-progress", Name: "In Progress", Type: "started"},
 }
@@ -134,6 +136,19 @@ func todoIssue() linear.Issue {
 		State:      linear.IssueState{Name: "Todo", Type: "unstarted"},
 	}
 }
+
+func toPlanIssue() linear.Issue {
+	return linear.Issue{
+		ID:         "uuid-6",
+		Identifier: "WND-6",
+		Title:      "Lifecycle verbs",
+		TeamID:     "team-1",
+		State:      linear.IssueState{Name: "To Plan", Type: "unstarted"},
+	}
+}
+
+// noVet allows every issue; the cases that need a refusal build their own.
+func noVet(linear.Issue) string { return "" }
 
 func TestClaimWritesStateAndAssigneeTogether(t *testing.T) {
 	f := &fake{issue: todoIssue(), states: wndStates, viewer: linear.User{ID: "u1", Name: "Matt"}}
@@ -221,6 +236,55 @@ func TestClaimRespectsCovenantRenames(t *testing.T) {
 	}
 	if _, err := Claim(context.Background(), f, cov, "WND-6"); err != nil {
 		t.Fatalf("claim from a renamed blessed column: %v", err)
+	}
+}
+
+func TestClaimForPlanningWritesStateAloneNoAssignee(t *testing.T) {
+	f := &fake{issue: toPlanIssue(), states: wndStates}
+
+	issue, err := ClaimForPlanning(context.Background(), f, covenant.Default(), "WND-6", noVet)
+	if err != nil {
+		t.Fatalf("ClaimForPlanning: %v", err)
+	}
+	if got := f.writes(); len(got) != 1 || got[0] != "update" {
+		t.Fatalf("writes = %v, want exactly one update: the claim is a single write, no comment", got)
+	}
+	u := f.updates[0]
+	if u.StateID != "st-in-planning" {
+		t.Errorf("update = %+v, want In Planning", u)
+	}
+	if u.AssigneeID != "" {
+		t.Errorf("update assigned %q; a plan run is read-only research nobody owns the way a build owns a branch", u.AssigneeID)
+	}
+	if issue.Identifier != "WND-6" {
+		t.Errorf("claim result = %+v, want the issue as read", issue)
+	}
+}
+
+func TestClaimForPlanningRefusesOutsideToPlan(t *testing.T) {
+	issue := toPlanIssue()
+	issue.State = linear.IssueState{Name: "In Planning", Type: "started"}
+	f := &fake{issue: issue, states: wndStates}
+
+	_, err := ClaimForPlanning(context.Background(), f, covenant.Default(), "WND-6", noVet)
+	if err == nil || !strings.Contains(err.Error(), "not yours to plan") {
+		t.Fatalf("err = %v, want a refusal naming that it is not yours to plan", err)
+	}
+	if w := f.writes(); len(w) != 0 {
+		t.Errorf("writes = %v, want none on refusal", w)
+	}
+}
+
+func TestClaimForPlanningRefusesWhatVetRejects(t *testing.T) {
+	f := &fake{issue: toPlanIssue(), states: wndStates}
+	rejectAll := func(linear.Issue) string { return "labeled human-only" }
+
+	_, err := ClaimForPlanning(context.Background(), f, covenant.Default(), "WND-6", rejectAll)
+	if err == nil || !strings.Contains(err.Error(), "human-only") {
+		t.Fatalf("err = %v, want the vet's reason", err)
+	}
+	if w := f.writes(); len(w) != 0 {
+		t.Errorf("writes = %v, want none on refusal", w)
 	}
 }
 

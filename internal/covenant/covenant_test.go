@@ -58,34 +58,43 @@ func TestEstimateValuesFollowTheScale(t *testing.T) {
 	}
 }
 
-// Scoped is the research-side analog of In Review: the plan is written and a
-// human has to judge it. It is `unstarted` — blessing it re-authorizes the
-// work rather than resuming it — and it sits between Scoping and Todo with
-// room on both sides, because a board that orders it anywhere else stops
-// reading as a pipeline.
-func TestScopedSitsBetweenScopingAndTodo(t *testing.T) {
-	var scoping, scoped, todo Status
+// Plan Review is the research-side analog of In Review: the plan is written
+// and a human has to judge it. It is `unstarted` — blessing it
+// re-authorizes the work rather than resuming it — and it sits between
+// In Planning and Todo with room on both sides, because a board that orders
+// it anywhere else stops reading as a pipeline. In Planning itself sits
+// between To Plan and Plan Review, and is `started` — the research-side
+// analog of In Progress — because a live plan run is work in flight, not a
+// blessing waiting to be spent.
+func TestPlanReviewSitsBetweenInPlanningAndTodo(t *testing.T) {
+	var toPlan, inPlanning, planReview, todo Status
 	for _, s := range Default().Statuses {
 		switch s.Key {
-		case "scoping":
-			scoping = s
-		case "scoped":
-			scoped = s
+		case "to_plan":
+			toPlan = s
+		case "in_planning":
+			inPlanning = s
+		case "plan_review":
+			planReview = s
 		case "todo":
 			todo = s
 		}
 	}
-	if scoped.Key == "" {
-		t.Fatal("the covenant has no scoped status")
+	if planReview.Key == "" {
+		t.Fatal("the covenant has no plan_review status")
 	}
-	if scoped.Name != "Scoped" {
-		t.Errorf("scoped name = %q, want %q", scoped.Name, "Scoped")
+	if planReview.Name != "Plan Review" {
+		t.Errorf("plan_review name = %q, want %q", planReview.Name, "Plan Review")
 	}
-	if scoped.Type != "unstarted" {
-		t.Errorf("scoped type = %q, want unstarted: blessing a plan re-authorizes the work, it does not resume it", scoped.Type)
+	if planReview.Type != "unstarted" {
+		t.Errorf("plan_review type = %q, want unstarted: blessing a plan re-authorizes the work, it does not resume it", planReview.Type)
 	}
-	if !(scoping.Position < scoped.Position && scoped.Position < todo.Position) {
-		t.Errorf("positions scoping=%v scoped=%v todo=%v, want Scoped strictly between", scoping.Position, scoped.Position, todo.Position)
+	if inPlanning.Type != "started" {
+		t.Errorf("in_planning type = %q, want started: a live plan run is work in flight", inPlanning.Type)
+	}
+	if !(toPlan.Position < inPlanning.Position && inPlanning.Position < planReview.Position && planReview.Position < todo.Position) {
+		t.Errorf("positions to_plan=%v in_planning=%v plan_review=%v todo=%v, want strictly ordered",
+			toPlan.Position, inPlanning.Position, planReview.Position, todo.Position)
 	}
 }
 
@@ -99,8 +108,8 @@ func TestMinimalFileGetsTheCurrentTopology(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	if got := f.Covenant().StatusName("scoped"); got != "Scoped" {
-		t.Errorf(`minimal file StatusName("scoped") = %q, want "Scoped"`, got)
+	if got := f.Covenant().StatusName("plan_review"); got != "Plan Review" {
+		t.Errorf(`minimal file StatusName("plan_review") = %q, want "Plan Review"`, got)
 	}
 }
 
@@ -113,14 +122,14 @@ func TestNewerSchemaIsRefused(t *testing.T) {
 	}
 }
 
-// Scoped is a status like any other: the file may rename it, and code that
-// reads it by key follows the rename.
-func TestScopedIsRenameable(t *testing.T) {
-	f, err := Parse([]byte("schema = 1\n[statuses]\nscoped = \"Planned\"\n"))
+// Plan Review is a status like any other: the file may rename it, and code
+// that reads it by key follows the rename.
+func TestPlanReviewIsRenameable(t *testing.T) {
+	f, err := Parse([]byte("schema = 1\n[statuses]\nplan_review = \"Planned\"\n"))
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	if got := f.Covenant().StatusName("scoped"); got != "Planned" {
-		t.Errorf(`renamed StatusName("scoped") = %q, want "Planned"`, got)
+	if got := f.Covenant().StatusName("plan_review"); got != "Planned" {
+		t.Errorf(`renamed StatusName("plan_review") = %q, want "Planned"`, got)
 	}
 }

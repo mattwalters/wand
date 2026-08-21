@@ -37,12 +37,12 @@ One pass is:
    lane, up to `caps.lanes`. Read-only: a run whose lease says its holder
    is provably dead does not hold a lane, whatever phase its journal last
    opened — the same [journal.Report.Zombie] proof `wand sweep` acts on.
-3. **Read and rank.** Todo and Scoping, each ranked and vetted the way
+3. **Read and rank.** Todo and To Plan, each ranked and vetted the way
    `wand queue` ranks Todo.
 4. **Pick the winner.** The highest-ranked, vetted Todo issue when a lane
    is free, through `wand run`; otherwise the highest-ranked, vetted
-   Scoping issue, through `wand plan`. A plan run needs no lane, so an
-   eligible Scoping ticket dispatches even at full lane occupancy —
+   To Plan issue, through `wand plan`. A plan run needs no lane, so an
+   eligible To Plan ticket dispatches even at full lane occupancy —
    research is never starved by full lane occupancy — and it is also what
    a pass falls back to when Todo simply has nothing startable.
 5. **Run it.** One ticket per pass, to one of `run`'s or `plan`'s own
@@ -89,7 +89,7 @@ single-shot pass can reach gets its own code:
 | `1` | Refused: nothing started (bad flags, missing configuration), or the winner was chosen but its claim raced and lost. |
 | `2` | Handed back or parked — the run/plan journal has the detail. |
 | `3` | Locked: another dispatch process already holds this repo's selector lock. |
-| `4` | Nothing to do: Todo and Scoping are both empty or fully vetted out. |
+| `4` | Nothing to do: Todo and To Plan are both empty or fully vetted out. |
 | `5` | Linear could not be reached (a transport-level failure — DNS, connection refused, a timeout — as opposed to a reachable API answering with an error). |
 
 `--watch` runs until interrupted and does not use this contract itself —
@@ -114,7 +114,7 @@ the repository — which is also where the team key comes from, unless
 `--team-key` overrides it.
 
 `caps.lanes` in the covenant sets how many `wand run` loops this repository
-runs at once (default `1`); a Scoping ticket never counts against it.
+runs at once (default `1`); a To Plan ticket never counts against it.
 
 ## See also
 

@@ -18,8 +18,9 @@ specific failure.
 
 ## Why the shape is fixed
 
-The state graph — Triage → Backlog → Scoping → Scoped → Todo → Needs Input →
-In Progress → In Review → Done — is wand's opinion, gofmt-style. A repo's
+The state graph — Triage → Backlog → To Plan → In Planning → Plan Review →
+Todo → Needs Input → In Progress → In Review → Done — is wand's opinion,
+gofmt-style. A repo's
 covenant file (`wand.toml`) customizes the parameters of the machine:
 status *names* over the fixed semantics, caps, the estimate scale, toggles,
 the pluggable commands, ticket templates. Never its shape.
@@ -52,9 +53,22 @@ Raising it is a migration — it asserts that the states exist on your board
 — and like every other blessing, a human's act.
 
 One schema exists so far: **1**, which includes every state below —
-[Scoped](#the-states-and-why-each-exists) included. The number holds at 1
-until wand is distributed: an increment is a promise to other people's
-covenant files, and there are no other people yet.
+[Plan Review](#the-states-and-why-each-exists) included. The number holds
+at 1 until wand is distributed: an increment is a promise to other
+people's covenant files, and there are no other people yet.
+
+[WND-79](https://linear.app/prosewell/issue/WND-79/topology-the-planning-track-gets-three-states-and-claims-the-middle)
+is the one topology change so far that reversed an earlier decision rather
+than adding to it: `wand plan` used to hold its ticket in a single
+unstarted status (Scoping) for the whole research phase and take a
+machine-local per-ticket lock instead of a claim, because it had no board
+move to lose a race on. A board claim is the more robust mechanism — it is
+what stops two *machines* from planning one ticket, which a machine-local
+lock never could — and the dead-claim objection that justified the lock
+over a claim is gone now that dead-lease reaping exists. So the research
+track claims a started status of its own (In Planning) before it touches
+anything, the same way `wand run` claims In Progress, and it is symmetric
+with the build track for the first time.
 
 ## Two doors out of Backlog
 
@@ -62,18 +76,22 @@ Every ticket leaves Backlog through one of two doors, and a human opens
 both. The cheap door is `Backlog → Todo`: a ticket small enough that
 writing a plan and reviewing it would cost more than just building it, so
 a person blesses it straight into Todo. The deliberate door is
-`Backlog → Scoping → Scoped → Todo`: a person blesses the *research*
-first, an agent researches it and writes a plan, and a person blesses that
-plan onward. Both doors end at the same gate — a human choosing Todo — the
-deliberate one just puts a plan in front of that choice instead of asking
-for it blind.
+`Backlog → To Plan → In Planning → Plan Review → Todo`: a person blesses
+the *research* first, an agent claims it and researches it and writes a
+plan, and a person blesses that plan onward. Both doors end at the same
+gate — a human choosing Todo — the deliberate one just puts a plan in
+front of that choice instead of asking for it blind.
 
-Scoped is what makes the deliberate door's last step first-class. A ticket
-sitting there is exactly a PR sitting in In Review: finished, argued, and
-waiting on nothing but a human's judgment. Reviewing a plan is not lesser
-work than reviewing the code that follows from it, and giving it its own
-state — rather than folding it into Needs Input, which means something
-else entirely — is how the board says so.
+Plan Review is what makes the deliberate door's last step first-class. A
+ticket sitting there is exactly a PR sitting in In Review: finished,
+argued, and waiting on nothing but a human's judgment. Reviewing a plan is
+not lesser work than reviewing the code that follows from it, and giving
+it its own state — rather than folding it into Needs Input, which means
+something else entirely — is how the board says so. In Planning is the
+same idea one step earlier: a live plan run is work in flight the same way
+a live build is, not a blessing sitting idle, and giving it its own
+`started` state is what lets the cockpit recognize a live plan run without
+a carve-out written just for it.
 
 ## The states, and why each exists
 
@@ -85,8 +103,9 @@ decided what may happen to this next?"
 |---|---|
 | Triage | Nothing. The inbox agents file into. |
 | Backlog | Nothing. The undifferentiated pool. |
-| Scoping | A scout may research this unattended. |
-| Scoped | Nothing — a finished plan is parked on a human to judge. |
+| To Plan | A scout may research this unattended. |
+| In Planning | Claimed; a scout is (or should be) behind it. |
+| Plan Review | Nothing — a finished plan is parked on a human to judge. |
 | Todo | A bot may build this unattended. |
 | Needs Input | Nothing — a question is parked on a human. |
 | In Progress | Claimed; a worker is (or should be) behind it. |
@@ -107,39 +126,52 @@ safe where promotion is not, because it removes authorization rather than
 granting it — a ticket that turns out to be wrong mid-flight gets handed
 back to Backlog with a comment, never quietly closed.
 
-**Scoping** blesses research. A ticket sitting in Scoping is one a
+**To Plan** blesses research. A ticket sitting in To Plan is one a
 dispatcher may spend a scout on unattended — real tokens, real time. That
 is an authorization, the same shape as Todo one rung lower, which is why
-agents may not put work there either. A plan run ends one of two ways, and
-both move the ticket *out* of Scoping: a scout with a blocking question
-moves it to Needs Input, posting the question; a scout with a finished
-plan moves it to Scoped, posting approaches, a recommendation and an
-estimate. Moving out is what every plan run ends with, either way, and it
-hands the decision back to a person.
+agents may not put work there either. `wand plan` claims a To Plan ticket
+into In Planning before it does anything else, the research-side mirror of
+`wand run` claiming Todo into In Progress — the board is the mutex on both
+sides now, where research used to take a machine-local lock instead
+because it had no board move to claim.
 
-**Scoped** is the research side of In Review: the plan is written, the
+**In Planning** is a live plan run in progress: a scout is (or should be)
+behind it, the same way In Progress means a worker is behind a build. It is
+the state that makes the cockpit's generic started-type read do the right
+thing for a plan run without a carve-out written just for it — a live plan
+run whose ticket is not in In Planning is genuine drift, the same as it
+would be for a build. A plan run ends one of two ways, and both move the
+ticket *out* of In Planning: a scout with a blocking question moves it to
+Needs Input, posting the question; a scout with a finished plan moves it
+to Plan Review, posting approaches, a recommendation and an estimate.
+Moving out is what every plan run ends with, either way, and it hands the
+decision back to a person.
+
+**Plan Review** is the research side of In Review: the plan is written, the
 approaches are argued, and all that remains is a human's judgment. It exists
 because Needs Input was carrying two different jobs after a plan run — "the
 scout has a question" and "the plan is ready to bless" — and those want
 different things from the person reading the board, on different clocks. A
 cockpit whose whole purpose is to sort work by the job it needs from you
 cannot do that while one queue holds both. Building already had the pair, In
-Progress and In Review; research now has it too. Like Needs Input it is
-`unstarted`: blessing a plan promotes it to Todo, which re-authorizes the
-work rather than resuming it.
+Progress and In Review; research now has the full triple — To Plan, In
+Planning, Plan Review mirroring Todo, In Progress, In Review exactly. Like
+Needs Input, Plan Review is `unstarted`: blessing a plan promotes it to
+Todo, which re-authorizes the work rather than resuming it.
 
-Scoped is the agent's terminal write for a plan run the same way In Review is
-for a build — an agent may set it unattended, and the guard treats the two
-identically. Neither may an agent move a ticket *out* of Scoped: that
-destination is Todo (blessing) or one of the three close statuses, all
-five already forbidden regardless of where the ticket is moving from.
+Plan Review is the agent's terminal write for a plan run the same way In
+Review is for a build — an agent may set it unattended, and the guard
+treats the two identically. Neither may an agent move a ticket *out* of
+Plan Review: that destination is Todo (blessing) or one of the three close
+statuses, all five already forbidden regardless of where the ticket is
+moving from.
 
 `wand plan`'s happy path ends there: the plan, the argued options and the
-estimate land on the ticket, then the move to Scoped is the last write,
-advertising that all three are there to read. Needs Input is the scout's
-other ending, and only that one now — a blocking question, nothing else,
-with the question as the comment. A team bootstrapped before Scoped
-existed will see the missing state reported by
+estimate land on the ticket, then the move to Plan Review is the last
+write, advertising that all three are there to read. Needs Input is the
+scout's other ending, and only that one now — a blocking question, nothing
+else, with the question as the comment. A team bootstrapped before this
+topology existed will see the missing states reported by
 [`wand doctor`](../commands/doctor/) and created by `wand init`. (It ships
 inside schema 1: wand is undistributed, so topology changes do not yet
 spend schema increments.)
@@ -167,7 +199,7 @@ waiting for, and surfacing that queue is one quarter of the whole job of
 [the cockpit](../commands/ui/).
 It is deliberately an `unstarted` state: answering the question re-blesses
 the work, it does not resume it automatically. It means exactly one thing —
-answer me — never "review this," which is Scoped's job and In Review's;
+answer me — never "review this," which is Plan Review's job and In Review's;
 a queue that means two things is a queue a person has to open before they
 know what it is asking of them.
 
@@ -187,27 +219,30 @@ happened.
 ## The forbidden transitions
 
 Five statuses grant or revoke authorization an agent does not have, so an
-agent may never set them: **Todo**, **Scoping**, **Done**, **Canceled**,
+agent may never set them: **Todo**, **To Plan**, **Done**, **Canceled**,
 **Duplicate**. Everything an agent legitimately sets is left alone:
-In Progress, In Review, Needs Input, **Scoped**, Backlog, Triage.
+In Progress, In Review, Needs Input, **In Planning**, **Plan Review**,
+Backlog, Triage.
 
-Note which *direction* is blocked. Moving a ticket into Scoping is a
-promotion and is refused; moving one out of Scoping is how every plan run
-ends, and is allowed either way it ends — to Needs Input (a blocking
-question) or to Scoped (a finished plan). The guard sees only the
-destination.
+Note which *direction* is blocked. Moving a ticket into To Plan is a
+promotion and is refused; moving one out of To Plan — the claim into In
+Planning `wand plan` makes before anything else — is allowed, the same
+WND-47 rule restated: agents may enter a state they do not bless, only
+humans may leave one that authorizes something. From In Planning, a plan
+run ends either way it ends — to Needs Input (a blocking question) or to
+Plan Review (a finished plan). The guard sees only the destination.
 
-Leaving Scoped toward Todo needs no rule of its own: it is the same
-promotion the Todo rule above already forbids from every status, Scoped
-included. Setting Scoped is new with this status; blocking the way out of
-it is not — it falls out of a rule that already existed.
+Leaving Plan Review toward Todo needs no rule of its own: it is the same
+promotion the Todo rule above already forbids from every status, Plan
+Review included. Setting Plan Review is new with this status; blocking the
+way out of it is not — it falls out of a rule that already existed.
 
-One gap this status inherits rather than fixes: the guard matches statuses
-by their default English display name (`"Scoped"`, `"Todo"`, ...), not
+One gap these statuses inherit rather than fix: the guard matches statuses
+by their default English display name (`"Plan Review"`, `"Todo"`, ...), not
 whatever a covenant-file rename might call them. A team that renames a
 guarded status in its covenant file silently falls out of the guard's
-coverage. That gap predates Scoped, applies to it and its neighbors alike,
-and is tracked separately rather than fixed here — see
+coverage. That gap predates this topology, applies to it and its
+neighbors alike, and is tracked separately rather than fixed here — see
 [WND-17](https://linear.app/prosewell/issue/WND-17/guards-forbidden-status-list-ignores-covenant-file-status-renames).
 
 This rule is enforced, not requested. Every rule in wand lives in exactly
@@ -243,7 +278,7 @@ rather than attempts and so has a meaningful zero.
 
 `caps.lanes` (default `1`) is a different kind of limit: how many
 `wand run` loops [`wand dispatch`](../commands/dispatch/) runs against this
-repository at once. A Scoping ticket never counts against it — research
+repository at once. A To Plan ticket never counts against it — research
 needs no lane — so raising it only ever buys more concurrent building.
 
 `caps.worker_retries` (default `1`) is the one cap whose floor is zero, and

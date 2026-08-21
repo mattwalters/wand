@@ -232,7 +232,7 @@ func TestBinaryRendersAndQuitsCleanly(t *testing.T) {
 
 	// The cockpit should render all five queues without any input.
 	got := screen.waitForText(t, "Needs Input")
-	for _, want := range []string{"wand cockpit", "Triage", "Scoped", "Needs Input", "Ready for human", "Lanes"} {
+	for _, want := range []string{"wand cockpit", "Triage", "Plan Review", "Needs Input", "Ready for human", "Lanes"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("cockpit is missing %q; screen was:\n%s", want, got)
 		}

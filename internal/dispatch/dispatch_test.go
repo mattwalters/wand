@@ -19,8 +19,8 @@ import (
 // before it gets that far (lock/nothing-to-do/unreachable), or is already
 // covered end to end in internal/run and internal/plan.
 type fakeBoard struct {
-	todo, scoping []linear.Issue
-	err           error
+	todo, toPlan []linear.Issue
+	err          error
 }
 
 func (f *fakeBoard) TeamIssuesByState(_ context.Context, _, stateName string) ([]linear.Issue, error) {
@@ -30,7 +30,7 @@ func (f *fakeBoard) TeamIssuesByState(_ context.Context, _, stateName string) ([
 	if stateName == "Todo" {
 		return f.todo, nil
 	}
-	return f.scoping, nil
+	return f.toPlan, nil
 }
 
 func (f *fakeBoard) IssueByIdentifier(context.Context, string) (linear.Issue, error) {

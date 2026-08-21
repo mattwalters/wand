@@ -85,7 +85,7 @@ type Caps struct {
 	PhaseTimeouts map[string]time.Duration
 	// Lanes is how many `wand run` loops this repo runs at once. `wand
 	// dispatch` reads it to decide whether a Todo winner may start; a
-	// Scoping winner never needs one (see internal/dispatch), so research
+	// To Plan winner never needs one (see internal/dispatch), so research
 	// is never starved by full lane occupancy.
 	Lanes int
 	// WorkerRetries is how many extra times one phase may respawn its
@@ -158,12 +158,27 @@ func (c Covenant) StatusName(key string) string {
 // Default is the stock covenant: the lifecycle proven in Prosewell.
 //
 // Triage is the inbox agents file into; Backlog is the undifferentiated pool;
-// Scoping blesses research; Scoped is the plan that research produced, done
-// and awaiting judgment; Todo blesses building; Needs Input parks a question
-// on a human. Scoped is to Scoping what In Review is to In Progress — the
-// finished-work end of a phase, held apart from the question-parking state
-// because "read this plan and decide" and "answer this question" are
-// different jobs for the human doing them.
+// To Plan blesses research; In Planning is that research actually happening;
+// Plan Review is the plan research produced, done and awaiting judgment;
+// Todo blesses building; Needs Input parks a question on a human. The
+// research half is now symmetric with the build half by design: To Plan is
+// to In Planning what Todo is to In Progress (blessed, not yet started vs.
+// started), and Plan Review is to In Planning what In Review is to
+// In Progress (the finished-work end of a phase). Plan Review is held apart
+// from the question-parking state because "read this plan and decide" and
+// "answer this question" are different jobs for the human doing them.
+//
+// WND-79 is a deliberate reversal of the topology `wand plan` originally
+// shipped with, which held its ticket in Scoping (a single unstarted status)
+// for the whole research phase rather than claiming a started one the way
+// `wand run` claims In Progress. That was defended on two grounds — a
+// planner has no board move to lose a race on, and a claim nothing drains
+// on a crash is worse than a lock — and both are gone: the lock
+// (journal.Store.LockTicket) was machine-local and could never stop two
+// machines planning one ticket, where a board claim can, and the
+// dead-lease reaping WND-69/71/72 built means a claim a dead planner
+// abandons is now drained the same way a dead builder's is. See PLAN.md for
+// the fuller accounting.
 //
 // The automations mirror Prosewell's observed
 // configuration: open and draft target In Progress (a claimed ticket is
@@ -179,15 +194,24 @@ func Default() Covenant {
 			// listed so the planner can verify rather than assume.
 			{Key: "triage", Name: "Triage", Type: "triage", Position: 0, Color: "#8A6FDF"},
 			{Key: "backlog", Name: "Backlog", Type: "backlog", Position: 0, Color: "#8A6FDF"},
-			{Key: "scoping", Name: "Scoping", Type: "unstarted", Position: -50, Color: "#8A6FDF"},
-			// Scoped sits midway between Scoping (-50) and Todo (1) rather
-			// than adjacent to either, so a later state on the research side
-			// has somewhere to go without renumbering the ones around it.
-			// Green is the ready-for-human green: Scoped is a finished plan
-			// waiting on a person, the same signal the label carries, and
-			// deliberately not Needs Input's orange — orange is an agent
-			// stuck on you, green is work ready for you.
-			{Key: "scoped", Name: "Scoped", Type: "unstarted", Position: -25, Color: "#4CB782"},
+			{Key: "to_plan", Name: "To Plan", Type: "unstarted", Position: -50, Color: "#8A6FDF"},
+			// In Planning sits between To Plan (-50) and Plan Review (-25):
+			// a live plan run's ticket, claimed the same way `run` claims
+			// In Progress. Its `started` type is the whole point — it is
+			// what puts a live plan run in the same swimlane as other work
+			// in flight, and what lets the cockpit's generic started-type
+			// read (internal/cockpit/lanes.go) recognize it without a
+			// verb-specific carve-out.
+			{Key: "in_planning", Name: "In Planning", Type: "started", Position: -40, Color: "#8A6FDF"},
+			// Plan Review sits midway between In Planning (-40) and Todo (1)
+			// rather than adjacent to either, so a later state on the
+			// research side has somewhere to go without renumbering the
+			// ones around it. Green is the ready-for-human green: Plan
+			// Review is a finished plan waiting on a person, the same
+			// signal the label carries, and deliberately not Needs Input's
+			// orange — orange is an agent stuck on you, green is work ready
+			// for you.
+			{Key: "plan_review", Name: "Plan Review", Type: "unstarted", Position: -25, Color: "#4CB782"},
 			{Key: "todo", Name: "Todo", Type: "unstarted", Position: 1, Color: "#8A6FDF"},
 			{Key: "needs_input", Name: "Needs Input", Type: "unstarted", Position: 50, Color: "#F2994A"},
 			{Key: "in_progress", Name: "In Progress", Type: "started", Position: 2, Color: "#8A6FDF"},

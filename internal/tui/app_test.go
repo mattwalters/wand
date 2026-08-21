@@ -196,7 +196,7 @@ func TestDispositionKeysOpenTheConfirmation(t *testing.T) {
 		wantBless  bool
 	}{
 		{key: "t", wantStatus: "todo", wantBless: true},
-		{key: "s", wantStatus: "scoping", wantBless: true},
+		{key: "s", wantStatus: "to_plan", wantBless: true},
 		{key: "b", wantStatus: "backlog"},
 		{key: "u", wantStatus: "backlog"},
 		{key: "d", wantStatus: "duplicate"},
@@ -522,15 +522,15 @@ func TestScreens(t *testing.T) {
 		{golden: "clear-parked", script: "j,j,j,j,j,j,c"},
 		{golden: "detail", script: "j,enter"},
 		{golden: "detail-lane", script: "j,j,j,j,j,enter"},
-		{golden: "detail-scoped", script: "j,j,enter"},
+		{golden: "detail-plan-review", script: "j,j,enter"},
 		{golden: "bless-todo", script: "t"},
 		{golden: "bless-todo-unranked", script: "j,t"},
-		{golden: "bless-scoping", script: "s"},
+		{golden: "bless-to-plan", script: "s"},
 		{golden: "backlog-ranked", script: "b"},
 		{golden: "backlog-unranked", script: "u"},
 		{golden: "duplicate", script: "d,W,N,D,-,4,1"},
 		{golden: "cancel", script: "x,o,b,s,o,l,e,t,e"},
-		{golden: "bless-scoped-todo", script: "j,j,t"},
+		{golden: "bless-plan-review-todo", script: "j,j,t"},
 		{golden: "reject-plan", script: "j,j,b,w,r,o,n,g"},
 	}
 
@@ -545,13 +545,13 @@ func TestScreens(t *testing.T) {
 // line-clamping depend on the terminal it is shown in — every other field
 // there is a short, fixed-width line. A narrower or shorter terminal must
 // still produce a readable, deterministic screen rather than a garbled one.
-func TestScopedPlanAtOtherSizes(t *testing.T) {
+func TestPlanReviewDetailAtOtherSizes(t *testing.T) {
 	tests := []struct {
 		golden        string
 		width, height int
 	}{
-		{golden: "detail-scoped-narrow", width: 48, height: screen.DefaultHeight},
-		{golden: "detail-scoped-short", width: screen.DefaultWidth, height: 14},
+		{golden: "detail-plan-review-narrow", width: 48, height: screen.DefaultHeight},
+		{golden: "detail-plan-review-short", width: screen.DefaultWidth, height: 14},
 	}
 
 	for _, tt := range tests {

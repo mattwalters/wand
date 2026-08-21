@@ -32,18 +32,38 @@ and should feel like one.
    If wand ever grows a second backend, it will be because wand won, not as
    a hedge.
 2. **Fixed topology, parameterized covenant.** The state graph — Triage →
-   Backlog → Scoping → Scoped → Todo → Needs Input → In Progress →
-   In Review → Done — is wand's opinion, gofmt-style. Every state exists because of a failure
+   Backlog → To Plan → In Planning → Plan Review → Todo → Needs Input →
+   In Progress → In Review → Done — is wand's opinion, gofmt-style. Every state exists because of a failure
    mode every team running agents will eventually hit. A repo's covenant
    file customizes the parameters of the machine (names, caps, commands,
    toggles), never its shape. Topology changes ship as wand upgrades, for
    everyone, versioned by a schema field.
+
+   **WND-79 is the one topology change so far that reversed an earlier
+   decision rather than adding to it.** The research half used to hold its
+   ticket in a single unstarted status (Scoping) for the whole research
+   phase — no board move to lose a race on, so `wand plan` took an
+   explicit per-ticket lock instead (`journal.Store.LockTicket`) rather
+   than a claim. Two things changed since: that lock was machine-local and
+   could never stop two machines planning one ticket, where a board claim
+   can; and the "a crashed claim strands the ticket" objection that
+   justified the lock over a claim is gone now that WND-69/71/72 built
+   dead-lease reaping for exactly that failure. So `wand plan` now claims
+   In Planning before it touches anything, the lock is gone, and the
+   research half is symmetric with the build half: To Plan/In
+   Planning/Plan Review mirror Todo/In Progress/In Review exactly, and the
+   cockpit's generic started-type read (`internal/cockpit/lanes.go`) needs
+   no plan-specific carve-out any more (the one WND-66 added is deleted).
+   Nothing had shipped when this landed, which is what made the reversal
+   free — the bill this convictions text describes ("topology changes ship
+   as wand upgrades, for everyone") is not payable yet, and paying it later
+   would have cost every adopting team a migration this one did not.
 3. **Single writer.** The orchestrator holds the only API credentials and
    makes every Linear and GitHub write. Spawned workers are cold, stateless
    and mute: prompt in, filesystem and git in the middle, one JSON handoff
    file out. Two writers on one ticket cannot be reconciled afterwards, so
    the second writer is not allowed to exist.
-4. **Humans hold the blessing.** Promotion to Todo (build this) and Scoping
+4. **Humans hold the blessing.** Promotion to Todo (build this) and To Plan
    (research this), and every closing status, are human acts. Agents can
    file, demote, hand back and recommend — never authorize. This is
    enforced, not requested (see the tiers below).

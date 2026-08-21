@@ -40,11 +40,11 @@ func TestEvaluate(t *testing.T) {
 		// the ticket having existed first — an agent blessing its own work.
 		{"created directly in Todo", linearTool, map[string]any{"title": "x", "team": "WND", "state": "Todo"}, true},
 
-		// --- Scoping, the same promotion one rung lower ------------------
-		{"Scoping", linearTool, map[string]any{"id": "WND-1", "state": "Scoping"}, true},
-		{"scoping lowercase", linearTool, map[string]any{"id": "WND-1", "state": "scoping"}, true},
-		{"Scoping with stray whitespace", linearTool, map[string]any{"id": "WND-1", "state": " Scoping  "}, true},
-		{"created directly in Scoping", linearTool, map[string]any{"title": "x", "team": "WND", "state": "Scoping"}, true},
+		// --- To Plan, the same promotion one rung lower ------------------
+		{"To Plan", linearTool, map[string]any{"id": "WND-1", "state": "To Plan"}, true},
+		{"to plan lowercase", linearTool, map[string]any{"id": "WND-1", "state": "to plan"}, true},
+		{"To Plan with stray whitespace", linearTool, map[string]any{"id": "WND-1", "state": " To Plan  "}, true},
+		{"created directly in To Plan", linearTool, map[string]any{"title": "x", "team": "WND", "state": "To Plan"}, true},
 
 		// --- closing, which is equally the human's call ------------------
 		{"Done", linearTool, map[string]any{"id": "WND-1", "state": "Done"}, true},
@@ -57,7 +57,7 @@ func TestEvaluate(t *testing.T) {
 		// are a live way to reach a forbidden status without naming it.
 		{"completed type", linearTool, map[string]any{"id": "WND-1", "state": "completed"}, true},
 		{"canceled type", linearTool, map[string]any{"id": "WND-1", "state": "canceled"}, true},
-		// Todo, Needs Input and Scoping are ALL unstarted, so this resolves
+		// Todo, Needs Input and To Plan are ALL unstarted, so this resolves
 		// to the team default — Todo — and reads as a hand-back while
 		// landing as a promotion.
 		{"unstarted type is ambiguous", linearTool, map[string]any{"id": "WND-1", "state": "unstarted"}, true},
@@ -68,10 +68,13 @@ func TestEvaluate(t *testing.T) {
 		{"In Review (ship)", linearTool, map[string]any{"id": "WND-1", "state": "In Review"}, false},
 		{"Needs Input (handback)", linearTool, map[string]any{"id": "WND-1", "state": "Needs Input"}, false},
 		{"needs input, loosely typed", linearTool, map[string]any{"id": "WND-1", "state": "needs input"}, false},
-		// Scoped is the research-side analog of In Review: the plan
+		// In Planning is what plan.Execute claims before it does anything
+		// else, the research-side mirror of claiming In Progress.
+		{"In Planning (plan claim)", linearTool, map[string]any{"id": "WND-1", "state": "In Planning"}, false},
+		// Plan Review is the research-side analog of In Review: the plan
 		// orchestrator's terminal write, allowed the same way In Review is.
-		{"Scoped (plan's terminal write)", linearTool, map[string]any{"id": "WND-1", "state": "Scoped"}, false},
-		{"scoped, loosely typed", linearTool, map[string]any{"id": "WND-1", "state": "scoped"}, false},
+		{"Plan Review (plan's terminal write)", linearTool, map[string]any{"id": "WND-1", "state": "Plan Review"}, false},
+		{"plan review, loosely typed", linearTool, map[string]any{"id": "WND-1", "state": "plan review"}, false},
 		{"Backlog (abandon)", linearTool, map[string]any{"id": "WND-1", "state": "Backlog"}, false},
 		{"backlog type", linearTool, map[string]any{"id": "WND-1", "state": "backlog"}, false},
 		{"Triage (file)", linearTool, map[string]any{"id": "WND-1", "state": "Triage"}, false},
@@ -144,16 +147,16 @@ func TestReasonsNameTheAlternative(t *testing.T) {
 	// the message has to name that transition. Told only "no", it
 	// improvises — and the nearest wrong answer, Todo, is itself blocked,
 	// which leaves it with nothing.
-	scoping := reasonFor("Scoping")
-	if !strings.Contains(scoping, "Needs Input") {
-		t.Error("Scoping block does not name Needs Input as the answer")
+	toPlan := reasonFor("To Plan")
+	if !strings.Contains(toPlan, "Needs Input") {
+		t.Error("To Plan block does not name Needs Input as the answer")
 	}
-	if !strings.Contains(scoping, "human promotes it") {
-		t.Error("Scoping block does not say a human promotes it")
+	if !strings.Contains(toPlan, "human promotes it") {
+		t.Error("To Plan block does not say a human promotes it")
 	}
 
-	if unstarted := reasonFor("unstarted"); !strings.Contains(unstarted, "Scoping") {
-		t.Error("unstarted block does not name all three unstarted statuses")
+	if unstarted := reasonFor("unstarted"); !strings.Contains(unstarted, "To Plan") {
+		t.Error("unstarted block does not name all four unstarted statuses")
 	}
 }
 
@@ -183,14 +186,16 @@ func TestForbiddenSetMatchesCovenant(t *testing.T) {
 	}
 
 	// The ambiguity message for the unstarted type claims exactly four
-	// unstarted statuses: Todo, Needs Input, Scoping, Scoped.
+	// unstarted statuses: Todo, Needs Input, To Plan, Plan Review. In
+	// Planning must NOT be among them — it is typed started, which is what
+	// this assertion actually proves.
 	unstarted := map[string]bool{}
 	for _, s := range cov.Statuses {
 		if s.Type == "unstarted" {
 			unstarted[normalize(s.Name)] = true
 		}
 	}
-	want := map[string]bool{"todo": true, "needs input": true, "scoping": true, "scoped": true}
+	want := map[string]bool{"todo": true, "needs input": true, "to plan": true, "plan review": true}
 	if len(unstarted) != len(want) {
 		t.Errorf("covenant has %d unstarted statuses %v, the unstarted reason claims %v", len(unstarted), unstarted, want)
 	}

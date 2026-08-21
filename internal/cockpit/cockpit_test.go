@@ -25,7 +25,7 @@ func TestBuildAlwaysHasFiveSections(t *testing.T) {
 	if len(b.Sections) != 5 {
 		t.Fatalf("sections = %d, want 5", len(b.Sections))
 	}
-	want := []Kind{KindTriage, KindScoped, KindNeedsInput, KindReadyForHuman, KindLanes}
+	want := []Kind{KindTriage, KindPlanReview, KindNeedsInput, KindReadyForHuman, KindLanes}
 	for i, k := range want {
 		if b.Sections[i].Kind != k {
 			t.Errorf("section %d = %q, want %q", i, b.Sections[i].Kind, k)
@@ -102,7 +102,7 @@ func TestDispositions(t *testing.T) {
 	}{
 		{kind: KindTriage, want: 6},
 		{kind: KindNeedsInput, want: 6},
-		{kind: KindScoped, want: 2},
+		{kind: KindPlanReview, want: 2},
 		{kind: KindReadyForHuman, want: 0},
 		{kind: KindLanes, want: 0},
 	}
@@ -141,7 +141,7 @@ func TestOtherLaneKindsOfferNoDisposition(t *testing.T) {
 // searches one row's own list, so a collision across lists is not a bug,
 // but a collision within one silently shadows a judgment.
 func TestDispositionKeysAreUnique(t *testing.T) {
-	for name, disps := range map[string][]Disposition{"judgments": judgments, "scopedJudgments": scopedJudgments, "laneJudgments": laneJudgments} {
+	for name, disps := range map[string][]Disposition{"judgments": judgments, "planReviewJudgments": planReviewJudgments, "laneJudgments": laneJudgments} {
 		seen := map[string]string{}
 		for _, d := range disps {
 			if d.Key == "" {
@@ -163,7 +163,7 @@ func TestDispositionKeysAreUnique(t *testing.T) {
 // will one day cancel a ticket somebody was only scrolling past.
 func TestDispositionKeysAvoidNavigation(t *testing.T) {
 	for _, nav := range []string{"j", "k", "q", "enter", "esc", "r", "up", "down"} {
-		for name, disps := range map[string][]Disposition{"judgments": judgments, "scopedJudgments": scopedJudgments, "laneJudgments": laneJudgments} {
+		for name, disps := range map[string][]Disposition{"judgments": judgments, "planReviewJudgments": planReviewJudgments, "laneJudgments": laneJudgments} {
 			for _, d := range disps {
 				if d.Key == nav {
 					t.Errorf("%s: %q is bound to %q, which the screen uses for navigation", name, d.Name, nav)

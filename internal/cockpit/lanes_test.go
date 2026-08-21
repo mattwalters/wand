@@ -25,8 +25,8 @@ func report(outcome journal.Outcome, reason string, live journal.Liveness) journ
 }
 
 // planReport builds a live plan-verb report, the shape TestClassify's
-// plan-exemption cases need: report() hardcodes Verb: "run", and adding a
-// verb parameter there would touch every existing case for one that needs it.
+// plan-verb cases need: report() hardcodes Verb: "run", and adding a verb
+// parameter there would touch every existing case for one that needs it.
 func planReport(live journal.Liveness) journal.Report {
 	r := report("", "", live)
 	r.State.Meta.Verb = "plan"
@@ -80,35 +80,26 @@ func TestClassify(t *testing.T) {
 			want: LaneOrphaned, wantAny: true,
 		},
 		{
-			name:   "a live plan run nothing claims is exempt, not orphaned",
-			report: planReport(journal.Alive), started: map[string]bool{},
-			// Scoping is an unstarted status by design; a plan run's
-			// ticket living outside started is expected, not drift.
+			name:   "a live plan run claimed into In Planning needs nobody",
+			report: planReport(journal.Alive), started: started,
+			// `wand plan` claims In Planning (a started status, WND-79)
+			// before it does anything else, so a live plan run whose
+			// ticket is in the started set reads exactly like a live build
+			// run's does: nobody has to resolve it.
 		},
 		{
-			name:   "a live plan run on a started ticket is also exempt",
-			report: planReport(journal.Alive), started: started,
-			// Proves the exemption is on the verb, not accidentally
-			// passing because started happened to contain the ticket.
+			name:   "a live plan run whose ticket drifted off In Planning is orphaned",
+			report: planReport(journal.Alive), started: map[string]bool{},
+			// The WND-66 carve-out this used to be exempt under is gone:
+			// the planning track has a started state of its own now, so a
+			// live plan run the board does not claim is genuine drift, the
+			// same as it would be for a build run.
+			want: LaneOrphaned, wantAny: true,
 		},
 		{
 			name:   "a plan run with a dead holder is still stuck",
 			report: planReport(journal.Dead), started: map[string]bool{},
-			// The exemption sits inside the alive-and-board-check path
-			// only; a dead plan holder is still a zombie to report.
 			want: LaneStuck, wantAny: true,
-		},
-		{
-			name: "a live run carrying the pre-rename \"scope\" verb is exempt too",
-			report: func() journal.Report {
-				r := planReport(journal.Alive)
-				r.State.Meta.Verb = "scope"
-				return r
-			}(),
-			started: map[string]bool{},
-			// A journal run predating this rename still carries "scope";
-			// the exemption reads it as a synonym for "plan" rather than
-			// treating an old local run as an orphan.
 		},
 		{
 			name: "death outranks board drift",

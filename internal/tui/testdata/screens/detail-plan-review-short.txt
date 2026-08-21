@@ -1,6 +1,6 @@
  WND-44  cockpit: a fifth queue for plans awaiting blessing
 
-  status    Scoped
+  status    Plan Review
   priority  Urgent
   assignee  Matt Walters
 
@@ -8,17 +8,7 @@
 
   **Add a Scoped section.** Triage and Scoped are both authorization judgments;
   putting them next to each other reads as one job, not two.
-
-  ### Steps
-
-  1. Read the Scoped state into the snapshot.
-  2. Render the plan section on the detail screen.
-  3. Wire Bless → Todo and Backlog, with reason.
-
-  ### How it is proven
-
-  Golden screens at two widths, plus the existing cockpit test tiers.
-  … 8 more lines; read it in Linear
+  … 18 more lines; read it in Linear
 
   judge  t ✦Todo  b Backlog
   esc back • q quit

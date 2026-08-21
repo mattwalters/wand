@@ -3,7 +3,7 @@
   Triage
     nothing filed since you last looked.
 
-  Scoped
+  Plan Review
     no plan is waiting on a blessing.
 
   Needs Input

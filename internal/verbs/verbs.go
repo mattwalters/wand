@@ -1,15 +1,17 @@
 // Package verbs implements the single-writer lifecycle actions an
-// interactive session performs: claim, handback, abandon, file, and the
-// one an orchestrator performs on its way out, report-park.
+// interactive session performs: claim, claim-for-planning, handback,
+// abandon, file, and the one an orchestrator performs on its way out,
+// report-park.
 //
 // Each verb encodes an ordering rule the reference system carried as prose —
 // and prose ordering is remembered ordering, which is to say sometimes
 // ordering. Here the sequence is the code:
 //
-//   - claim moves the status before anything touches the filesystem, because
-//     the status move is the cheapest place to lose a race: two sessions that
-//     both branch and then both claim have each done work one must throw
-//     away, while two that claim first collide before either has anything.
+//   - claim (and claim-for-planning, its research-side mirror) moves the
+//     status before anything touches the filesystem, because the status
+//     move is the cheapest place to lose a race: two sessions that both
+//     branch and then both claim have each done work one must throw away,
+//     while two that claim first collide before either has anything.
 //   - handback posts the question before setting Needs Input, so a failure
 //     between the two never leaves a Needs Input ticket with no question on
 //     it — that ticket parks forever, because the human it waits on was
@@ -158,6 +160,47 @@ func Claim(ctx context.Context, cl Linear, cov covenant.Covenant, identifier str
 		return Claimed{}, err
 	}
 	return Claimed{Issue: issue, Assignee: viewer.Name}, nil
+}
+
+// ClaimForPlanning vets one issue and takes it into research: In Planning,
+// in a single write, before anything touches the filesystem — the same
+// claim-before-filesystem ordering [Claim] uses, and for the same reason:
+// the status move is the cheapest place to lose a race, and losing it here
+// costs nothing, not even a run directory.
+//
+// Unlike Claim it does not assign the ticket to anybody: a plan run is
+// read-only research that nobody owns the way a build owns a branch, and
+// the board's own In Planning status is what makes a live plan run visible
+// without one.
+//
+// vet is the caller's own rule for what may not be planned (`plan.Vet`,
+// which this package cannot import without a cycle — plan already imports
+// verbs). This package owns the claim's ordering, not the policy of which
+// research is off-limits; only the status gate — claim starts research, so
+// only To Plan is claimable — lives here.
+func ClaimForPlanning(ctx context.Context, cl Linear, cov covenant.Covenant, identifier string, vet func(linear.Issue) string) (linear.Issue, error) {
+	issue, err := cl.IssueByIdentifier(ctx, identifier)
+	if err != nil {
+		return linear.Issue{}, err
+	}
+	toPlan := cov.StatusName("to_plan")
+	if !strings.EqualFold(issue.State.Name, toPlan) {
+		return linear.Issue{}, fmt.Errorf(
+			"%s is in %q, not %q: wand plan researches blessed work, and blessing research is a human act — an issue outside %q is not yours to plan",
+			issue.Identifier, issue.State.Name, toPlan, toPlan)
+	}
+	if reason := vet(issue); reason != "" {
+		return linear.Issue{}, fmt.Errorf("%s may not be planned: %s", issue.Identifier, reason)
+	}
+
+	stateID, err := ResolveState(ctx, cl, cov, issue.TeamID, "in_planning")
+	if err != nil {
+		return linear.Issue{}, err
+	}
+	if err := cl.UpdateIssue(ctx, issue.ID, linear.IssueUpdate{StateID: stateID}); err != nil {
+		return linear.Issue{}, err
+	}
+	return issue, nil
 }
 
 // Handback parks one issue on a human: the question as a comment first,
