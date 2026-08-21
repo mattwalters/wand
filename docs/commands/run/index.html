@@ -310,6 +310,20 @@ instead of dying in a worker&rsquo;s transcript. A deviation reported by a revis
 worker arrives after the PR body was written, so the hand-back and the
 journal are what carry it; nothing about a run&rsquo;s ending is allowed to be
 the place its account gets dropped.</p>
+<h2 id="transcripts">Transcripts</h2>
+<p>Each phase&rsquo;s full worker output — the harness&rsquo;s own event stream, not just
+the 64KB diagnostic tail the journal keeps — is captured to disk under the
+run&rsquo;s directory, at <code>transcripts/&lt;phase&gt;-&lt;round&gt;.transcript.jsonl</code>, beside
+<code>scratch/</code>. It carries the worker&rsquo;s reasoning and tool calls, not only its
+final answer, because that is what a human (or a later <code>wand analyze</code>)
+needs to reconstruct why a run went sideways — the handoff is the worker&rsquo;s
+conclusion, the transcript is how it got there.</p>
+<p>Each file is capped at a safety-valve byte limit so one wedged or chatty
+worker cannot fill the disk; there is no cross-run retention policy yet, so
+transcripts accumulate under <code>$XDG_STATE_HOME/wand/runs</code> until a human (or
+a later pruning verb) clears them. A transcript can carry repository code
+and a worker&rsquo;s own reasoning about it — fine on the operator&rsquo;s own disk,
+but nothing quotes one into Linear or GitHub automatically, and <code>wand analyze</code> inherits that constraint too.</p>
 <h2 id="flags">Flags</h2>
 <table>
 	<thead>
@@ -409,6 +423,7 @@ run WND-42-20260819T120000Z ended: converged — reviewer approved on round 1; P
       </ul>
     </li>
     <li><a href="#what-the-handoff-carries-back">What the handoff carries back</a></li>
+    <li><a href="#transcripts">Transcripts</a></li>
     <li><a href="#flags">Flags</a></li>
     <li><a href="#exit-codes">Exit codes</a></li>
     <li><a href="#requirements">Requirements</a></li>

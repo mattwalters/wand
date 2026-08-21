@@ -374,6 +374,9 @@ brief&rsquo;s own content rather than a real one — <code>wand sweep</code>&rsq
 recovery still runs against it uneventfully; the hand-back it attempts on a
 synthetic identifier simply fails and is logged, the same best-effort
 handling any hand-back failure gets there.</p>
+<p>The scout&rsquo;s full output is captured the same way <code>wand run</code> and <code>wand plan</code>
+capture theirs — see <a href="../run/#transcripts"><code>wand run</code></a> — under the run&rsquo;s
+<code>transcripts/</code> directory.</p>
 <h2 id="requirements">Requirements</h2>
 <p><code>LINEAR_API_KEY</code> in the environment, and — for <code>wand pm</code> — the harness on
 <code>PATH</code> and a git repository to run in. <code>wand pm bless</code> needs no harness: it

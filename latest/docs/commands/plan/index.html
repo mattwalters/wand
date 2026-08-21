@@ -411,6 +411,12 @@ journaled, the ticket gets the same sentence as a comment and the <code>parked</
 label, best-effort: a plan run never advances its own status past the claim
 on a park, so the mark is a label and the ticket stays In Planning, claimed,
 where the run left it.</p>
+<p>Each phase&rsquo;s full worker output — the scout&rsquo;s, the critic&rsquo;s, the reviser&rsquo;s
+own event stream, not just the diagnostic tail — is captured to
+<code>transcripts/&lt;phase&gt;-&lt;round&gt;.transcript.jsonl</code> in the run&rsquo;s directory,
+beside <code>scratch/</code>, capped per file at a safety-valve byte limit rather than
+kept whole. See <a href="../run/#transcripts"><code>wand run</code></a> for what it carries and
+the constraint on quoting it outward.</p>
 <h3 id="the-failure-that-retries-instead">The failure that retries instead</h3>
 <p>A scout that died of infrastructure — a provider error, a host suspended
 mid-response — does not park on the first try. When the harness&rsquo;s own
