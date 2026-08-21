@@ -61,6 +61,20 @@ and should feel like one.
    orchestrator exactly where it was without one. That is what keeps the
    seam generic while still letting the orchestrator act on what only a
    harness can know.
+7. **The ticket body is the specification; the comments are the trail.**
+   The plan lives in the marker-fenced region of the body, and that region
+   is the planner's to rewrite — whole, on every plan run. Everything
+   outside the fence — goals, problem statement, title — belongs to the
+   human who wrote it, and a planner never edits it: a planner that
+   misunderstood the ticket and could also rewrite it would be erasing the
+   evidence of its own misunderstanding, and the body has to stay the
+   thing a plan is checked *against*. Comments are the argument, the open
+   questions, the human's answers, what changed between cycles — durable,
+   but never authoritative, and an implementer that reads a ticket's
+   rejected approaches as equally binding as its accepted one can build
+   the wrong thing. "The goals are wrong" is still expressible: a wrong
+   premise hands back to a human instead of rewriting the body to match a
+   plan that answered a different question.
 
 ## How rules are enforced
 

@@ -218,6 +218,13 @@ that finds the ticket's premise wrong takes the other ending instead: no
 plan, its account on the ticket, and Needs Input — reserved for exactly
 that, a blocking question, never a plan awaiting review.
 
+The plan region is the only thing a plan run writes into the description.
+The ticket's goals, problem statement and title are the human's and are
+checked *against* by the plan, never rewritten by it — the fence is
+absolute, on a first plan and a re-plan alike. A scout that judges the
+ticket itself wrong takes the wrong-premise ending instead: no plan, its
+account on the ticket, and a human decides.
+
 There is no worktree: the scout reads your checkout and may not change it,
 and a run whose worker touched the tree parks with the change left in front
 of you. `--interactive` grills you over the draft first — questions ordered
@@ -340,6 +347,12 @@ suite — while the orchestrator makes every external write: it runs verify,
 pushes, opens and titles the PR (`[WND-3] …`, written at open and repaired
 in code), applies the handoff's description corrections to the ticket, and
 moves the status.
+
+The ticket's description is the specification handed to the implement
+worker; its comments are the record of how it got there — reasoning, open
+questions, answers, approaches raised and rejected — never themselves
+authoritative, and the prompt says so: a worker that read a rejected
+approach and the accepted one as equally binding could build the wrong one.
 
 Every run ends in exactly one journaled terminal state, and the exit code
 is a contract a scheduler can read:
