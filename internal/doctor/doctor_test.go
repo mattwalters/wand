@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io/fs"
 	"strings"
 	"testing"
 
 	"github.com/mattwalters/wand/internal/bootstrap"
 	"github.com/mattwalters/wand/internal/covenant"
 	"github.com/mattwalters/wand/internal/linear"
+	"github.com/mattwalters/wand/internal/shim"
 )
 
 // covenantTeam is a team that satisfies the stock covenant, the state a
@@ -278,7 +280,7 @@ func TestRunExitContract(t *testing.T) {
 
 	t.Run("clean team exits 0", func(t *testing.T) {
 		var out, errOut bytes.Buffer
-		code := Run(context.Background(), &fakeClient{team: team, current: clean}, &out, &errOut, "WND", covenant.Default())
+		code := Run(context.Background(), &fakeClient{team: team, current: clean}, &out, &errOut, "WND", covenant.Default(), nil, nil)
 		if code != ExitClean {
 			t.Fatalf("exit code = %d, want %d; stderr:\n%s", code, ExitClean, errOut.String())
 		}
@@ -291,7 +293,7 @@ func TestRunExitContract(t *testing.T) {
 		current := clean
 		current.Labels = nil
 		var out, errOut bytes.Buffer
-		code := Run(context.Background(), &fakeClient{team: team, current: current}, &out, &errOut, "WND", covenant.Default())
+		code := Run(context.Background(), &fakeClient{team: team, current: current}, &out, &errOut, "WND", covenant.Default(), nil, nil)
 		if code != ExitDrift {
 			t.Fatalf("exit code = %d, want %d", code, ExitDrift)
 		}
@@ -310,7 +312,7 @@ func TestRunExitContract(t *testing.T) {
 		// removed them.
 		schemaTeam, schemaCurrent := schema1Team()
 		var out, errOut bytes.Buffer
-		code := Run(context.Background(), &fakeClient{team: schemaTeam, current: schemaCurrent}, &out, &errOut, "WND", covenant.Default())
+		code := Run(context.Background(), &fakeClient{team: schemaTeam, current: schemaCurrent}, &out, &errOut, "WND", covenant.Default(), nil, nil)
 		if code != ExitDrift {
 			t.Fatalf("exit code = %d, want %d; stderr:\n%s", code, ExitDrift, errOut.String())
 		}
@@ -330,7 +332,7 @@ func TestRunExitContract(t *testing.T) {
 
 	t.Run("unknown team exits 2", func(t *testing.T) {
 		var out, errOut bytes.Buffer
-		code := Run(context.Background(), &fakeClient{team: team, current: clean}, &out, &errOut, "NOPE", covenant.Default())
+		code := Run(context.Background(), &fakeClient{team: team, current: clean}, &out, &errOut, "NOPE", covenant.Default(), nil, nil)
 		if code != ExitError {
 			t.Fatalf("exit code = %d, want %d", code, ExitError)
 		}
@@ -346,9 +348,122 @@ func TestRunExitContract(t *testing.T) {
 			"team read fails":   {team: team, current: clean, readErr: errors.New("boom")},
 		} {
 			var out, errOut bytes.Buffer
-			if code := Run(context.Background(), cl, &out, &errOut, "WND", covenant.Default()); code != ExitError {
+			if code := Run(context.Background(), cl, &out, &errOut, "WND", covenant.Default(), nil, nil); code != ExitError {
 				t.Errorf("%s: exit code = %d, want %d", name, code, ExitError)
 			}
+		}
+	})
+
+	t.Run("repo-check findings merge into a clean Linear result as drift", func(t *testing.T) {
+		var out, errOut bytes.Buffer
+		repoFindings := []string{".claude/settings.json carries the guard hook but is not tracked by git; commit it, or only this checkout is protected"}
+		code := Run(context.Background(), &fakeClient{team: team, current: clean}, &out, &errOut, "WND", covenant.Default(), repoFindings, nil)
+		if code != ExitDrift {
+			t.Fatalf("exit code = %d, want %d; stderr:\n%s", code, ExitDrift, errOut.String())
+		}
+		if !strings.Contains(out.String(), "drift: .claude/settings.json carries the guard hook") {
+			t.Errorf("output does not report the repo-check finding:\n%s", out.String())
+		}
+		if !strings.Contains(out.String(), "1 drift from the covenant") {
+			t.Errorf("output does not count the drift:\n%s", out.String())
+		}
+	})
+
+	t.Run("a repo-check failure exits 2 and takes precedence over any Linear outcome", func(t *testing.T) {
+		// The filesystem check is purely local and cheaper to diagnose than
+		// a Linear failure — the same "local step first" order init itself
+		// uses — so it is checked, and reported, before the Linear API is
+		// ever called.
+		repoErr := errors.New("could not determine whether .codex/hooks.json is tracked by git")
+		for name, cl := range map[string]*fakeClient{
+			"Linear would be clean": {team: team, current: clean},
+			"Linear would drift":    {team: team, current: bootstrap.Current{}},
+			"Linear would error":    {team: team, teamErr: errors.New("boom")},
+		} {
+			t.Run(name, func(t *testing.T) {
+				var out, errOut bytes.Buffer
+				code := Run(context.Background(), cl, &out, &errOut, "WND", covenant.Default(), nil, repoErr)
+				if code != ExitError {
+					t.Fatalf("exit code = %d, want %d", code, ExitError)
+				}
+				if !strings.Contains(errOut.String(), repoErr.Error()) {
+					t.Errorf("stderr does not report the repo-check failure:\n%s", errOut.String())
+				}
+				if out.String() != "" {
+					t.Errorf("Linear check ran despite a repo-check failure; out = %q", out.String())
+				}
+			})
+		}
+	})
+}
+
+func TestRepoCheck(t *testing.T) {
+	canonical, _, err := shim.Ensure(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := []ShimPath{{Path: "settings.json", Ensure: shim.Ensure}}
+	dontCall := func(t *testing.T) func(string) shim.TrackStatus {
+		return func(string) shim.TrackStatus {
+			t.Fatal("tracked status should not be consulted here")
+			return shim.StatusUnknown
+		}
+	}
+
+	t.Run("present, matching, untracked is drift", func(t *testing.T) {
+		findings, err := RepoCheck(paths,
+			func(string) ([]byte, error) { return canonical, nil },
+			func(string) shim.TrackStatus { return shim.StatusUntracked })
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(findings) != 1 || !strings.Contains(findings[0], "settings.json") {
+			t.Errorf("findings = %v, want one mentioning settings.json", findings)
+		}
+	})
+
+	t.Run("present, matching, tracked is clean", func(t *testing.T) {
+		findings, err := RepoCheck(paths,
+			func(string) ([]byte, error) { return canonical, nil },
+			func(string) shim.TrackStatus { return shim.StatusTracked })
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(findings) != 0 {
+			t.Errorf("findings = %v, want none", findings)
+		}
+	})
+
+	t.Run("missing shim is not reported", func(t *testing.T) {
+		findings, err := RepoCheck(paths,
+			func(string) ([]byte, error) { return nil, fs.ErrNotExist },
+			dontCall(t))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(findings) != 0 {
+			t.Errorf("findings = %v, want none", findings)
+		}
+	})
+
+	t.Run("stale content is not reported", func(t *testing.T) {
+		findings, err := RepoCheck(paths,
+			func(string) ([]byte, error) { return []byte("{}"), nil },
+			dontCall(t))
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(findings) != 0 {
+			t.Errorf("findings = %v, want none", findings)
+		}
+	})
+
+	t.Run("could-not-determine is an error, not drift or health", func(t *testing.T) {
+		_, err := RepoCheck(paths,
+			func(string) ([]byte, error) { return canonical, nil },
+			func(string) shim.TrackStatus { return shim.StatusUnknown })
+		if err == nil {
+			t.Fatal("want an error when tracked status could not be determined")
 		}
 	})
 }

@@ -11,6 +11,13 @@
 // labels, and automations on events the covenant does not mention are
 // invisible to wand, not drift. Renamed or missing covenant statuses,
 // repointed automations, and missing labels are drift.
+//
+// RepoCheck widens doctor past the Linear API for the one thing that lives
+// only on disk: whether the harness shims wand init writes are committed.
+// An untracked-but-matching shim protects only the checkout that generated
+// it, which is drift by the same definition Diagnose uses for everything
+// else — so Run folds RepoCheck's findings into the same exit-code
+// contract, rather than leaving it a second, separate check.
 package doctor
 
 import (
@@ -100,7 +107,23 @@ type Client interface {
 // code, so the contract — clean, drift, could-not-check — is testable
 // in-process; the cobra layer turns the return into the real exit. Findings
 // go to out, failures to check go to errOut.
-func Run(ctx context.Context, cl Client, out, errOut io.Writer, teamKey string, cov covenant.Covenant) int {
+//
+// repoFindings and repoErr are RepoCheck's result, computed by the caller
+// (cli/doctor.go) and merged in here rather than in the cobra layer, so the
+// precedence between the filesystem check and the Linear check is pinned by
+// an in-process test rather than left to the compiled-binary e2e tier.
+// repoErr takes precedence over any Linear-side outcome and is checked
+// first: it is purely local and cheaper to diagnose than a Linear failure,
+// the same "local step first" order init itself uses for installing the
+// shim before ever calling the Linear API. A repo-check failure is reported
+// as could-not-check, never as drift or as health, the same rule this
+// function already applies to a Linear failure.
+func Run(ctx context.Context, cl Client, out, errOut io.Writer, teamKey string, cov covenant.Covenant, repoFindings []string, repoErr error) int {
+	if repoErr != nil {
+		fmt.Fprintf(errOut, "could not check: %v\n", repoErr)
+		return ExitError
+	}
+
 	team, err := cl.TeamByKey(ctx, teamKey)
 	if err != nil {
 		fmt.Fprintf(errOut, "could not check: %v\n", err)
@@ -117,6 +140,7 @@ func Run(ctx context.Context, cl Client, out, errOut io.Writer, teamKey string, 
 	}
 
 	findings := Diagnose(cov, team, current)
+	findings = append(findings, repoFindings...)
 	if len(findings) == 0 {
 		fmt.Fprintf(out, "team %s satisfies the covenant\n", team.Key)
 		return ExitClean

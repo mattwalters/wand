@@ -21,6 +21,17 @@ plus the checks a plan cannot express: team settings like triage and the
 estimate scale, which are properties of the team rather than actions
 against it.
 
+`doctor` also makes one filesystem check, alongside its Linear diff: each
+harness shim `init` writes (`.claude/settings.json`, `.codex/hooks.json`)
+that is present and already matches what `init` would write, but is not
+tracked by git, is reported as drift — a shim generated but never
+committed protects only the checkout it ran in, which is exactly the
+[`wand init`](../init/) doc's warning made concrete. This check is purely
+local; it runs before the Linear API is ever called, and if it cannot be
+answered (no git, or the working directory is not a repository), that is
+reported as exit `2`, the same as any other could-not-check, taking
+precedence over whatever the Linear diff would have said.
+
 Findings print one per line, prefixed `drift:`, followed by a count. A
 clean team prints one line and nothing else.
 
@@ -41,14 +52,18 @@ that said so would be a doctor teams learn to ignore.
 ## Exit codes
 
 The three codes are the point of this command — it is built to be a CI
-step, and the codes are pinned by a test in `e2e/` so they cannot drift
-from what is written here.
+step. The precondition half of `2` (no `LINEAR_API_KEY`, no resolvable
+team key) is pinned by a test in `e2e/` against the compiled binary; `0`,
+`1`, and the rest of `2` — the Linear diff, the repo-local shim check, and
+how the two combine — need a live or faked Linear team to exercise, so
+they are pinned in-process in `internal/doctor` instead, the tier that
+tier can't reach.
 
 | Code | Meaning |
 |---|---|
-| `0` | The team satisfies the covenant. |
-| `1` | Drift found. The findings are on stdout. |
-| `2` | The check could not run: no `LINEAR_API_KEY`, no resolvable team key (neither `--team-key` nor `[team] key` in `wand.toml`), no team with that key, a broken `wand.toml`, or an API failure. The reason is on stderr. |
+| `0` | The team satisfies the covenant, and every installed shim is tracked by git. |
+| `1` | Drift found: in the Linear diff, or an installed-but-untracked shim, or both. The findings are on stdout. |
+| `2` | A check could not run: no `LINEAR_API_KEY`, no resolvable team key (neither `--team-key` nor `[team] key` in `wand.toml`), no team with that key, a broken `wand.toml`, an API failure, or the repo-local shim check itself failing (no git, or the working directory is not a git repository). The reason is on stderr. |
 
 `1` and `2` are kept apart deliberately. A CI job that cannot tell "your
 board drifted" from "I could not reach Linear" turns an outage into a

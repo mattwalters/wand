@@ -22,15 +22,24 @@ Four things, in this order:
    directory parameterizes it; absent one, the stock covenant applies.
    Which one was used is printed, because a run that silently fell back to
    defaults looks exactly like one that read your file.
-2. **Installs the guard hook**, into `.claude/settings.json`. This comes
-   first because it is the only purely local step: from here on, this
-   repo's own sessions are under the guard, even if the Linear half fails.
-   The entry routes tool calls matching `mcp__.*__save_issue` to
-   `wand guard`. The matcher is loose in the middle on purpose — the Linear
-   MCP server's connector id changes when Linear is reconnected, and a
-   matcher pinned to today's id would go dead silently, which for a guard
-   means allowing everything with no sign of it. Existing settings are
-   merged, not clobbered; every key `init` does not need to touch survives.
+2. **Installs the guard hook**, into `.claude/settings.json` and
+   `.codex/hooks.json`. This comes first because it is the only purely
+   local step: from here on, this repo's own sessions are under the guard,
+   even if the Linear half fails. The entry routes tool calls matching
+   `mcp__.*__save_issue` to `wand guard`. The matcher is loose in the
+   middle on purpose — the Linear MCP server's connector id changes when
+   Linear is reconnected, and a matcher pinned to today's id would go dead
+   silently, which for a guard means allowing everything with no sign of
+   it. Existing settings are merged, not clobbered; every key `init` does
+   not need to touch survives.
+
+   Both files are repo artifacts, not local machine state: they must be
+   committed for the guard to protect anyone besides whoever ran `init`.
+   `init` says so — a line ending `commit this file` after writing a shim,
+   or after finding one already installed but not yet tracked by git — but
+   it does not stage or commit anything itself; that stays yours to do.
+   [`wand doctor`](../doctor/) also reports an installed-but-untracked shim
+   as drift, so a checked-out clone missing the commit does not go quiet.
 3. **Creates or adopts the team.** A team with the given key already in the
    workspace is adopted, not duplicated.
 4. **Plans and applies the difference** between the team and the covenant:
