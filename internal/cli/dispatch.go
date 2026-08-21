@@ -25,7 +25,7 @@ func newDispatchCmd() *cobra.Command {
 		Long: "dispatch is the selector over the loop: a thin, read-mostly pass that\n" +
 			"picks the highest-ranked, vetted Todo issue — through wand run — or,\n" +
 			"when no lane is free or Todo has nothing startable, the highest-ranked,\n" +
-			"vetted Scoping issue — through wand plan, which needs no lane, so\n" +
+			"vetted To Plan issue — through wand plan, which needs no lane, so\n" +
 			"research is never starved by full lane occupancy. One ticket per pass.\n\n" +
 			"The Todo gate lives here, deliberately, and not in run or plan\n" +
 			"themselves: a human typing an identifier has already made that\n" +

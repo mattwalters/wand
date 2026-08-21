@@ -60,7 +60,7 @@ wand claim WND-3            # take a blessed issue: In Progress + assignee, firs
 wand handback WND-3 -m "…"  # park it on a human: question first, Needs Input second
 wand abandon WND-3 -m "…"   # return it to Backlog with the evidence that undid it
 wand file "…" --team-key WND  # file a finding into Triage, duplicates searched first
-wand plan WND-3             # research one Scoping ticket into a plan, ending at Scoped
+wand plan WND-3             # research one To Plan ticket into a plan, ending at Plan Review
 wand run WND-3              # own one blessed ticket: implement → CI → review → revise
 wand dispatch --team-key WND  # pick the one ticket to run next, and run it
 wand sweep --team-key WND   # act on one thing left over after a run ended
@@ -79,7 +79,7 @@ wand version                # build info, and the covenant schema this binary sp
 › WND-42  doctor prints an empty drift section on a clean board              Low
   WND-41  guard: a raw state UUID is not matched
 
-  Scoped  1 to bless
+  Plan Review  1 to bless
   WND-44  cockpit: a fifth queue for plans awaiting blessing              Urgent
 
   Needs Input  1 to answer
@@ -92,7 +92,7 @@ wand version                # build info, and the covenant schema this binary sp
   stuck    WND-36  held by pid 48213 on studio.local, which is gone; the run …
   parked   WND-33  the worktree was dirty at handoff; refusing to park noise …
 
-  judge  t ✦Todo  s ✦Scoping  b Backlog  u unranked  d duplicate  x cancel
+  judge  t ✦Todo  s ✦To Plan  b Backlog  u unranked  d duplicate  x cancel
   ↑/k ↓/j move • enter open • r refresh • q quit
 ```
 
@@ -101,14 +101,14 @@ and each is invisible until something puts it on one screen. Backlog is
 deliberately absent: a Backlog ticket is not waiting on you, it is the pool,
 and browsing a pool is Linear's job.
 
-**Scoped is where a plan gets judged.** A ticket lands there with the plan
+**Plan Review is where a plan gets judged.** A ticket lands there with the plan
 `wand plan` wrote in its description, and opening the row shows that plan in
 place — nothing else in the description, and no comment. Judging it has two
 answers: bless it into Todo, the same way Triage does, or send it back to
 Backlog with the reasoning as a comment, so the next plan run over the ticket
 starts from why the last plan did not land instead of guessing.
 
-**Blessing lives here.** Promoting a ticket to Todo or Scoping is the
+**Blessing lives here.** Promoting a ticket to Todo or To Plan is the
 transition [the guard](#the-guard) refuses everywhere else, because it hands
 out authorization an agent does not have. The cockpit is the one place a
 person grants it, and it is a deliberate moment rather than a keystroke:
@@ -139,7 +139,7 @@ be on it.
 `wand ui --sample` opens the same screen against a built-in board, so you can
 walk the whole interface without an API key or a team.
 
-Press `e` to **engage**: the cockpit then polls Todo and Scoping on an
+Press `e` to **engage**: the cockpit then polls Todo and To Plan on an
 interval, spawning a winner as a detached process — `wand dispatch --watch`'s
 own mechanics, run from inside the cockpit instead of a standalone process.
 It is always a deliberate key press, never a default: bare `wand` opens the
@@ -154,8 +154,8 @@ comparing the two is how you learn whether a given binary can read it.
 
 ## The covenant file
 
-The state graph — Triage → Backlog → Scoping → Scoped → Todo → Needs Input →
-In Progress → In Review → Done — is wand's opinion, gofmt-style. What a repo
+The state graph — Triage → Backlog → To Plan → In Planning → Plan Review →
+Todo → Needs Input → In Progress → In Review → Done — is wand's opinion, gofmt-style. What a repo
 customizes are the parameters of the machine, never its shape: a checked-in
 `wand.toml` at the repo root carries status *names* over the fixed semantics,
 caps (review rounds, CI attempts, worker timeouts), the estimate scale,
@@ -195,10 +195,12 @@ different processes, it is covenant.
 
 ## The plan orchestrator
 
-`wand plan WND-3` sends a cold, read-only scout over the repository to
-research one ticket, validates what it hands back, and writes the result:
-the plan into a marker-fenced region of the description, the approaches and
-their trade-offs as a comment, the estimate, then Scoped. Promoting the
+`wand plan WND-3` claims the ticket into In Planning — mirroring the way
+`wand run` claims Todo into In Progress, before anything else happens —
+then sends a cold, read-only scout over the repository to research it,
+validates what it hands back, and writes the result: the plan into a
+marker-fenced region of the description, the approaches and their
+trade-offs as a comment, the estimate, then Plan Review. Promoting the
 result to Todo is yours — an agent does not bless its own plan.
 
 Two rules carry most of the weight. **A handoff that fails validation
@@ -211,9 +213,9 @@ than costing the whole research pass, because discarding a scout's work
 over one malformed field is a loss out of all proportion to the mistake.
 Half a plan reads like a whole one, and a human blesses it on the strength
 of the argument beside it. And **each deliverable lands before the
-transition that advertises it** — Scoped says "there is a finished plan
-here to judge", so it is written last, and anything that fails before it
-leaves the ticket in Scoping rather than claiming to be finished. A scout
+transition that advertises it** — Plan Review says "there is a finished
+plan here to judge", so it is written last, and anything that fails before
+it leaves the ticket in In Planning rather than claiming to be finished. A scout
 that finds the ticket's premise wrong takes the other ending instead: no
 plan, its account on the ticket, and Needs Input — reserved for exactly
 that, a blocking question, never a plan awaiting review.
@@ -252,11 +254,11 @@ are drift.
 ## The guard
 
 Some ticket transitions hand out authorization an agent does not have:
-promoting to **Todo** blesses building, promoting to **Scoping** blesses
+promoting to **Todo** blesses building, promoting to **To Plan** blesses
 research, and **Done**, **Canceled** and **Duplicate** close a ticket. Those
 are a human's call, so `wand guard` refuses them — by status name or by
 Linear state type — while leaving every legitimate agent move alone
-(In Progress, In Review, Needs Input, Scoped, Backlog, Triage).
+(In Progress, In Review, Needs Input, In Planning, Plan Review, Backlog, Triage).
 
 It speaks the Claude Code and Codex PreToolUse hook protocol: the pending tool
 call arrives as JSON on stdin, and exit code 2 blocks it with the reason on

@@ -17,16 +17,16 @@ func newPlanCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "plan <identifier>",
-		Short: "Research one Scoping ticket into a plan a human can bless",
-		Long: "plan sends a cold, read-only scout over this repository to research one\n" +
-			"ticket, validates what it hands back, and writes the result: the plan into\n" +
-			"the ticket's description, the approaches and their trade-offs as a comment,\n" +
-			"the estimate, and Scoped last — so every deliverable has landed before\n" +
-			"the status that advertises it. Nothing is written unless the whole handoff\n" +
-			"passes validation.\n\n" +
-			"The ticket must be in Scoping. Blessing research is a human act, the same\n" +
+		Short: "Research one To Plan ticket into a plan a human can bless",
+		Long: "plan claims one ticket into In Planning, sends a cold, read-only scout over\n" +
+			"this repository to research it, validates what it hands back, and writes\n" +
+			"the result: the plan into the ticket's description, the approaches and\n" +
+			"their trade-offs as a comment, the estimate, and Plan Review last — so\n" +
+			"every deliverable has landed before the status that advertises it.\n" +
+			"Nothing is written unless the whole handoff passes validation.\n\n" +
+			"The ticket must be in To Plan. Blessing research is a human act, the same\n" +
 			"way blessing building is, and plan will not take a ticket nobody blessed.\n" +
-			"It ends in Scoped: promoting the plan to Todo is yours.\n\n" +
+			"It ends in Plan Review: promoting the plan to Todo is yours.\n\n" +
 			"There is no worktree, no branch and no CI: the scout reads the checkout you\n" +
 			"run this from and may not change it. If it does, the run parks and leaves\n" +
 			"the change for you to look at.\n\n" +
@@ -44,7 +44,7 @@ func newPlanCmd() *cobra.Command {
 		// any RunE error, which would collapse handed-back and parked into
 		// generic failure. The command exits itself instead.
 		Run: func(cmd *cobra.Command, args []string) {
-			if code := runPlan(cmd, args[0], harness, model, effort, interactive); code != plan.ExitScoped {
+			if code := runPlan(cmd, args[0], harness, model, effort, interactive); code != plan.ExitPlanReviewed {
 				os.Exit(code)
 			}
 		},

@@ -20,9 +20,9 @@ func issue(id string, priority int, age time.Duration) linear.Issue {
 
 func TestSelectPrefersTodoWhenALaneIsFree(t *testing.T) {
 	todo := []linear.Issue{issue("WND-2", 2, time.Hour), issue("WND-1", 1, time.Hour)}
-	scoping := []linear.Issue{issue("WND-9", 1, time.Hour)}
+	toPlan := []linear.Issue{issue("WND-9", 1, time.Hour)}
 
-	winner, ok, _, _ := Select(todo, scoping, true)
+	winner, ok, _, _ := Select(todo, toPlan, true)
 	if !ok {
 		t.Fatal("expected a winner")
 	}
@@ -31,23 +31,23 @@ func TestSelectPrefersTodoWhenALaneIsFree(t *testing.T) {
 	}
 }
 
-func TestSelectFallsBackToScopingWhenLanesAreFull(t *testing.T) {
+func TestSelectFallsBackToToPlanWhenLanesAreFull(t *testing.T) {
 	todo := []linear.Issue{issue("WND-1", 1, time.Hour)}
-	scoping := []linear.Issue{issue("WND-9", 1, time.Hour)}
+	toPlan := []linear.Issue{issue("WND-9", 1, time.Hour)}
 
-	winner, ok, _, _ := Select(todo, scoping, false)
+	winner, ok, _, _ := Select(todo, toPlan, false)
 	if !ok {
 		t.Fatal("expected a winner")
 	}
 	if winner.Verb != VerbPlan || winner.Issue.Identifier != "WND-9" {
-		t.Errorf("winner = %+v, want the Scoping issue via plan — a plan run needs no lane", winner)
+		t.Errorf("winner = %+v, want the To Plan issue via plan — a plan run needs no lane", winner)
 	}
 }
 
-func TestSelectFallsBackToScopingWhenTodoIsEmpty(t *testing.T) {
-	scoping := []linear.Issue{issue("WND-9", 1, time.Hour)}
+func TestSelectFallsBackToToPlanWhenTodoIsEmpty(t *testing.T) {
+	toPlan := []linear.Issue{issue("WND-9", 1, time.Hour)}
 
-	winner, ok, _, _ := Select(nil, scoping, true)
+	winner, ok, _, _ := Select(nil, toPlan, true)
 	if !ok {
 		t.Fatal("expected a winner")
 	}
@@ -62,16 +62,16 @@ func TestSelectNothingWhenBothAreEmpty(t *testing.T) {
 	}
 }
 
-func TestSelectVetsScopingCandidates(t *testing.T) {
+func TestSelectVetsToPlanCandidates(t *testing.T) {
 	blocked := issue("WND-9", 1, time.Hour)
 	blocked.Labels = []string{"human-only"}
 
-	winner, ok, _, scopingSkips := Select(nil, []linear.Issue{blocked}, false)
+	winner, ok, _, toPlanSkips := Select(nil, []linear.Issue{blocked}, false)
 	if ok {
 		t.Fatalf("expected no winner, got %+v", winner)
 	}
-	if len(scopingSkips) != 1 || scopingSkips[0].Issue.Identifier != "WND-9" {
-		t.Errorf("scopingSkips = %+v, want WND-9 skipped", scopingSkips)
+	if len(toPlanSkips) != 1 || toPlanSkips[0].Issue.Identifier != "WND-9" {
+		t.Errorf("toPlanSkips = %+v, want WND-9 skipped", toPlanSkips)
 	}
 }
 
@@ -124,12 +124,12 @@ func TestLanesUsedCountsUnknownLiveness(t *testing.T) {
 // cold research pass, and the reference journal has the same ticket planned
 // and parked three times over for one defect — three passes bought, one
 // failure. Selection is where that stops.
-func TestSelectSkipsAParkedScopingTicket(t *testing.T) {
+func TestSelectSkipsAParkedToPlanTicket(t *testing.T) {
 	parked := issue("WND-9", 1, time.Hour)
 	parked.Labels = []string{"parked"}
 	fresh := issue("WND-10", 2, time.Hour)
 
-	winner, ok, _, scopingSkips := Select(nil, []linear.Issue{parked, fresh}, true)
+	winner, ok, _, toPlanSkips := Select(nil, []linear.Issue{parked, fresh}, true)
 	if !ok {
 		t.Fatal("expected a winner")
 	}
@@ -137,11 +137,11 @@ func TestSelectSkipsAParkedScopingTicket(t *testing.T) {
 	if winner.Issue.Identifier != "WND-10" {
 		t.Errorf("winner = %s, want the parked higher-priority ticket passed over", winner.Issue.Identifier)
 	}
-	if len(scopingSkips) != 1 || scopingSkips[0].Issue.Identifier != "WND-9" {
-		t.Fatalf("skips = %+v, want WND-9 skipped with a reason", scopingSkips)
+	if len(toPlanSkips) != 1 || toPlanSkips[0].Issue.Identifier != "WND-9" {
+		t.Fatalf("skips = %+v, want WND-9 skipped with a reason", toPlanSkips)
 	}
-	if scopingSkips[0].Reason != "labeled parked" {
-		t.Errorf("skip reason = %q", scopingSkips[0].Reason)
+	if toPlanSkips[0].Reason != "labeled parked" {
+		t.Errorf("skip reason = %q", toPlanSkips[0].Reason)
 	}
 }
 
@@ -151,11 +151,11 @@ func TestSelectFindsNoWinnerWhenEveryCandidateIsParked(t *testing.T) {
 	parked := issue("WND-9", 1, time.Hour)
 	parked.Labels = []string{"parked"}
 
-	_, ok, _, scopingSkips := Select(nil, []linear.Issue{parked}, true)
+	_, ok, _, toPlanSkips := Select(nil, []linear.Issue{parked}, true)
 	if ok {
 		t.Fatal("a parked ticket was selected")
 	}
-	if len(scopingSkips) != 1 {
-		t.Fatalf("skips = %+v, want the refusal reported rather than silent", scopingSkips)
+	if len(toPlanSkips) != 1 {
+		t.Fatalf("skips = %+v, want the refusal reported rather than silent", toPlanSkips)
 	}
 }

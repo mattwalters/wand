@@ -53,11 +53,11 @@ func Read(ctx context.Context, cl Linear, runs Runs, cov covenant.Covenant, team
 	}
 	snap.Triage = triage
 
-	scoped, err := cl.TeamIssuesByState(ctx, teamKey, cov.StatusName("scoped"))
+	planReview, err := cl.TeamIssuesByState(ctx, teamKey, cov.StatusName("plan_review"))
 	if err != nil {
-		return Snapshot{}, fmt.Errorf("reading Scoped: %w", err)
+		return Snapshot{}, fmt.Errorf("reading Plan Review: %w", err)
 	}
-	snap.Scoped = scoped
+	snap.PlanReview = planReview
 
 	needsInput, err := cl.TeamIssuesByState(ctx, teamKey, cov.StatusName("needs_input"))
 	if err != nil {

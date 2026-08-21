@@ -16,7 +16,7 @@ import (
 )
 
 // Board is the slice of the Linear client dispatch reads through: enough to
-// read Todo and Scoping itself, plus everything run.Execute and
+// read Todo and To Plan itself, plus everything run.Execute and
 // plan.Execute need once a winner is chosen — the same client value is
 // handed to both, and Go's structural typing is what lets one interface
 // satisfy three.

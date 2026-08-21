@@ -25,35 +25,35 @@ type Winner struct {
 
 // Select picks the one ticket a dispatch pass runs: the highest-ranked,
 // vetted Todo issue when a lane is free, falling back to the
-// highest-ranked, vetted Scoping issue otherwise.
+// highest-ranked, vetted To Plan issue otherwise.
 //
-// A Scoping winner is the fallback in two cases that read identically from
+// A To Plan winner is the fallback in two cases that read identically from
 // here — no lane is free, or Todo simply has nothing startable — and that
 // is deliberate: a plan run needs no lane (see [LanesUsed]), so an eligible
-// Scoping ticket dispatches even at full lane occupancy, and research is
+// To Plan ticket dispatches even at full lane occupancy, and research is
 // never left idle just because Todo is momentarily empty either.
 //
 // Pure: every input is already read, so a test can hold the whole decision
 // without a board or a store. Ranking and vetting reuse the read layer —
-// queue.Build for Todo, the same discipline for Scoping — so the order an
+// queue.Build for Todo, the same discipline for To Plan — so the order an
 // agent starts work in is the order `wand queue` would have printed it.
-func Select(todo, scoping []linear.Issue, laneFree bool) (winner Winner, ok bool, todoSkips, scopingSkips []queue.Skip) {
+func Select(todo, toPlan []linear.Issue, laneFree bool) (winner Winner, ok bool, todoSkips, toPlanSkips []queue.Skip) {
 	todoReady, todoSkips := queue.Build(todo)
-	scopingReady, scopingSkips := rankScoping(scoping)
+	toPlanReady, toPlanSkips := rankToPlan(toPlan)
 
 	if laneFree && len(todoReady) > 0 {
-		return Winner{Issue: todoReady[0], Verb: VerbRun}, true, todoSkips, scopingSkips
+		return Winner{Issue: todoReady[0], Verb: VerbRun}, true, todoSkips, toPlanSkips
 	}
-	if len(scopingReady) > 0 {
-		return Winner{Issue: scopingReady[0], Verb: VerbPlan}, true, todoSkips, scopingSkips
+	if len(toPlanReady) > 0 {
+		return Winner{Issue: toPlanReady[0], Verb: VerbPlan}, true, todoSkips, toPlanSkips
 	}
-	return Winner{}, false, todoSkips, scopingSkips
+	return Winner{}, false, todoSkips, toPlanSkips
 }
 
-// rankScoping ranks and vets Scoping issues the way queue.Build does for
+// rankToPlan ranks and vets To Plan issues the way queue.Build does for
 // Todo, with plan's own vet: a ticket blocked by another is exactly the
 // ticket worth planning early, so only the human-only label refuses here.
-func rankScoping(issues []linear.Issue) (ready []linear.Issue, skips []queue.Skip) {
+func rankToPlan(issues []linear.Issue) (ready []linear.Issue, skips []queue.Skip) {
 	ranked := make([]linear.Issue, len(issues))
 	copy(ranked, issues)
 	sort.SliceStable(ranked, func(i, j int) bool { return queue.Less(ranked[i], ranked[j]) })

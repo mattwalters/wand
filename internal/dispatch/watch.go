@@ -130,7 +130,7 @@ func NewPending() *Pending {
 // count returns the number of lanes this session's spawned-but-unregistered
 // children occupy. A plan child never counts here — a plan run needs no
 // lane, same as [LanesUsed] excludes a registered plan run — otherwise a
-// dispatched Scoping ticket would starve Todo for the length of its own
+// dispatched To Plan ticket would starve Todo for the length of its own
 // pass, the exact starvation the lane split exists to prevent.
 func (p *Pending) count() int {
 	p.mu.Lock()
@@ -201,12 +201,12 @@ func (w WatchDeps) Tick(ctx context.Context, store *journal.Store, p *Pending, l
 	if err != nil {
 		return TickResult{}, fmt.Errorf("reading Todo: %w", err)
 	}
-	scoping, err := w.Board.TeamIssuesByState(ctx, w.TeamKey, w.Cov.StatusName("scoping"))
+	toPlan, err := w.Board.TeamIssuesByState(ctx, w.TeamKey, w.Cov.StatusName("to_plan"))
 	if err != nil {
-		return TickResult{}, fmt.Errorf("reading Scoping: %w", err)
+		return TickResult{}, fmt.Errorf("reading To Plan: %w", err)
 	}
 
-	winner, ok, _, _ := Select(todo, scoping, laneFree)
+	winner, ok, _, _ := Select(todo, toPlan, laneFree)
 	if !ok {
 		return TickResult{
 			LanesUsed: used,

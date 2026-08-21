@@ -28,7 +28,7 @@ func newFake() *fakeLinear {
 	return &fakeLinear{
 		states: []linear.WorkflowState{
 			{ID: "st-todo", Name: "Todo", Type: "unstarted"},
-			{ID: "st-scoping", Name: "Scoping", Type: "unstarted"},
+			{ID: "st-to-plan", Name: "To Plan", Type: "unstarted"},
 			{ID: "st-backlog", Name: "Backlog", Type: "backlog"},
 			{ID: "st-duplicate", Name: "Duplicate", Type: "duplicate"},
 			{ID: "st-canceled", Name: "Canceled", Type: "canceled"},
@@ -122,8 +122,8 @@ func TestApplyPerformsTheTransitionsTheGuardForbids(t *testing.T) {
 	}{
 		{name: "bless to Todo", in: Intent{Issue: subject(), Disp: BlessTodo},
 			want: "UpdateIssue uuid-WND-9 state=st-todo"},
-		{name: "bless to Scoping", in: Intent{Issue: subject(), Disp: BlessScoping},
-			want: "UpdateIssue uuid-WND-9 state=st-scoping"},
+		{name: "bless to To Plan", in: Intent{Issue: subject(), Disp: BlessToPlan},
+			want: "UpdateIssue uuid-WND-9 state=st-to-plan"},
 		{name: "backlog, ranked", in: Intent{Issue: subject(), Disp: ToBacklog, Priority: 2},
 			want: "UpdateIssue uuid-WND-9 state=st-backlog priority=2"},
 		{name: "backlog, unranked", in: Intent{Issue: subject(), Disp: ToBacklogUnranked},

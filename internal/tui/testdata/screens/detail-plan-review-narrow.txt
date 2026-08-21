@@ -1,6 +1,6 @@
  WND-44  cockpit: a fifth queue for plans awai…
 
-  status    Scoped
+  status    Plan Review
   priority  Urgent
   assignee  Matt Walters
 

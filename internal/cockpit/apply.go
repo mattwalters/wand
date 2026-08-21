@@ -16,7 +16,7 @@ import (
 //
 // Every other status write — the lifecycle verbs, the PreToolUse hook —
 // runs through guard.CheckState first, and four of the six dispositions
-// here are transitions that function refuses: Todo, Scoping, Canceled,
+// here are transitions that function refuses: Todo, To Plan, Canceled,
 // Duplicate. The absence of the call is deliberate and is the point of the
 // package.
 //

@@ -1,7 +1,7 @@
 // Package cockpit answers one question: what is waiting on a human?
 //
-// Five queues, and nothing else. Triage to judge, Scoped to bless a plan,
-// Needs Input to answer, ready-for-human work to look at, and lanes no
+// Five queues, and nothing else. Triage to judge, Plan Review to bless a
+// plan, Needs Input to answer, ready-for-human work to look at, and lanes no
 // process is driving any more. Each is a queue that nothing drains on its
 // own — the failure mode PLAN.md names "queues nothing drains" — and each is
 // invisible until something puts it on one screen.
@@ -19,7 +19,7 @@
 //
 // # Blessing
 //
-// Promotion to Todo and to Scoping is the transition [guard] refuses
+// Promotion to Todo and to To Plan is the transition [guard] refuses
 // everywhere else, and this package is the one place in wand that performs
 // it. That is not an exception to the rule, it is the rule's other half: the
 // guard stops *agents* from granting authorization unattended, and blessing
@@ -57,9 +57,9 @@ type Snapshot struct {
 	// Triage and NeedsInput are two of the judgment queues, as read.
 	Triage     []linear.Issue
 	NeedsInput []linear.Issue
-	// Scoped is every issue carrying a finished plan, awaiting the human
+	// PlanReview is every issue carrying a finished plan, awaiting the human
 	// judgment that either blesses it into Todo or sends it back.
-	Scoped []linear.Issue
+	PlanReview []linear.Issue
 	// ReadyForHuman is every open issue carrying the ready-for-human label.
 	ReadyForHuman []linear.Issue
 	// Lanes are runs the journal says a person has to resolve.
@@ -75,7 +75,7 @@ type Kind string
 
 const (
 	KindTriage        Kind = "triage"
-	KindScoped        Kind = "scoped"
+	KindPlanReview    Kind = "plan_review"
 	KindNeedsInput    Kind = "needs_input"
 	KindReadyForHuman Kind = "ready_for_human"
 	KindLanes         Kind = "lanes"
@@ -155,11 +155,11 @@ func Build(s Snapshot) Board {
 				Rows:  issueRows(KindTriage, s.Triage),
 			},
 			{
-				Kind:  KindScoped,
-				Title: "Scoped",
+				Kind:  KindPlanReview,
+				Title: "Plan Review",
 				Verb:  "to bless",
 				Empty: "no plan is waiting on a blessing.",
-				Rows:  issueRows(KindScoped, s.Scoped),
+				Rows:  issueRows(KindPlanReview, s.PlanReview),
 			},
 			{
 				Kind:  KindNeedsInput,
@@ -203,10 +203,10 @@ func openIssues(issues []linear.Issue) []linear.Issue {
 
 // PlanSection returns the plan region `wand plan` wrote onto issue's
 // description — the marker-fenced text [plan.PlanMarkdown] rendered and
-// nothing else — and whether the issue carries one. A Scoped ticket always
-// should; a malformed pair of markers is reported as an error rather than
-// guessed at, the same refusal [linear.ReadSection] makes for every other
-// reader of a fenced section.
+// nothing else — and whether the issue carries one. A Plan Review ticket
+// always should; a malformed pair of markers is reported as an error rather
+// than guessed at, the same refusal [linear.ReadSection] makes for every
+// other reader of a fenced section.
 func PlanSection(issue linear.Issue) (string, bool, error) {
 	return linear.ReadSection(issue.Description, plan.PlanSectionID)
 }
@@ -277,8 +277,8 @@ type Disposition struct {
 // The dispositions. Seven, and no more: five statuses plus the split between
 // a ranked and an unranked Backlog (the difference between "worth doing" and
 // "worth keeping"), plus RejectPlan — a second, reasoned way into Backlog
-// that only a Scoped row offers, because sending a finished plan back is a
-// verdict on it and a raw ticket's Backlog move is not.
+// that only a Plan Review row offers, because sending a finished plan back
+// is a verdict on it and a raw ticket's Backlog move is not.
 var (
 	BlessTodo = Disposition{
 		Key: "t", Name: "Bless → Todo", Status: "todo", Bless: true,
@@ -286,11 +286,12 @@ var (
 			"unattended. Blessing it lets an agent claim the ticket, branch, write " +
 			"code and open a pull request without asking you again.",
 	}
-	BlessScoping = Disposition{
-		Key: "s", Name: "Bless → Scoping", Status: "scoping", Bless: true,
-		Gravity: "Scoping blesses research rather than building: a ticket sitting here " +
-			"is one a dispatcher may spend a scout on unattended. The scout ends at " +
-			"Needs Input, back on this screen, with the decision still yours.",
+	BlessToPlan = Disposition{
+		Key: "s", Name: "Bless → To Plan", Status: "to_plan", Bless: true,
+		Gravity: "To Plan blesses research rather than building: a ticket sitting here " +
+			"is one a dispatcher may spend a scout on unattended. The scout claims it " +
+			"into In Planning, then ends at Needs Input, back on this screen, with the " +
+			"decision still yours.",
 	}
 	ToBacklog = Disposition{
 		Key: "b", Name: "Backlog, ranked", Status: "backlog", Field: FieldPriority,
@@ -314,7 +315,7 @@ var (
 			"reason is posted as a comment before the status moves, because a close " +
 			"nobody can explain is one nobody can undo either.",
 	}
-	// RejectPlan sends a Scoped ticket back to the pool. Demoting a plan is
+	// RejectPlan sends a Plan Review ticket back to the pool. Demoting a plan is
 	// as much a judgment as blessing one, and the reason exists for the same
 	// reason Cancel's does: the next plan run over this ticket reads it
 	// instead of guessing why the last one did not land.
@@ -339,14 +340,14 @@ var (
 
 // judgments are the six Triage and Needs Input rows offer, in the order they
 // are offered.
-var judgments = []Disposition{BlessTodo, BlessScoping, ToBacklog, ToBacklogUnranked, AsDuplicate, Cancel}
+var judgments = []Disposition{BlessTodo, BlessToPlan, ToBacklog, ToBacklogUnranked, AsDuplicate, Cancel}
 
-// scopedJudgments are what a Scoped row offers: bless the plan into Todo, or
-// reject it back to Backlog with the reasoning that made the call. Judging a
-// plan is narrower than judging a raw ticket — there is no research left to
-// authorize, and no title vague enough yet to be someone else's ticket — so
-// it gets a shorter list rather than the full six.
-var scopedJudgments = []Disposition{BlessTodo, RejectPlan}
+// planReviewJudgments are what a Plan Review row offers: bless the plan into
+// Todo, or reject it back to Backlog with the reasoning that made the call.
+// Judging a plan is narrower than judging a raw ticket — there is no
+// research left to authorize, and no title vague enough yet to be someone
+// else's ticket — so it gets a shorter list rather than the full six.
+var planReviewJudgments = []Disposition{BlessTodo, RejectPlan}
 
 // laneJudgments is what a parked lane row offers: the one act a park's own
 // comment names.
@@ -354,12 +355,12 @@ var laneJudgments = []Disposition{ClearParked}
 
 // Dispositions returns what a human may do to this row.
 //
-// Triage and Needs Input get all six. Scoped gets the narrower pair: bless
-// the plan, or reject it. Ready-for-human gets none, and that is the honest
-// answer rather than a gap: the act that row is asking for is a review or a
-// merge, which happens on the pull request — and the covenant's on-merge
-// automation closes the ticket seconds later. A status write from here would
-// be racing that automation to say the same thing.
+// Triage and Needs Input get all six. Plan Review gets the narrower pair:
+// bless the plan, or reject it. Ready-for-human gets none, and that is the
+// honest answer rather than a gap: the act that row is asking for is a
+// review or a merge, which happens on the pull request — and the covenant's
+// on-merge automation closes the ticket seconds later. A status write from
+// here would be racing that automation to say the same thing.
 //
 // Lanes get none, with one exception: a parked lane offers ClearParked. A
 // lane is otherwise not a ticket, and resolving one means going to the
@@ -369,8 +370,8 @@ func Dispositions(r Row) []Disposition {
 	switch r.Kind {
 	case KindTriage, KindNeedsInput:
 		return judgments
-	case KindScoped:
-		return scopedJudgments
+	case KindPlanReview:
+		return planReviewJudgments
 	case KindLanes:
 		if r.Lane.Kind == LaneParked {
 			return laneJudgments

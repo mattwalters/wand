@@ -65,15 +65,15 @@ func TestWatchSpawnsAndTracksPending(t *testing.T) {
 	waitForPending(t, p, 0)
 }
 
-// TestWatchScopingWinnerDoesNotOccupyALane pins the addendum's invariant
-// down to pending, not just LanesUsed: a Scoping winner spawned this session
+// TestWatchToPlanWinnerDoesNotOccupyALane pins the addendum's invariant
+// down to pending, not just LanesUsed: a To Plan winner spawned this session
 // must not inflate the lane count while its child is still running, or a
 // long-lived plan run would starve every Todo ticket behind it for the length
 // of its own pass — exactly backwards from "a plan run needs no lane."
-func TestWatchScopingWinnerDoesNotOccupyALane(t *testing.T) {
+func TestWatchToPlanWinnerDoesNotOccupyALane(t *testing.T) {
 	store := journal.New(t.TempDir())
-	board := &fakeBoard{scoping: []linear.Issue{
-		{Identifier: "WND-2", Title: "needs scoping", State: linear.IssueState{Name: "Scoping"}, CreatedAt: time.Now()},
+	board := &fakeBoard{toPlan: []linear.Issue{
+		{Identifier: "WND-2", Title: "needs planning", State: linear.IssueState{Name: "To Plan"}, CreatedAt: time.Now()},
 	}}
 	cov := covenant.Default()
 	cov.Caps.Lanes = 1
@@ -120,12 +120,12 @@ func TestWatchScopingWinnerDoesNotOccupyALane(t *testing.T) {
 	waitForPending(t, p, 0)
 }
 
-// TestTickIdlesWhenNoLaneAndNoScopingWinner pins Tick's own idle path,
-// independent of Watch's loop: a full lane and an empty Scoping queue must
+// TestTickIdlesWhenNoLaneAndNoToPlanWinner pins Tick's own idle path,
+// independent of Watch's loop: a full lane and an empty To Plan queue must
 // report Dispatched=false with an idle summary, not merely fail to find a
 // Todo winner. This is the case an engage-mode caller needs to distinguish
 // from a real dispatch, since it renders as "idle" rather than "dispatched".
-func TestTickIdlesWhenNoLaneAndNoScopingWinner(t *testing.T) {
+func TestTickIdlesWhenNoLaneAndNoToPlanWinner(t *testing.T) {
 	store := journal.New(t.TempDir())
 	board := &fakeBoard{todo: []linear.Issue{
 		{Identifier: "WND-1", Title: "one", State: linear.IssueState{Name: "Todo"}, CreatedAt: time.Now()},
@@ -147,7 +147,7 @@ func TestTickIdlesWhenNoLaneAndNoScopingWinner(t *testing.T) {
 	p := NewPending()
 	logDir := t.TempDir()
 
-	// Fill the one lane, then confirm a second tick with no scoping winner
+	// Fill the one lane, then confirm a second tick with no To Plan winner
 	// idles rather than spawning a second run into the same lane.
 	if _, err := w.Tick(context.Background(), store, p, logDir); err != nil {
 		t.Fatalf("first tick: %v", err)
@@ -160,7 +160,7 @@ func TestTickIdlesWhenNoLaneAndNoScopingWinner(t *testing.T) {
 		t.Fatalf("second tick: %v", err)
 	}
 	if res.Dispatched {
-		t.Fatalf("res.Dispatched = true, want false: no lane is free and Scoping is empty")
+		t.Fatalf("res.Dispatched = true, want false: no lane is free and To Plan is empty")
 	}
 	if !strings.Contains(res.Summary, "idle") {
 		t.Errorf("summary = %q, want it to say idle", res.Summary)

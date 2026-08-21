@@ -77,7 +77,7 @@ func TestPlanMarkdownSurvivesTheFence(t *testing.T) {
 }
 
 func TestOptionsCommentArguesAndAsks(t *testing.T) {
-	got := plan.OptionsComment(parsedDraft(t), "fibonacci", "Scoped", plan.Provenance{RunID: "WND-9-x", Harness: "claude-code"})
+	got := plan.OptionsComment(parsedDraft(t), "fibonacci", "Plan Review", plan.Provenance{RunID: "WND-9-x", Harness: "claude-code"})
 
 	for _, want := range []string{
 		"Filter in Vet",                      // both approaches, by name
@@ -88,7 +88,7 @@ func TestOptionsCommentArguesAndAsks(t *testing.T) {
 		"2, on the team's fibonacci scale.",  // the estimate, with the scale it is on
 		"Blockers arrive on the issue read.", // what the plan rests on
 		"Should a canceled blocker resolve?", // what is still open
-		"now in Scoped",                      // the status it says it just moved to
+		"now in Plan Review",                 // the status it says it just moved to
 		"promoting it to Todo",               // the ask, and whose act it is
 		"WND-9-x",                            // the run, for the journal
 	} {
@@ -103,12 +103,12 @@ func TestOptionsCommentArguesAndAsks(t *testing.T) {
 // same artifact, and only this line says which is on the ticket.
 func TestProvenanceSaysWhatArguedWithTheDraft(t *testing.T) {
 	d := parsedDraft(t)
-	plain := plan.OptionsComment(d, "fibonacci", "Scoped", plan.Provenance{RunID: "r", Harness: "codex"})
+	plain := plan.OptionsComment(d, "fibonacci", "Plan Review", plan.Provenance{RunID: "r", Harness: "codex"})
 	if !strings.Contains(plain, "Drafted by a cold codex scout") || strings.Contains(plain, "critic") {
 		t.Errorf("a plain plan claims more than happened:\n%s", plain)
 	}
 
-	full := plan.OptionsComment(d, "fibonacci", "Scoped", plan.Provenance{
+	full := plan.OptionsComment(d, "fibonacci", "Plan Review", plan.Provenance{
 		RunID: "r", Harness: "codex", Critic: true, Objections: 2, Interview: true, Answers: 3,
 	})
 	for _, want := range []string{"2 objection(s)", "3 answer(s)"} {
@@ -117,7 +117,7 @@ func TestProvenanceSaysWhatArguedWithTheDraft(t *testing.T) {
 		}
 	}
 
-	quiet := plan.OptionsComment(d, "fibonacci", "Scoped", plan.Provenance{RunID: "r", Harness: "codex", Critic: true, Interview: true})
+	quiet := plan.OptionsComment(d, "fibonacci", "Plan Review", plan.Provenance{RunID: "r", Harness: "codex", Critic: true, Interview: true})
 	if !strings.Contains(quiet, "nothing stuck") || !strings.Contains(quiet, "nothing to change") {
 		t.Errorf("a critic and an interview that changed nothing are not reported as such:\n%s", quiet)
 	}
@@ -134,7 +134,7 @@ func TestOptionsCommentOmitsAnEstimateThereIsNone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ParseDraft: %v", err)
 	}
-	if got := plan.OptionsComment(parsed, "notUsed", "Scoped", plan.Provenance{RunID: "r", Harness: "h"}); strings.Contains(got, "### Estimate") {
+	if got := plan.OptionsComment(parsed, "notUsed", "Plan Review", plan.Provenance{RunID: "r", Harness: "h"}); strings.Contains(got, "### Estimate") {
 		t.Errorf("an estimate section was written for a team that does not estimate:\n%s", got)
 	}
 }

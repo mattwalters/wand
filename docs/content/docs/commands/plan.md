@@ -1,16 +1,18 @@
 ---
 title: wand plan
 weight: 195
-summary: Research one Scoping ticket into a plan a human can bless.
+summary: Research one To Plan ticket into a plan a human can bless.
 aliases:
   - /docs/commands/scope/
 ---
 
-`plan` is the research orchestrator. It sends a cold, read-only scout over
-your repository to research one ticket, validates what the scout hands back,
-and writes the result onto the ticket: the plan into the description, the
-approaches and their trade-offs as a comment, the estimate, and Scoped
-last.
+`plan` is the research orchestrator. It claims the ticket into In Planning
+— before anything else happens, the same claim-before-filesystem ordering
+`wand run` uses for Todo and In Progress — then sends a cold, read-only
+scout over your repository to research it, validates what the scout hands
+back, and writes the result onto the ticket: the plan into the description,
+the approaches and their trade-offs as a comment, the estimate, and Plan
+Review last.
 
 It is the smallest orchestrator wand has — no worktree, no branch, no PR, no
 CI — and the one to run first if you want to see the machinery work before
@@ -22,10 +24,10 @@ you let it write code.
 wand plan <identifier> [--interactive] [--harness NAME] [--model M] [--effort E]
 ```
 
-## The ticket must be in Scoping
+## The ticket must be in To Plan
 
 Blessing research is a human act, the same way blessing building is: a
-ticket in Scoping is one you have decided is worth spending a scout on.
+ticket in To Plan is one you have decided is worth spending a scout on.
 `plan` refuses anything else, and refuses a `human-only` or `parked`
 ticket outright — a plan run is a full cold research pass, and re-buying one
 that already stopped is the most expensive way to learn nothing.
@@ -47,12 +49,12 @@ Four writes, and the order is the contract:
    every approach with its trade-off, which one is recommended and why,
    what the plan rests on, what is still open, and the ask.
 3. **The estimate**, on the team's scale.
-4. **Scoped**.
+4. **Plan Review**.
 
 Each deliverable lands before the transition that advertises it. A ticket in
-Scoped promises a finished plan to judge, so the status move is last, and if
-anything before it fails the ticket stays in Scoping — carrying whatever
-did land, and nothing claiming to be finished.
+Plan Review promises a finished plan to judge, so the status move is last,
+and if anything before it fails the ticket stays in In Planning — carrying
+whatever did land, and nothing claiming to be finished.
 
 The comment comes before the estimate for the same reason: a ticket carrying
 the argument for an estimate it does not have is recoverable, while a ticket
@@ -151,18 +153,22 @@ first draft from a plan that survived a critic and an interview.
 
 ## One plan run per ticket
 
-`wand plan` takes a per-ticket lock for the life of the process. `wand run`
-does not need one — it claims its ticket out of Todo, so the board is its
-mutex — but a plan run's ticket sits in Scoping from the first read to the
-last write, so nothing on the board can keep a second plan run out. Two plan
-runs over one ticket would write two plans into one fenced region and argue
-two recommendations at a reader who cannot tell which the estimate belongs
-to.
+`wand plan` claims its ticket out of To Plan into In Planning before it
+touches anything else, the same way `wand run` claims its ticket out of
+Todo into In Progress — the board is the mutex on both sides now. A second
+plan run over the same ticket finds it already In Planning and refuses,
+the same way a second `wand claim` finds a ticket already In Progress and
+refuses. Two plan runs over one ticket would otherwise write two plans
+into one fenced region and argue two recommendations at a reader who
+cannot tell which the estimate belongs to.
 
-The lock is a file in wand's state directory, released by the operating
-system when the process dies, however it dies. It is machine-local: it
-serializes the processes on your machine and says nothing about anyone
-else's.
+This is a deliberate reversal of the topology `wand plan` originally
+shipped with, which held its ticket in a single unstarted status (Scoping)
+for the whole research phase and took a machine-local per-ticket lock
+instead of a claim, because it had no board move to lose a race on. That
+lock could never stop two machines planning one ticket, where a board
+claim can — which is why it is gone now that research has a started
+status of its own to claim.
 
 ## Flags
 
@@ -179,8 +185,8 @@ A scheduler contract, and the one `wand run` publishes too.
 
 | Code | Meaning |
 |---|---|
-| `0` | Planned. The plan, the options and the estimate are on the ticket, and it is in Scoped for a human to judge. |
-| `1` | The run never started: no API key, the ticket is not in Scoping, `--interactive` with no terminal, another process holds the ticket. Nothing was written. |
+| `0` | Planned. The plan, the options and the estimate are on the ticket, and it is in Plan Review for a human to judge. |
+| `1` | The run never started: no API key, the ticket is not in To Plan, `--interactive` with no terminal, the claim raced and lost. Nothing was written. |
 | `2` | Handed back. The scout judged the ticket's premise wrong; its account is on the ticket, no plan was written, and it is in Needs Input for a human to answer. |
 | `3` | Parked. The run stopped without deciding — an unusable handoff, a worker failure, a write that failed part-way. The journal says which, and how much reached the ticket; the ticket itself carries the reason as a comment and the `parked` label. |
 
@@ -197,8 +203,9 @@ under `$XDG_STATE_HOME/wand/runs` (or `WAND_STATE_DIR`), outside every
 repository. The journal is written before the ticket is, deliberately — a
 park has to be reachable when Linear itself is what failed. Once it is
 journaled, the ticket gets the same sentence as a comment and the `parked`
-label, best-effort: a plan run never owns its ticket's status, so the mark is
-a label and the ticket stays in Scoping where a human put it.
+label, best-effort: a plan run never advances its own status past the claim
+on a park, so the mark is a label and the ticket stays In Planning, claimed,
+where the run left it.
 
 ### The failure that retries instead
 
@@ -233,12 +240,13 @@ wand plan WND-42
 ```
 
 ```
-planning WND-42 (Scoping), journaling to ~/.local/state/wand/runs/WND-42-20260819T120000Z
+claimed WND-42: In Planning
+planning WND-42, journaling to ~/.local/state/wand/runs/WND-42-20260819T120000Z
 phase scout: spawning a cold worker (claude-code)
 wrote the plan into the ticket's description
 posted the options comment
 set the estimate to 3
-run WND-42-20260819T120000Z ended: converged — scoped: …
+run WND-42-20260819T120000Z ended: converged — plan review: …
 ```
 
 Grilled first:

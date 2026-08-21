@@ -24,9 +24,11 @@ const (
 	// behind it, which looks healthy and which nothing drains.
 	LaneStuck LaneKind = "stuck"
 	// LaneOrphaned: a live run whose ticket is not in a started status.
-	// The lane is held; nothing on the board claims it. Never fires for a
-	// plan run: its ticket lives in Scoping, an unstarted status, for its
-	// whole life by design.
+	// The lane is held; nothing on the board claims it. This now fires for
+	// a plan run exactly as it does for a build one: `wand plan` claims
+	// In Planning (a started status, WND-79) before it does anything else,
+	// so a live plan run whose ticket has drifted off it is genuine drift,
+	// not a design invariant to carve out.
 	LaneOrphaned LaneKind = "orphaned"
 	// LaneUnclear: the journal says the run is still going and its holder
 	// is on another machine, or the lock could not be examined. Never
@@ -52,10 +54,9 @@ type Lane struct {
 // Classify decides whether one run is waiting on a person, and why.
 //
 // started is the set of ticket identifiers currently in a started status on
-// the board — In Progress and In Review both. It is what distinguishes a
-// held lane from an orphaned one, and it is passed in rather than looked up
-// so this stays a pure function. It is never consulted for a plan run: see
-// LaneOrphaned.
+// the board — In Progress, In Review and In Planning all three. It is what
+// distinguishes a held lane from an orphaned one, and it is passed in
+// rather than looked up so this stays a pure function.
 //
 // The order of the checks is the order of severity, and it matters: a dead
 // holder whose ticket also fell out of In Progress is reported stuck, not
@@ -95,17 +96,12 @@ func Classify(r journal.Report, started map[string]bool) (Lane, bool) {
 	}
 
 	// Alive. The only thing left that needs a person is the board
-	// disagreeing with the journal — except a plan run, whose ticket lives
-	// in Scoping (an unstarted status) for its whole life by design; started
-	// has nothing to say about it. See internal/plan/plan.go's package doc.
-	//
-	// "scope" is the pre-rename journal value: a run journaled before this
-	// package existed still carries it, and it means exactly what "plan"
-	// means now, so both are read as the same verb rather than migrating
-	// every local journal for a value nothing else needs to change.
-	if lane.Verb == "scope" || lane.Verb == "plan" {
-		return Lane{}, false
-	}
+	// disagreeing with the journal — and that now applies to a plan run the
+	// same as a build one: `wand plan` claims In Planning (a started
+	// status, WND-79) before it does anything else, so started has exactly
+	// as much to say about a live plan run as it does about a live build
+	// one. The verb-specific exemption this package used to carry here (see
+	// WND-66) is gone along with the topology gap it was patching.
 	if !started[lane.Ticket] {
 		lane.Kind = LaneOrphaned
 		lane.Reason = fmt.Sprintf(

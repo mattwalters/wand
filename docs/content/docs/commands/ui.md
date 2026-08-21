@@ -30,7 +30,7 @@ wand ui --dump-screen [--script KEYS] [--width N] [--height N]
 › WND-42  doctor prints an empty drift section on a clean board              Low
   WND-41  guard: a raw state UUID is not matched
 
-  Scoped  1 to bless
+  Plan Review  1 to bless
   WND-44  cockpit: a fifth queue for plans awaiting blessing              Urgent
 
   Needs Input  1 to answer
@@ -43,7 +43,7 @@ wand ui --dump-screen [--script KEYS] [--width N] [--height N]
   stuck    WND-36  held by pid 48213 on studio.local, which is gone; the run …
   parked   WND-33  the worktree was dirty at handoff; refusing to park noise …
 
-  judge  t ✦Todo  s ✦Scoping  b Backlog  u unranked  d duplicate  x cancel
+  judge  t ✦Todo  s ✦To Plan  b Backlog  u unranked  d duplicate  x cancel
   ↑/k ↓/j move • enter open • r refresh • q quit
 ```
 
@@ -53,14 +53,14 @@ invisible until something puts it on one screen:
 * **Triage** — what agents filed, waiting to be judged. Ranked in the same
   order [`wand queue`](../queue/) ranks work, so the ticket you bless first
   is the one an agent starts first.
-* **Scoped** — tickets carrying a finished plan, waiting on the judgment
-  that either blesses it into Todo or sends it back. Opening a row shows
-  the plan itself — the marker-fenced region [`wand plan`](../plan/)
+* **Plan Review** — tickets carrying a finished plan, waiting on the
+  judgment that either blesses it into Todo or sends it back. Opening a row
+  shows the plan itself — the marker-fenced region [`wand plan`](../plan/)
   wrote into the description — not the ticket's original body. See
   [Blessing a plan](#blessing-a-plan) below.
 * **Needs Input** — runs parked on a question: a plan run that judged the
   ticket's premise wrong, or a run that hands back. It means one thing —
-  answer me — never "a plan is ready to bless," which is Scoped's job.
+  answer me — never "a plan is ready to bless," which is Plan Review's job.
 * **Ready for human** — every open issue carrying the `ready-for-human`
   label: a pull request to review, a merge to press. Closed issues are
   dropped, because the label outlives the merge that answered it.
@@ -135,7 +135,7 @@ until sweep reaps it.
 
 ## Blessing
 
-Promoting a ticket to **Todo** or **Scoping** is the transition
+Promoting a ticket to **Todo** or **To Plan** is the transition
 [`wand guard`](../guard/) refuses everywhere else, because it hands out
 authorization an agent does not have. The cockpit is the one place a person
 grants it — and it is a moment, not a keystroke:
@@ -163,7 +163,7 @@ starts.
 
 ## Blessing a plan
 
-Opening a Scoped row shows the plan [`wand plan`](../plan/) wrote — the
+Opening a Plan Review row shows the plan [`wand plan`](../plan/) wrote — the
 marker-fenced region of the description, and nothing else. Not the ticket's
 original body, and not the scout's argued-options comment (the approaches it
 weighed, the trade-offs, the estimate): that stays in Linear, one click away
@@ -173,7 +173,7 @@ judgment on the plan itself rather than the argument for it.
 ```
  WND-44  cockpit: a fifth queue for plans awaiting blessing
 
-  status    Scoped
+  status    Plan Review
   priority  Urgent
   assignee  Matt Walters
 
@@ -214,7 +214,7 @@ one did not land instead of guessing:
   Backlog, with reason
 
     WND-44  cockpit: a fifth queue for plans awaiting blessing
-    Scoped → Backlog
+    Plan Review → Backlog
 
     Backlog is the pool. The reason is posted as a comment before the status
     moves, because a rejected plan with no reason on it leaves the next plan run
@@ -227,27 +227,27 @@ one did not land instead of guessing:
 
 ## The seven judgments
 
-Triage and Needs Input rows get all six of the first table below. A Scoped
-row gets only two — bless, or reject with a reason — which is `t` and `b`
-from the same table, but pointed at a plan rather than a raw ticket. Ready-
-for-human and lane rows offer none, and the screen says why rather than
-leaving a key to do nothing.
+Triage and Needs Input rows get all six of the first table below. A Plan
+Review row gets only two — bless, or reject with a reason — which is `t`
+and `b` from the same table, but pointed at a plan rather than a raw
+ticket. Ready-for-human and lane rows offer none, and the screen says why
+rather than leaving a key to do nothing.
 
 | Key | Judgment | Where | Asks for | Writes |
 |---|---|---|---|---|
-| `t` | Bless → Todo | Triage, Needs Input, Scoped | — | status |
-| `s` | Bless → Scoping | Triage, Needs Input | — | status |
+| `t` | Bless → Todo | Triage, Needs Input, Plan Review | — | status |
+| `s` | Bless → To Plan | Triage, Needs Input | — | status |
 | `b` | Backlog, ranked | Triage, Needs Input | a priority, `1`–`4` | status + priority |
 | `u` | Backlog, unranked | Triage, Needs Input | — | status + priority `0` |
 | `d` | Duplicate | Triage, Needs Input | the canonical issue | relation, **then** status |
 | `x` | Canceled, with reason | Triage, Needs Input | the reason | comment, **then** status |
-| `b` | Backlog, with reason | Scoped | the reason | comment, **then** status |
+| `b` | Backlog, with reason | Plan Review | the reason | comment, **then** status |
 
 `enter` confirms, `esc` goes back. The unranked Backlog move sends an
 explicit `0` rather than leaving the field alone: carrying the old rank into
 the pool is the opposite of the judgment "worth keeping, not worth ranking".
 
-Duplicate, Cancel and the Scoped row's Backlog write their evidence *before*
+Duplicate, Cancel and the Plan Review row's Backlog write their evidence *before*
 the status moves, for the same reason [`wand handback`](../handback/) posts
 its question first. The status write is what ends the ticket's visibility,
 so anything a reader will later need has to already be on it. A crash
@@ -268,11 +268,11 @@ to `Ready` gets a screen that says `→ Ready`.
 
 ## Engage mode
 
-Press `e` to engage. While engaged, the cockpit polls Todo and Scoping on
+Press `e` to engage. While engaged, the cockpit polls Todo and To Plan on
 `--interval` (default `1m`) exactly the way `wand dispatch --watch` (see
 [`wand dispatch`](../dispatch/)) does — because it *is* that mechanism,
 reused rather than reimplemented: each poll counts lanes, ranks
-and vets Todo and Scoping, and when a winner exists spawns it as a
+and vets Todo and To Plan, and when a winner exists spawns it as a
 **detached child process** through `wand run` or `wand scope`, the same way
 `--watch` does. That child survives the cockpit: closing the UI, or the
 whole terminal it runs in, never kills work already spawned. Press `e`

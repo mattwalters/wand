@@ -20,7 +20,7 @@ The vetting is [`wand queue`](../queue/)'s own — not labeled `human-only`,
 no unresolved blockers — plus a status gate:
 
 **The issue must be in Todo.** Claim starts blessed work, and blessing is a
-human act. An issue in Backlog, Triage or Scoping is not yours to start,
+human act. An issue in Backlog, Triage or To Plan is not yours to start,
 however ready it looks, and `claim` refuses rather than promoting it. (It
 could not promote it anyway: [`wand guard`](../guard/) blocks the write.)
 

@@ -30,10 +30,11 @@ func covenantTeam() (linear.Team, bootstrap.Current) {
 }
 
 // schema1Team is what a team bootstrapped under WND-32's original covenant —
-// before Scoped existed — looks like today: every status the pre-Scoped
-// covenant created, Scoped absent. It mirrors bootstrap_test.go's
-// existingSchema1Team, duplicated here because that fixture is unexported in
-// another package's _test.go file.
+// before Scoped existed, and before WND-79's To Plan/In Planning/Plan Review
+// topology replaced Scoping/Scoped entirely — looks like today: every status
+// the earliest covenant created, none of the research-track additions
+// since. It mirrors bootstrap_test.go's existingSchema1Team, duplicated here
+// because that fixture is unexported in another package's _test.go file.
 func schema1Team() (linear.Team, bootstrap.Current) {
 	team := linear.Team{ID: "team-1", Name: "Wand", Key: "WND", TriageEnabled: true, IssueEstimationType: "fibonacci"}
 	var current bootstrap.Current
@@ -78,16 +79,21 @@ func TestDiagnoseCleanTeam(t *testing.T) {
 	}
 }
 
-func TestDiagnoseMissingScopedStatus(t *testing.T) {
-	// A team bootstrapped before Scoped existed (WND-32's original covenant)
-	// predates WND-38's addition of Scoped to covenant.Default(). Diagnose
-	// should surface that gap the same way it surfaces any other missing
-	// status: as drift, with a remedy, not an accusation.
+func TestDiagnoseMissingToPlanInPlanningPlanReviewStatuses(t *testing.T) {
+	// A team bootstrapped before this topology change (schema1Team, same
+	// shape WND-32's original covenant left behind) predates WND-79's
+	// replacement of Scoping/Scoped with To Plan/In Planning/Plan Review.
+	// Diagnose should surface that gap the same way it surfaces any other
+	// missing status: as drift, with a remedy, not an accusation.
 	team, current := schema1Team()
 	findings := Diagnose(covenant.Default(), team, current)
-	want := `status "Scoped" (unstarted) is missing`
-	if len(findings) != 1 || findings[0] != want {
-		t.Errorf("findings:\n got %s\nwant %s", strings.Join(findings, "\n     "), want)
+	want := []string{
+		`status "To Plan" (unstarted) is missing`,
+		`status "In Planning" (started) is missing`,
+		`status "Plan Review" (unstarted) is missing`,
+	}
+	if len(findings) != len(want) || strings.Join(findings, "\n") != strings.Join(want, "\n") {
+		t.Errorf("findings:\n got %s\nwant %s", strings.Join(findings, "\n     "), strings.Join(want, "\n     "))
 	}
 }
 
@@ -297,20 +303,27 @@ func TestRunExitContract(t *testing.T) {
 		}
 	})
 
-	t.Run("team predating Scoped exits 1", func(t *testing.T) {
-		// A team bootstrapped before WND-38 added Scoped to the covenant is
-		// drift, not silence, and the report reads as a remedy: init adds
-		// the missing status, nobody removed it.
+	t.Run("team predating To Plan/In Planning/Plan Review exits 1", func(t *testing.T) {
+		// A team bootstrapped before WND-79 replaced Scoping/Scoped with
+		// To Plan/In Planning/Plan Review is drift, not silence, and the
+		// report reads as a remedy: init adds the missing statuses, nobody
+		// removed them.
 		schemaTeam, schemaCurrent := schema1Team()
 		var out, errOut bytes.Buffer
 		code := Run(context.Background(), &fakeClient{team: schemaTeam, current: schemaCurrent}, &out, &errOut, "WND", covenant.Default())
 		if code != ExitDrift {
 			t.Fatalf("exit code = %d, want %d; stderr:\n%s", code, ExitDrift, errOut.String())
 		}
-		if !strings.Contains(out.String(), `drift: status "Scoped" (unstarted) is missing`) {
-			t.Errorf("output does not report the missing status:\n%s", out.String())
+		for _, want := range []string{
+			`drift: status "To Plan" (unstarted) is missing`,
+			`drift: status "In Planning" (started) is missing`,
+			`drift: status "Plan Review" (unstarted) is missing`,
+		} {
+			if !strings.Contains(out.String(), want) {
+				t.Errorf("output does not report %q:\n%s", want, out.String())
+			}
 		}
-		if !strings.Contains(out.String(), "1 drift from the covenant") {
+		if !strings.Contains(out.String(), "3 drifts from the covenant") {
 			t.Errorf("output does not count the drift:\n%s", out.String())
 		}
 	})

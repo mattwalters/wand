@@ -701,7 +701,7 @@ func dropIssue(issues []linear.Issue, id, identifier string) []linear.Issue {
 // already judged.
 func withoutIssue(s cockpit.Snapshot, id, identifier string) cockpit.Snapshot {
 	s.Triage = dropIssue(s.Triage, id, identifier)
-	s.Scoped = dropIssue(s.Scoped, id, identifier)
+	s.PlanReview = dropIssue(s.PlanReview, id, identifier)
 	s.NeedsInput = dropIssue(s.NeedsInput, id, identifier)
 	s.ReadyForHuman = dropIssue(s.ReadyForHuman, id, identifier)
 	return s

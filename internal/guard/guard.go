@@ -1,7 +1,7 @@
 // Package guard decides what an agent may never do to a Linear ticket.
 //
 // The lifecycle's prose already says an agent never promotes a ticket to Todo
-// or Scoping and never closes one. Prose is advisory: the reference system
+// or To Plan and never closes one. Prose is advisory: the reference system
 // this port comes from had the rule written down in two places and a run
 // still landed a ticket in Todo. A correctly written instruction that is only
 // sometimes followed looks, from the outside, exactly like one that was never
@@ -13,40 +13,44 @@
 //	Todo       blesses work — the gate between "written down" and "a bot may
 //	           act on this unattended". A ticket that lands there carrying no
 //	           comment and no branch rejoins the queue looking startable.
-//	Scoping    blesses research, the same shape one rung lower: a ticket in
-//	           Scoping is one a dispatcher may spend a scout on unattended.
+//	To Plan    blesses research, the same shape one rung lower: a ticket in
+//	           To Plan is one a dispatcher may spend a scout on unattended.
 //	Done       )
 //	Canceled   ) close a ticket. Closing is a human's call however obsolete
 //	Duplicate  ) the ticket looks; an agent recommends it in a comment.
 //
 // Every status an agent legitimately sets is left alone: In Progress,
-// In Review, Needs Input, Scoped, Backlog, Triage. Backlog is the one
-// downward move an agent may make, and it is safe because it removes
-// authorization rather than granting it. Note which direction is blocked:
-// moving a ticket *into* Scoping is a promotion and is refused; moving one
-// *out* of Scoping is what every plan run ends with, and both ways it can
-// end are allowed — to Needs Input, the scout has a blocking question, or to
-// Scoped, the plan is finished — the guard sees only the destination.
+// In Review, Needs Input, In Planning, Plan Review, Backlog, Triage.
+// Backlog is the one downward move an agent may make, and it is safe
+// because it removes authorization rather than granting it. Note which
+// direction is blocked: moving a ticket *into* To Plan is a promotion and is
+// refused; moving one *out* of To Plan is what `plan.Execute` does the
+// moment it claims the ticket into In Planning, the research-side mirror of
+// `run.Execute` claiming In Progress — the same WND-47 rule restated:
+// agents may enter a state they do not bless, only humans may leave one
+// that authorizes something. From In Planning, both ways a plan run can end
+// are allowed — to Needs Input, the scout has a blocking question, or to
+// Plan Review, the plan is finished — the guard sees only the destination.
 //
-// Scoped is the research-side analog of In Review: it is the plan
+// Plan Review is the research-side analog of In Review: it is the plan
 // orchestrator's terminal write, the plan-review equivalent of "this code is
 // ready to look at". An agent may set it unattended, the same as In Review,
-// and it may never move a ticket *out* of Scoped — that destination is
-// already covered by the Todo rule above (Scoped -> Todo is blessing a plan,
-// which is the same human act as blessing anything else into Todo) and by
-// the four-close-statuses rule (Scoped -> Done/Canceled/Duplicate is closing
-// a ticket, forbidden regardless of where it is closed from). No status
-// besides Todo, Scoping, Done, Canceled and Duplicate is ever a forbidden
-// destination, so leaving Scoped needs no rule of its own: it is already
-// covered by the same five.
+// and it may never move a ticket *out* of Plan Review — that destination is
+// already covered by the Todo rule above (Plan Review -> Todo is blessing a
+// plan, which is the same human act as blessing anything else into Todo)
+// and by the four-close-statuses rule (Plan Review ->
+// Done/Canceled/Duplicate is closing a ticket, forbidden regardless of
+// where it is closed from). No status besides Todo, To Plan, Done, Canceled
+// and Duplicate is ever a forbidden destination, so leaving Plan Review
+// needs no rule of its own: it is already covered by the same five.
 //
 // WND-17: the maps below match the covenant's default English display
-// names ("Todo", "Scoping", ...), not whatever a covenant-file rename might
+// names ("Todo", "To Plan", ...), not whatever a covenant-file rename might
 // call them. A team that renames a guarded status in its covenant file
-// silently falls out of this guard's coverage — including Scoped and its
-// neighbors, added here. That gap is real and is not fixed by this change;
-// it is tracked separately as WND-17, deliberately, rather than carried
-// forward with no comment saying so.
+// silently falls out of this guard's coverage — including Plan Review and
+// its neighbors, added here. That gap is real and is not fixed by this
+// change; it is tracked separately as WND-17, deliberately, rather than
+// carried forward with no comment saying so.
 //
 // Known gap, accepted rather than overlooked: Linear's state parameter takes
 // "a state type, name, or ID". Names and types are matched below; a raw UUID
@@ -113,8 +117,8 @@ const (
 		"Done also arrives on its own: Linear's on-PR-merge automation sets it " +
 		"within seconds of the human merging."
 
-	reasonScoping = "Moving a ticket to **Scoping** is the human's call, for the same reason " +
-		"Todo is. Scoping blesses research: a ticket sitting in it is one a " +
+	reasonToPlan = "Moving a ticket to **To Plan** is the human's call, for the same reason " +
+		"Todo is. To Plan blesses research: a ticket sitting in it is one a " +
 		"dispatcher may spend a scout on unattended, so putting work there " +
 		"authorizes it rather than describing it.\n\n" +
 		"If you are a scout finishing a plan, the move you want is **Needs " +
@@ -126,7 +130,7 @@ const (
 		"and leave the status alone. A human promotes it."
 
 	reasonAmbiguousUnstarted = "`unstarted` is a state *type*, not a status, and this team has four of " +
-		"them — **Todo**, **Needs Input**, **Scoping** and **Scoped**. Linear " +
+		"them — **Todo**, **Needs Input**, **To Plan** and **Plan Review**. Linear " +
 		"resolves the type to whichever the team defaults to, which is Todo, so " +
 		"this reads as a hand-back and lands as a promotion. Two of the four are " +
 		"statuses you may never set, which is why the type is refused rather than " +
@@ -147,7 +151,7 @@ const (
 var forbiddenNames = map[string]string{
 	"todo":      reasonTodo,
 	"to do":     reasonTodo,
-	"scoping":   reasonScoping,
+	"to plan":   reasonToPlan,
 	"done":      reasonClose,
 	"canceled":  reasonClose,
 	"cancelled": reasonClose,
@@ -157,9 +161,9 @@ var forbiddenNames = map[string]string{
 // forbiddenTypes are the state *types* that resolve to a forbidden status.
 //
 // `completed` and `canceled` are unambiguous — one status each. `unstarted`
-// covers Todo, Needs Input, Scoping and Scoped, so it gets its own message
-// telling the caller to name the status rather than the type. (`duplicate` needs no
-// entry: the string is already forbidden as a name.)
+// covers Todo, Needs Input, To Plan and Plan Review, so it gets its own
+// message telling the caller to name the status rather than the type.
+// (`duplicate` needs no entry: the string is already forbidden as a name.)
 var forbiddenTypes = map[string]string{
 	"completed": reasonClose,
 	"canceled":  reasonClose,

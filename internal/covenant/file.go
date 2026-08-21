@@ -54,8 +54,9 @@ type FileTeam struct {
 type FileStatuses struct {
 	Triage     string `toml:"triage"`
 	Backlog    string `toml:"backlog"`
-	Scoping    string `toml:"scoping"`
-	Scoped     string `toml:"scoped"`
+	ToPlan     string `toml:"to_plan"`
+	InPlanning string `toml:"in_planning"`
+	PlanReview string `toml:"plan_review"`
 	Todo       string `toml:"todo"`
 	NeedsInput string `toml:"needs_input"`
 	InProgress string `toml:"in_progress"`
@@ -70,8 +71,9 @@ func (s FileStatuses) overrides() map[string]string {
 	all := map[string]string{
 		"triage":      s.Triage,
 		"backlog":     s.Backlog,
-		"scoping":     s.Scoping,
-		"scoped":      s.Scoped,
+		"to_plan":     s.ToPlan,
+		"in_planning": s.InPlanning,
+		"plan_review": s.PlanReview,
 		"todo":        s.Todo,
 		"needs_input": s.NeedsInput,
 		"in_progress": s.InProgress,
@@ -221,7 +223,7 @@ func validateTeam(md toml.MetaData, t FileTeam) error {
 func validateStatuses(md toml.MetaData, s FileStatuses) error {
 	// An explicitly empty name is refused rather than treated as unset:
 	// whatever the author meant, it was not "quietly keep the default".
-	for _, key := range []string{"triage", "backlog", "scoping", "scoped", "todo", "needs_input", "in_progress", "in_review", "done", "canceled", "duplicate"} {
+	for _, key := range []string{"triage", "backlog", "to_plan", "in_planning", "plan_review", "todo", "needs_input", "in_progress", "in_review", "done", "canceled", "duplicate"} {
 		if md.IsDefined("statuses", key) && strings.TrimSpace(s.overrides()[key]) == "" {
 			return fmt.Errorf("statuses.%s is empty; delete the key to keep the stock name", key)
 		}

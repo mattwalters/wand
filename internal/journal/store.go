@@ -29,16 +29,19 @@ import (
 //
 // The lock guards one *run*, not one ticket. Two runs against the same
 // ticket are two directories and two locks, and nothing here stops them —
-// deciding that a ticket already has a run is normally the dispatcher's
-// job, made on the board, before a run exists. This layer's promise is
-// narrower and absolute: one writer per run, and a dead one provably dead.
+// deciding that a ticket already has a run is the dispatcher's job, made on
+// the board, before a run exists: `wand run` claims Todo into In Progress
+// and `wand plan` claims To Plan into In Planning, both before touching
+// this store, so the board itself is the mutex on both sides (see
+// internal/verbs). This layer's promise is narrower and absolute: one
+// writer per run, and a dead one provably dead.
 //
-// An orchestrator whose ticket never changes status while it works has no
-// board move to lose the race on, and asks for ticket-level exclusion
-// explicitly with [Store.LockTicket] (ticket.go) — machine-local, held for
-// the life of the process, released by the kernel when it dies:
-//
-//	<root>/tickets/<ticket>.lock    one plan run at a time, per ticket
+// This package used to also offer a machine-local per-ticket lock
+// ([Store.LockTicket], WND-79 removed it) for the plan verb specifically,
+// back when its ticket held one unstarted status for its whole life and so
+// had no board move to lose a race on. That reasoning no longer holds now
+// that To Plan/In Planning/Plan Review give research the same claim-then-
+// release shape building already had — see PLAN.md.
 type Store struct {
 	// Root is the directory runs live under. Absolute, and outside every
 	// repository the store records runs for.

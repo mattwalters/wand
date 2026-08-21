@@ -55,7 +55,7 @@ func TestReadFollowsTheCovenantsNames(t *testing.T) {
 		t.Fatalf("Read: %v", err)
 	}
 
-	if len(cl.states) != 3 || cl.states[0] != "Inbox" || cl.states[1] != "Scoped" || cl.states[2] != "Blocked on me" {
+	if len(cl.states) != 3 || cl.states[0] != "Inbox" || cl.states[1] != "Plan Review" || cl.states[2] != "Blocked on me" {
 		t.Errorf("statuses read = %v, want the covenant's own names", cl.states)
 	}
 	// Two label reads: ready-for-human fills a queue, and parked decides
@@ -73,7 +73,7 @@ func TestReadFollowsTheCovenantsNames(t *testing.T) {
 	if snap.Team != "WND" {
 		t.Errorf("team = %q, want WND", snap.Team)
 	}
-	if len(snap.Triage) != 1 || len(snap.Scoped) != 1 || len(snap.NeedsInput) != 1 || len(snap.ReadyForHuman) != 1 {
+	if len(snap.Triage) != 1 || len(snap.PlanReview) != 1 || len(snap.NeedsInput) != 1 || len(snap.ReadyForHuman) != 1 {
 		t.Errorf("snapshot = %+v, want one issue in each queue", snap)
 	}
 	if snap.Lanes != nil {

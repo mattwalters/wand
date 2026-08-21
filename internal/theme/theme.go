@@ -21,7 +21,7 @@ type Theme struct {
 	Selected lipgloss.Style
 
 	// Bless is the one style reserved for a single act: promoting work to
-	// Todo or Scoping. Nothing else on the board wears it, which is what
+	// Todo or To Plan. Nothing else on the board wears it, which is what
 	// makes the blessing screen read as a different kind of moment rather
 	// than another confirmation dialog.
 	Bless lipgloss.Style

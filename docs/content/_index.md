@@ -24,7 +24,7 @@ $ wand ui --sample
 › WND-42  doctor prints an empty drift section on a clean board              Low
   WND-41  guard: a raw state UUID is not matched
 
-  Scoped  1 to bless
+  Plan Review  1 to bless
   WND-44  cockpit: a fifth queue for plans awaiting blessing              Urgent
 
   Needs Input  1 to answer
@@ -37,7 +37,7 @@ $ wand ui --sample
   stuck    WND-36  held by pid 48213 on studio.local, which is gone; the run …
   parked   WND-33  the worktree was dirty at handoff; refusing to park noise …
 
-  judge  t ✦Todo  s ✦Scoping  b Backlog  u unranked  d duplicate  x cancel
+  judge  t ✦Todo  s ✦To Plan  b Backlog  u unranked  d duplicate  x cancel
   ↑/k ↓/j move • enter open • q quit
 ```
 
@@ -55,13 +55,13 @@ written. `wand ui --team-key WND` shows your team's.
 > last one, is not built yet.
 
 **A covenant, not a config file.** The state graph — Triage → Backlog →
-Scoping → Scoped → Todo → Needs Input → In Progress → In Review → Done — is
+To Plan → In Planning → Plan Review → Todo → Needs Input → In Progress → In Review → Done — is
 wand's opinion, gofmt-style. A checked-in `wand.toml` carries the *parameters* of
 the machine — status names, caps, commands — never its shape.
 [The covenant](docs/covenant/) is the reasoning behind every state in it.
 
 **A guard that outranks the agent.** Promoting to Todo blesses building,
-promoting to Scoping blesses research, and Done, Canceled and Duplicate
+promoting to To Plan blesses research, and Done, Canceled and Duplicate
 close a ticket. Those are a human's call, so
 [`wand guard`](docs/commands/guard/) refuses them — as a harness hook, on the
 tool call, before the write happens.
@@ -73,9 +73,10 @@ prose, where it was followed only sometimes: the question is posted before
 the ticket parks on it, the evidence before the demotion, the duplicate
 search before the filing.
 
-**Orchestrators that hand back.** [`wand plan`](docs/commands/plan/) sends
-a cold, read-only scout over one ticket and writes a plan plus the argued
-options a human blesses it on — ending at Scoped, never at Todo.
+**Orchestrators that hand back.** [`wand plan`](docs/commands/plan/) claims
+a ticket into In Planning, sends a cold, read-only scout over it, and writes
+a plan plus the argued options a human blesses it on — ending at Plan
+Review, never at Todo.
 [`wand run`](docs/commands/run/) takes a ticket a human *has* blessed and
 drives it through implement → CI → review → revise. Neither ever blesses
 its own work.

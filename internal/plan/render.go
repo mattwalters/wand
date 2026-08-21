@@ -61,7 +61,8 @@ func PlanMarkdown(d Draft) string {
 // recommendation, the estimate, what the plan rests on, and what is still
 // unanswered — then the explicit request for a blessing an agent may not
 // grant itself. statusName is the covenant's display name for the terminal
-// status the plan run is about to move the ticket to (its "scoped" key), so
+// status the plan run is about to move the ticket to (its "plan_review"
+// key), so
 // the comment names whatever a covenant file calls it rather than a
 // hardcoded default.
 func OptionsComment(d Draft, scale, statusName string, prov Provenance) string {
