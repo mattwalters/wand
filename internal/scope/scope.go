@@ -31,6 +31,15 @@
 //     recoverable, and a ticket carrying a number nothing explains is a
 //     number nobody can weigh.
 //
+//   - **A re-scope preserves what it replaces.** The plan region is
+//     rewritten whole on every scope (render.go), so a plan a human read
+//     and blessed would otherwise vanish the moment a later scope ran,
+//     surviving nowhere but a closed PR. Before the region is overwritten,
+//     whatever is already there is posted as a dated, superseded comment —
+//     preservePriorPlan, ahead of UpsertSection in [scoping.write] the same
+//     way the options comment is ahead of the estimate. Re-scoping itself
+//     stays legitimate; only the silent loss was the defect.
+//
 //   - **Every extra pass is a fresh, cold process.** The critic attacks
 //     the draft, the reviser rewrites it, and neither is the session that
 //     wrote it — a session that has just argued for an approach defends
@@ -460,6 +469,10 @@ func (s *scoping) write(ctx context.Context, draft Draft) Outcome {
 		return *s.park(ctx, fmt.Sprintf("could not resolve the %s status: %v", s.d.Cov.StatusName("scoped"), err))
 	}
 
+	if out := s.preservePriorPlan(ctx); out != nil {
+		return *out
+	}
+
 	if _, _, err := s.d.Board.UpsertSection(ctx, s.issue.ID, s.issue.Description, PlanSectionID, PlanMarkdown(draft)); err != nil {
 		return *s.park(ctx, fmt.Sprintf("the plan could not be written into the description: %v", err))
 	}
@@ -488,6 +501,32 @@ func (s *scoping) write(ctx context.Context, draft Draft) Outcome {
 		fmt.Fprintf(s.d.Out, "journal: %v\n", err)
 	}
 	return Outcome{Kind: journal.Converged, Reason: reason}
+}
+
+// preservePriorPlan posts the description's existing plan region as a dated,
+// superseded comment before the write that is about to replace it. A scope
+// of an already-scoped ticket is a legitimate, deliberate human act — that
+// is what re-opens Scoping — but the plan region is rewritten whole on
+// every scope, so without this step the plan a human read and blessed
+// vanishes the moment the new one lands, leaving no trace on the ticket
+// that it ever existed. Called before [Board.UpsertSection], the same
+// comment-before-write discipline [scoping.write] uses everywhere else:
+// what could be destroyed is made safe before the write that would destroy
+// it runs. A ticket with no prior plan posts nothing.
+func (s *scoping) preservePriorPlan(ctx context.Context) *Outcome {
+	prior, ok, err := linear.ReadSection(s.issue.Description, PlanSectionID)
+	if err != nil {
+		return s.park(ctx, fmt.Sprintf("could not read the description's existing plan region: %v", err))
+	}
+	if !ok || strings.TrimSpace(prior) == "" {
+		return nil
+	}
+	if err := s.d.Board.CreateComment(ctx, s.issue.ID, supersededComment(prior, s.prov)); err != nil {
+		return s.park(ctx, fmt.Sprintf(
+			"the ticket already carries a plan, and preserving it as a comment before replacing it failed: %v — nothing was overwritten", err))
+	}
+	fmt.Fprintln(s.d.Out, "preserved the ticket's previous plan as a comment before replacing it")
+	return nil
 }
 
 // work journals a phase, spawns its worker, and journals what came back. A
