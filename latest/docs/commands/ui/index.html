@@ -202,27 +202,42 @@ wand ui --dump-screen [--script KEYS] [--width N] [--height N]
 </code></pre><p>Each of the five is a queue nothing drains on its own, and each is
 invisible until something puts it on one screen:</p>
 <ul>
-<li><strong>Triage</strong> — what agents filed, waiting to be judged. Ranked in the same
+<li>
+<p><strong>Triage</strong> — what agents filed, waiting to be judged. Ranked in the same
 order <a href="../queue/"><code>wand queue</code></a> ranks work, so the ticket you bless first
-is the one an agent starts first.</li>
-<li><strong>Scoped</strong> — tickets carrying a finished plan, waiting on the judgment
+is the one an agent starts first.</p>
+</li>
+<li>
+<p><strong>Scoped</strong> — tickets carrying a finished plan, waiting on the judgment
 that either blesses it into Todo or sends it back. Opening a row shows
 the plan itself — the marker-fenced region <a href="../plan/"><code>wand plan</code></a>
 wrote into the description — not the ticket&rsquo;s original body. See
-<a href="#blessing-a-plan">Blessing a plan</a> below.</li>
-<li><strong>Needs Input</strong> — runs parked on a question: a plan run that judged the
+<a href="#blessing-a-plan">Blessing a plan</a> below.</p>
+</li>
+<li>
+<p><strong>Needs Input</strong> — runs parked on a question: a plan run that judged the
 ticket&rsquo;s premise wrong, or a run that hands back. It means one thing —
-answer me — never &ldquo;a plan is ready to bless,&rdquo; which is Scoped&rsquo;s job.</li>
-<li><strong>Ready for human</strong> — every open issue carrying the <code>ready-for-human</code>
+answer me — never &ldquo;a plan is ready to bless,&rdquo; which is Scoped&rsquo;s job.</p>
+</li>
+<li>
+<p><strong>Ready for human</strong> — every open issue carrying the <code>ready-for-human</code>
 label: a pull request to review, a merge to press. Closed issues are
-dropped, because the label outlives the merge that answered it.</li>
-<li><strong>Lanes</strong> — runs the crash-only run journal says a person has to
+dropped, because the label outlives the merge that answered it.</p>
+</li>
+<li>
+<p><strong>Lanes</strong> — runs the crash-only run journal says a person has to
 resolve. Four kinds, worst first: <code>stuck</code> (the journal says it is running
 and its holder is provably dead), <code>orphaned</code> (a live run whose ticket is
 not in a started status — nothing on the board claims the lane),
 <code>unclear</code> (a holder on a machine this one cannot see, which is never swept
-automatically), and <code>parked</code> (the run stopped and recorded why). Read-only:
-a lane is not a ticket, and resolving one means going to the machine.</li>
+automatically), and <code>parked</code> (the run stopped and recorded why).</p>
+<p>A parked lane is the one a person can act on: <code>clear parked</code> removes the
+<code>parked</code> label from its ticket, and the lane goes with it. That is not a
+cosmetic dismissal — the label is what makes a park a live obligation, so
+clearing it is the act, and the lane is a picture of it. The other three
+kinds are read-only: they describe a process misbehaving right now, and
+resolving one means going to the machine.</p>
+</li>
 </ul>
 <p>The sections are always all five, even when empty. A queue that vanished
 when it drained would teach you to stop looking for it, and the day it
