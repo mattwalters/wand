@@ -333,8 +333,8 @@ human's call as making one.
 `wand run WND-3` owns one blessed ticket from claim to a terminal state:
 implement → CI → review → revise, a cold worker per phase, in a run-private
 worktree, with phases and caps from the covenant (`caps.review_rounds`,
-`caps.ci_attempts`, `caps.worker_timeout_minutes`, `caps.worker_retries`;
-`commands.verify` is required). Workers commit and are mute — their environments carry no Linear
+`caps.ci_attempts`, `caps.worker_timeout_minutes`, `caps.phase_timeout_minutes`,
+`caps.worker_retries`; `commands.verify` is required). Workers commit and are mute — their environments carry no Linear
 or GitHub credentials, proven per harness by the isolation conformance
 suite — while the orchestrator makes every external write: it runs verify,
 pushes, opens and titles the PR (`[WND-3] …`, written at open and repaired

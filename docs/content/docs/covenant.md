@@ -257,6 +257,41 @@ is ever retried: a failure that might be about the work, a timeout, and an
 interrupt all park on the first attempt. See
 [`wand run`](../commands/run/) for the rules that keep it narrow.
 
+`caps.worker_timeout_minutes` (default `60`) is a different kind of cap
+from `review_rounds` and `ci_attempts`, worth naming so the three are not
+tuned by the same instinct. The round caps bound *semantic looping* — they
+exist so a run cannot converge by exhausting a counter, and changing them
+changes what a run is willing to conclude. The worker timeout bounds *a
+wedged process* — a liveness backstop only, and changing it changes
+nothing about correctness.
+
+One number applied to every phase asks a reviewer to justify the
+implementer's budget, or asks an implementer to make do with the
+reviewer's. `caps.phase_timeout_minutes` overrides the global timeout for
+specific phases, falling back to it for any phase left unmentioned:
+
+```toml
+[caps]
+worker_timeout_minutes = 60
+
+[caps.phase_timeout_minutes]
+review = 20
+fix-ci = 20
+```
+
+The stock covenant already ships `review` and `fix-ci` at 20 minutes, over
+a 60-minute global default that `implement` and scope's research phases
+(`scout`, `critic`, `revise`) fall back to. These are early defaults —
+sized from this machine's own run journals (an `implement` phase
+legitimately running into the 40s of minutes on a real multi-package
+ticket; `review` and `fix-ci` never observed past a few) rather than from
+guessing, but from a small sample, and subject to revision as more runs
+accumulate. Every key is validated the same way as the other caps: an
+unknown phase name is refused loudly, the same as any other misspelled key
+in this file, and an explicit zero or negative is refused for the same
+reason a bare cap of zero is — a cap of nothing is a request to loop
+forever.
+
 ## Toggles
 
 Two optional stages of the plan orchestrator are the covenant's to switch,

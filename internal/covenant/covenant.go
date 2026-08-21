@@ -63,10 +63,26 @@ type Automation struct {
 
 // Caps are the hard limits on the run loop. A cap running out is never
 // silent convergence: exhaustion is a hand-back that says so.
+//
+// ReviewRounds and CIAttempts bound semantic looping: they exist so a run
+// cannot converge by exhausting a counter, and changing them changes what a
+// run is willing to conclude. WorkerTimeout (and its per-phase overrides in
+// PhaseTimeouts) bounds a wedged process — a liveness backstop only.
+// Changing it changes nothing about correctness. Do not reach for a
+// per-phase entry in PhaseTimeouts to solve a problem that is really about
+// ReviewRounds or CIAttempts; the two kinds of cap do not mix.
 type Caps struct {
 	ReviewRounds  int
 	CIAttempts    int
 	WorkerTimeout time.Duration
+	// PhaseTimeouts overrides WorkerTimeout for specific phases, keyed by
+	// the phase name passed to internal/run's and internal/scope's `work`
+	// (e.g. "implement", "review", "scout"). A phase absent here falls back
+	// to WorkerTimeout — use Timeout rather than reading this map directly.
+	// Early defaults, sized from this machine's own run journals rather
+	// than guessed: implement's work profile runs long, a reviewer's does
+	// not, and one number cannot serve both.
+	PhaseTimeouts map[string]time.Duration
 	// Lanes is how many `wand run` loops this repo runs at once. `wand
 	// dispatch` reads it to decide whether a Todo winner may start; a
 	// Scoping winner never needs one (see internal/dispatch), so research
@@ -80,6 +96,16 @@ type Caps struct {
 	// before this existed. Nothing else is ever retried; a failure that
 	// might be about the work still parks on the first attempt.
 	WorkerRetries int
+}
+
+// Timeout returns how long a worker spawned for phase may run: the phase's
+// override in PhaseTimeouts when the covenant sets one, else the global
+// WorkerTimeout backstop.
+func (c Caps) Timeout(phase string) time.Duration {
+	if d, ok := c.PhaseTimeouts[phase]; ok {
+		return d
+	}
+	return c.WorkerTimeout
 }
 
 // Toggles switch the lifecycle's optional stages.
@@ -186,7 +212,19 @@ func Default() Covenant {
 		Caps: Caps{
 			ReviewRounds:  3,
 			CIAttempts:    3,
-			WorkerTimeout: 30 * time.Minute,
+			WorkerTimeout: 60 * time.Minute,
+			// review and fix-ci read a diff or a failure and write a
+			// verdict or a patch; this machine's own run journals show
+			// neither has ever taken longer than a few minutes, so a
+			// reviewer or a fix-ci worker still going at 20 is far more
+			// likely wedged than thorough. implement (and scope's
+			// research phases) keep the 60-minute global: the same
+			// journals show implement legitimately running into the
+			// 40s of minutes on a real multi-package ticket.
+			PhaseTimeouts: map[string]time.Duration{
+				"review": 20 * time.Minute,
+				"fix-ci": 20 * time.Minute,
+			},
 			Lanes:         1,
 			WorkerRetries: 1,
 		},

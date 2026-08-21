@@ -569,7 +569,7 @@ func (s *planning) work(ctx context.Context, phase string, round int, rules []st
 			Dir:         s.d.Repo,
 			ScratchDir:  s.r.ScratchDir(),
 			HandoffPath: s.r.HandoffPath(),
-			Timeout:     s.d.Cov.Caps.WorkerTimeout,
+			Timeout:     s.d.Cov.Caps.Timeout(phase),
 			Model:       s.d.Model,
 			Effort:      s.d.Effort,
 			Out:         s.d.Out,

@@ -790,8 +790,8 @@ func TestWorkerSpecsCarryTheContract(t *testing.T) {
 	f.execute(t)
 
 	impl := f.workers.specs[0]
-	if impl.Timeout != f.deps.Cov.Caps.WorkerTimeout {
-		t.Errorf("implement timeout %v", impl.Timeout)
+	if want := f.deps.Cov.Caps.Timeout("implement"); impl.Timeout != want {
+		t.Errorf("implement timeout %v, want %v", impl.Timeout, want)
 	}
 	if !strings.HasSuffix(impl.Dir, filepath.Join("", "tree")) {
 		t.Errorf("implement dir %q is not the run's worktree", impl.Dir)
@@ -811,6 +811,28 @@ func TestWorkerSpecsCarryTheContract(t *testing.T) {
 	// name nothing at all — the diff has to be against the tracking ref.
 	if !strings.Contains(review.Prompt, "git diff origin/main...HEAD") {
 		t.Errorf("review prompt does not point at the diff:\n%s", review.Prompt)
+	}
+}
+
+// A configured per-phase override reaches the worker spec for that phase
+// alone; every other phase keeps the global WorkerTimeout. This is the
+// regression the phase-timeout table exists to catch: an override
+// configured but never read, or read by the wrong phase.
+func TestPhaseTimeoutOverrideReachesWorkerSpec(t *testing.T) {
+	f := newFixture(t)
+	f.deps.Cov.Caps.PhaseTimeouts = map[string]time.Duration{"review": 5 * time.Minute}
+	f.workers.steps = []workerStep{{handoff: doneHandoff}, {handoff: approveHandoff}}
+	f.shell.steps = []shellStep{{ok: true}}
+
+	f.execute(t)
+
+	impl := f.workers.specs[0]
+	if impl.Timeout != f.deps.Cov.Caps.WorkerTimeout {
+		t.Errorf("implement timeout %v, want the unconfigured global %v", impl.Timeout, f.deps.Cov.Caps.WorkerTimeout)
+	}
+	review := f.workers.specs[1]
+	if review.Timeout != 5*time.Minute {
+		t.Errorf("review timeout %v, want the configured override %v", review.Timeout, 5*time.Minute)
 	}
 }
 
