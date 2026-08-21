@@ -871,18 +871,19 @@ func (s *planning) work(ctx context.Context, phase string, round int, rules []st
 		// the phase opened would point the scout at the previous phase's
 		// handoff file.
 		spec := worker.Spec{
-			Mode:        phase + " (read-only research; no worktree, no branch, no CI)",
-			Rules:       rules,
-			Prompt:      prompt,
-			Dir:         s.d.Repo,
-			ScratchDir:  s.r.ScratchDir(),
-			HandoffPath: s.r.HandoffPath(),
-			Timeout:     s.d.Cov.Caps.Timeout(phase),
-			Model:       s.d.Model,
-			Effort:      s.d.Effort,
-			Out:         s.d.Out,
-			Label:       fmt.Sprintf("%s round %d", phase, round),
-			OnHeartbeat: s.heartbeat(phase, round),
+			Mode:           phase + " (read-only research; no worktree, no branch, no CI)",
+			Rules:          rules,
+			Prompt:         prompt,
+			Dir:            s.d.Repo,
+			ScratchDir:     s.r.ScratchDir(),
+			HandoffPath:    s.r.HandoffPath(),
+			TranscriptPath: s.r.TranscriptPath(),
+			Timeout:        s.d.Cov.Caps.Timeout(phase),
+			Model:          s.d.Model,
+			Effort:         s.d.Effort,
+			Out:            s.d.Out,
+			Label:          fmt.Sprintf("%s round %d", phase, round),
+			OnHeartbeat:    s.heartbeat(phase, round),
 		}
 		start := time.Now()
 		res, err := s.d.Workers.Run(ctx, spec)

@@ -183,17 +183,18 @@ func (p *proposing) draft(ctx context.Context, boardSummary string) (Draft, *Out
 		return Draft{}, p.park(fmt.Sprintf("could not journal phase scout: %v", err))
 	}
 	spec := worker.Spec{
-		Mode:        "pm (propose tickets from a brief; no worktree, no Linear writes)",
-		Rules:       scoutRules(),
-		Prompt:      scoutPrompt(p.brief, boardSummary, p.d.Cov),
-		Dir:         p.d.Repo,
-		ScratchDir:  p.r.ScratchDir(),
-		HandoffPath: p.r.HandoffPath(),
-		Timeout:     p.d.Cov.Caps.WorkerTimeout,
-		Model:       p.d.Model,
-		Effort:      p.d.Effort,
-		Out:         p.d.Out,
-		Label:       "scout",
+		Mode:           "pm (propose tickets from a brief; no worktree, no Linear writes)",
+		Rules:          scoutRules(),
+		Prompt:         scoutPrompt(p.brief, boardSummary, p.d.Cov),
+		Dir:            p.d.Repo,
+		ScratchDir:     p.r.ScratchDir(),
+		HandoffPath:    p.r.HandoffPath(),
+		TranscriptPath: p.r.TranscriptPath(),
+		Timeout:        p.d.Cov.Caps.WorkerTimeout,
+		Model:          p.d.Model,
+		Effort:         p.d.Effort,
+		Out:            p.d.Out,
+		Label:          "scout",
 	}
 	res, err := p.d.Workers.Run(ctx, spec)
 	detail := phaseDetail{ExitCode: res.ExitCode, TimedOut: res.TimedOut, Handoff: res.Handoff != nil}

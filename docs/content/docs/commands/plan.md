@@ -246,6 +246,13 @@ label, best-effort: a plan run never advances its own status past the claim
 on a park, so the mark is a label and the ticket stays In Planning, claimed,
 where the run left it.
 
+Each phase's full worker output — the scout's, the critic's, the reviser's
+own event stream, not just the diagnostic tail — is captured to
+`transcripts/<phase>-<round>.transcript.jsonl` in the run's directory,
+beside `scratch/`, capped per file at a safety-valve byte limit rather than
+kept whole. See [`wand run`](../run/#transcripts) for what it carries and
+the constraint on quoting it outward.
+
 ### The failure that retries instead
 
 A scout that died of infrastructure — a provider error, a host suspended
