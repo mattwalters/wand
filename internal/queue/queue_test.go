@@ -137,3 +137,46 @@ func TestRenderEmptyStatesAreDistinct(t *testing.T) {
 		t.Errorf("vetted-out render = %q, want the distinction and the skip printed", got)
 	}
 }
+
+// WND-71. A parked ticket keeps its place in the lifecycle — a park reports
+// that the machine stopped, not that the work was judged — so nothing about
+// its status keeps the next pass from starting it again. Vetting on the
+// label is what makes a park cost one run instead of a stream of them:
+// WND-54 parked three times that way, WND-37 three times, each repeat the
+// identical failure re-purchased.
+func TestVetParked(t *testing.T) {
+	parked := issue("WND-5", 2, day(1))
+	parked.Labels = []string{"agent-filed", "Parked"} // case-insensitive, like Linear
+
+	ready, skips := Build([]linear.Issue{parked, issue("WND-6", 2, day(2))})
+	if len(ready) != 1 || ready[0].Identifier != "WND-6" {
+		t.Fatalf("ready = %v, want the parked ticket left out", identifiers(ready))
+	}
+	if len(skips) != 1 || !strings.Contains(skips[0].Reason, "parked") {
+		t.Fatalf("skips = %+v, want a parked reason", skips)
+	}
+	// Skipped, never dropped: a queue that quietly comes up short reads as
+	// a queue in order, and the whole point here is that a person can see
+	// why nothing is happening.
+	if !strings.Contains(skips[0].Reason, "clear the label") {
+		t.Errorf("the skip does not say how to undo it: %q", skips[0].Reason)
+	}
+	// One line, in the register of the other reasons: `wand queue` prints
+	// these inline beside an identifier, so a paragraph here is a broken
+	// column for everyone reading the queue.
+	if len(skips[0].Reason) > 60 {
+		t.Errorf("the skip reason is too long for the queue's one-line format: %q", skips[0].Reason)
+	}
+}
+
+// Clearing the label is the retry. It is a person's act, which is the same
+// thing the covenant says about every other authorization.
+func TestClearingTheParkedLabelMakesItStartableAgain(t *testing.T) {
+	was := issue("WND-5", 2, day(1))
+	was.Labels = []string{"agent-filed"} // the human cleared it
+
+	ready, skips := Build([]linear.Issue{was})
+	if len(ready) != 1 || len(skips) != 0 {
+		t.Fatalf("ready = %v, skips = %+v; want it startable once the label is gone", identifiers(ready), skips)
+	}
+}

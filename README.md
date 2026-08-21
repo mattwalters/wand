@@ -277,10 +277,11 @@ contribute their own servers.
 `wand queue` prints a team's Todo issues in start order: priority ascending
 with "No priority" last, oldest first within a priority, identifier as the
 final tiebreak so two racing readers agree. Issues an agent may not start
-are vetted out and printed with the reason — labeled `human-only`, or
-blocked by an issue not yet completed or canceled (a started blocker still
-blocks). Nothing is dropped silently: a queue that quietly comes up short
-reads as a queue in order.
+are vetted out and printed with the reason — labeled `human-only`, labeled
+`parked` (a run already stopped on it; clearing the label is how you ask
+for another), or blocked by an issue not yet completed or canceled (a
+started blocker still blocks). Nothing is dropped silently: a queue that
+quietly comes up short reads as a queue in order.
 
 `wand ticket WND-3` renders one issue for someone with no context — a worker
 being prompted, or a human catching up. The description is passed whole;

@@ -8,6 +8,7 @@ import (
 
 	"github.com/mattwalters/wand/internal/covenant"
 	"github.com/mattwalters/wand/internal/linear"
+	"github.com/mattwalters/wand/internal/queue"
 )
 
 // fake is a Linear that records the order of its writes. The ordering rules
@@ -175,6 +176,10 @@ func TestClaimRefusesOutsideTodo(t *testing.T) {
 func TestClaimRefusesVettedIssues(t *testing.T) {
 	cases := map[string]func(*linear.Issue){
 		"human-only": func(i *linear.Issue) { i.Labels = []string{"human-only"} },
+		// Claim refuses for exactly the reasons the queue skips, so a
+		// ticket a previous run parked cannot be taken by hand either
+		// until someone clears the label.
+		"parked": func(i *linear.Issue) { i.Labels = []string{queue.ParkedLabel} },
 		"blocked": func(i *linear.Issue) {
 			i.BlockedBy = []linear.Blocker{{
 				Identifier: "WND-4",
@@ -480,7 +485,7 @@ func TestResolveStateRoutesThroughTheGuard(t *testing.T) {
 
 // parkedLabels is a board that already carries the covenant's parked label.
 func parkedLabels() []linear.Label {
-	return []linear.Label{{ID: "lbl-parked", Name: ParkedLabel}}
+	return []linear.Label{{ID: "lbl-parked", Name: queue.ParkedLabel}}
 }
 
 // The ordering rule, stated the way Handback's is: the explanation lands
@@ -501,7 +506,7 @@ func TestReportParkCommentsBeforeLabeling(t *testing.T) {
 	if body := f.comments[0]; !strings.Contains(body, "timed out after 30m0s") {
 		t.Errorf("the report does not quote the reason:\n%s", body)
 	}
-	if body := f.comments[0]; !strings.Contains(body, ParkedLabel) {
+	if body := f.comments[0]; !strings.Contains(body, queue.ParkedLabel) {
 		t.Errorf("the report does not tell the reader how to clear it:\n%s", body)
 	}
 }

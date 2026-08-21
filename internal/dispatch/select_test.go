@@ -118,3 +118,43 @@ func TestLanesUsedCountsUnknownLiveness(t *testing.T) {
 		t.Errorf("LanesUsed = %d, want 1 — an unknown holder may well be alive, and undercounting capacity is the safe direction to be wrong in", got)
 	}
 }
+
+// WND-71. The park costs one run, not a stream of them. A scope is a full
+// cold research pass, and the reference journal has the same ticket scoped
+// and parked three times over for one defect — three passes bought, one
+// failure. Selection is where that stops.
+func TestSelectSkipsAParkedScopingTicket(t *testing.T) {
+	parked := issue("WND-9", 1, time.Hour)
+	parked.Labels = []string{"parked"}
+	fresh := issue("WND-10", 2, time.Hour)
+
+	winner, ok, _, scopingSkips := Select(nil, []linear.Issue{parked, fresh}, true)
+	if !ok {
+		t.Fatal("expected a winner")
+	}
+	// WND-9 outranks WND-10 on priority and would have won but for the label.
+	if winner.Issue.Identifier != "WND-10" {
+		t.Errorf("winner = %s, want the parked higher-priority ticket passed over", winner.Issue.Identifier)
+	}
+	if len(scopingSkips) != 1 || scopingSkips[0].Issue.Identifier != "WND-9" {
+		t.Fatalf("skips = %+v, want WND-9 skipped with a reason", scopingSkips)
+	}
+	if scopingSkips[0].Reason != "labeled parked" {
+		t.Errorf("skip reason = %q", scopingSkips[0].Reason)
+	}
+}
+
+// A parked ticket is the only one on the board: nothing runs, and the pass
+// says why rather than looking like an empty queue.
+func TestSelectFindsNoWinnerWhenEveryCandidateIsParked(t *testing.T) {
+	parked := issue("WND-9", 1, time.Hour)
+	parked.Labels = []string{"parked"}
+
+	_, ok, _, scopingSkips := Select(nil, []linear.Issue{parked}, true)
+	if ok {
+		t.Fatal("a parked ticket was selected")
+	}
+	if len(scopingSkips) != 1 {
+		t.Fatalf("skips = %+v, want the refusal reported rather than silent", scopingSkips)
+	}
+}

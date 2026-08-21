@@ -196,19 +196,6 @@ func Handback(ctx context.Context, cl Linear, cov covenant.Covenant, identifier,
 	return issue, nil
 }
 
-// ParkedLabel marks a ticket whose run stopped without deciding. Like the
-// other three, it is covenant topology, not a parameter (see
-// covenant.Default).
-//
-// A label rather than a status is the whole point. A park is not a
-// judgment about the work, it is a report that the machine stopped —
-// often for a reason that has nothing to do with the ticket, like a host
-// that slept mid-phase. Demoting to Backlog on those would revoke a
-// human's blessing over an infrastructure hiccup, and Needs Input means
-// only "answer me" (WND-54). So the ticket keeps its place in the
-// lifecycle and gains a mark anyone can see and query.
-const ParkedLabel = "parked"
-
 // Parker is the slice of the client [ReportPark] writes through. Its own
 // interface, narrower than [Linear] and wider in one direction — AddLabel
 // is not a verb the others need — so a caller does not have to grow its
@@ -268,17 +255,17 @@ func ReportPark(ctx context.Context, cl Parker, out io.Writer, issueID, reason s
 		fmt.Fprintf(out, "note: the run parked, but saying so on the ticket failed: %v\n", err)
 		return
 	}
-	label, found, err := cl.LabelByName(ctx, ParkedLabel)
+	label, found, err := cl.LabelByName(ctx, queue.ParkedLabel)
 	if err != nil {
-		fmt.Fprintf(out, "note: the park is on the ticket, but resolving the %q label failed: %v\n", ParkedLabel, err)
+		fmt.Fprintf(out, "note: the park is on the ticket, but resolving the %q label failed: %v\n", queue.ParkedLabel, err)
 		return
 	}
 	if !found {
-		fmt.Fprintf(out, "note: no %q label anywhere in the workspace; run `wand init` to bring the team to the covenant\n", ParkedLabel)
+		fmt.Fprintf(out, "note: no %q label anywhere in the workspace; run `wand init` to bring the team to the covenant\n", queue.ParkedLabel)
 		return
 	}
 	if err := cl.AddLabel(ctx, issueID, label.ID); err != nil {
-		fmt.Fprintf(out, "note: the park is on the ticket, but labeling it %q failed: %v\n", ParkedLabel, err)
+		fmt.Fprintf(out, "note: the park is on the ticket, but labeling it %q failed: %v\n", queue.ParkedLabel, err)
 	}
 }
 
@@ -300,7 +287,7 @@ func ParkedComment(reason string) string {
 		"**This run parked.** It stopped without deciding, so nothing is driving this ticket right now.\n\n> %s\n\n"+
 			"The ticket keeps its place in the lifecycle — a park is a report that the machine stopped, not a judgment about the work. "+
 			"Remove the `%s` label once you have looked; `wand dispatch` will pick the ticket up again on a later pass.",
-		strings.TrimSpace(reason), ParkedLabel)
+		strings.TrimSpace(reason), queue.ParkedLabel)
 }
 
 // Correction is one anchored edit to the description: the exact wording the
