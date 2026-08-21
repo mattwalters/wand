@@ -94,9 +94,13 @@ func TestParseDraftRefusesWhatIsNotAScope(t *testing.T) {
 		}, "no argument"},
 		{"no recommendation at all", func(d map[string]any) { delete(d, "recommendation") }, "recommends nothing"},
 		{"no files", func(d map[string]any) { d["files"] = []any{} }, "cites no files"},
-		{"a file with no line", func(d map[string]any) {
+		// The draft's only citation loses its line number, which is a
+		// cosmetic defect and dropped rather than failing the draft — but
+		// dropping the only citation leaves none, and a scope with zero
+		// citations is still refused, just for that reason instead.
+		{"a file with no line, and it was the only one", func(d map[string]any) {
 			d["files"].([]any)[0].(map[string]any)["location"] = "internal/queue/queue.go"
-		}, "not path:line"},
+		}, "cites no files"},
 		{"a file with no note", func(d map[string]any) {
 			d["files"].([]any)[0].(map[string]any)["note"] = ""
 		}, "why it matters"},
@@ -180,17 +184,64 @@ func TestParseDraftAcceptsMultiLocationCitations(t *testing.T) {
 	}
 }
 
-// A bare filename is still refused: a list satisfies "a citation carries a
-// line", but no line at all does not.
-func TestParseDraftStillRefusesABareFilename(t *testing.T) {
+// A bare filename is dropped, not fatal. It used to fail the whole draft,
+// and that one rule accounted for 18 of the 24 parks in the reference
+// journal — six-minute, 1.7M-token research passes discarded because one
+// citation of several lacked a line number.
+//
+// WND-61 widened the grammar once already, for comma-separated lists; the
+// same lesson arriving a second time is the argument for fixing the blast
+// radius rather than the grammar again. The scout keeps writing bare paths
+// because the grammar cannot say "this whole file is the thing", and its
+// only alternatives are to invent ":1" or to park.
+func TestParseDraftDropsABareFilenameRatherThanDyingOnIt(t *testing.T) {
+	d := goodDraft()
+	d["files"] = []any{
+		map[string]any{"location": "internal/queue/queue.go", "note": "the whole file is the thing"},
+		map[string]any{"location": "internal/scope/handoff.go:271", "note": "the gate itself"},
+	}
+
+	got, err := scope.ParseDraft(raw(t, d), covenant.Default())
+	if err != nil {
+		t.Fatalf("a draft whose only defect was one bare citation was refused: %v", err)
+	}
+	if len(got.Files) != 1 || got.Files[0].Location != "internal/scope/handoff.go:271" {
+		t.Fatalf("files = %+v, want only the citation that carried a line", got.Files)
+	}
+	// Dropped silently is how a scope quietly becomes less than the scout
+	// found. Recording it is the whole difference between trimming and
+	// losing.
+	if len(got.Dropped) != 1 || got.Dropped[0] != "internal/queue/queue.go" {
+		t.Errorf("dropped = %v, want the one citation that carried no line", got.Dropped)
+	}
+}
+
+// Dropping is not a licence to accept a draft that cites nothing usable: a
+// scope with zero citations left is still not a scope, however it got to
+// zero. The refusal just changes its reason.
+func TestParseDraftStillRefusesADraftWhoseOnlyCitationIsBare(t *testing.T) {
 	d := goodDraft()
 	d["files"] = []any{map[string]any{"location": "internal/queue/queue.go", "note": "n"}}
 	_, err := scope.ParseDraft(raw(t, d), covenant.Default())
 	if err == nil {
-		t.Fatal("a bare filename was accepted")
+		t.Fatal("a draft with no usable citation was accepted")
 	}
-	if !strings.Contains(err.Error(), "not path:line") {
-		t.Errorf("error = %v\nwant it to mention %q", err, "not path:line")
+	if !strings.Contains(err.Error(), "cites no files") {
+		t.Errorf("error = %v\nwant it to mention %q", err, "cites no files")
+	}
+}
+
+// The split is only worth anything if the structural half stayed fatal. A
+// citation with nothing said about why it matters is not fixable by
+// dropping a location — the scout did not do that part of the job.
+func TestParseDraftKeepsStructuralDefectsFatal(t *testing.T) {
+	d := goodDraft()
+	d["files"] = []any{
+		map[string]any{"location": "internal/scope/handoff.go:271", "note": ""},
+		map[string]any{"location": "internal/scope/scope.go:324", "note": "still fine"},
+	}
+	if _, err := scope.ParseDraft(raw(t, d), covenant.Default()); err == nil {
+		t.Fatal("a citation with an empty note was accepted")
 	}
 }
 

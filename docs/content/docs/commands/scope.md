@@ -68,8 +68,12 @@ What is checked:
 
 - one to three approaches, each with a real trade-off;
 - a recommendation naming one of those approaches, with the argument for it;
-- at least one file citation, every one of them `path:line` — the line is
-  what makes it a citation rather than a filename;
+- at least one usable file citation, cited `path:line` (a range or a
+  comma-separated list of either also counts) — the line is what makes it a
+  citation rather than a filename. A citation carrying no line is **dropped,
+  not fatal**: it leaves the file map, the plan says which one went and why,
+  and the run carries on. Only a draft with no usable citation left is
+  refused, and then for citing nothing rather than for the formatting;
 - an estimate on the covenant's scale (Linear silently adjusts an off-scale
   estimate to fit, which would land a number nobody chose; a team whose
   scale is `notUsed` gets no estimate and is not asked for one);
@@ -178,7 +182,12 @@ A scheduler contract, and the one `wand run` publishes too.
 ## The journal
 
 Every scope is a journaled run: each phase recorded before it happens, the
-scout's handoff kept as a note, and exactly one terminal record. Runs live
+scout's handoff kept as a note, and exactly one terminal record. A handoff
+that fails validation is kept too, written to the run's `scratch/` as
+`<phase>-<round>.rejected.json` before the park — the worker's own copy is
+already gone by then, and a refusal you cannot read afterwards makes the
+validator's one-line complaint the only surviving account of a research
+pass that may have cost minutes and millions of tokens. Runs live
 under `$XDG_STATE_HOME/wand/runs` (or `WAND_STATE_DIR`), outside every
 repository. The journal is written before the ticket is, deliberately — a
 park has to be reachable when Linear itself is what failed. Once it is

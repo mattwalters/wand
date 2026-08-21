@@ -73,6 +73,18 @@ type Draft struct {
 
 	// OpenQuestions are what the scout could not answer from the code.
 	OpenQuestions []string `json:"open_questions,omitempty"`
+
+	// Dropped is the locations of citations validation removed for
+	// carrying no line number. Not part of the handoff grammar — a worker
+	// never writes it, and strictUnmarshal would refuse it if one tried —
+	// it is filled in by validation on the way past.
+	//
+	// It exists so that trimming a handoff is never the same as silently
+	// losing part of it. The citation is gone from Files, so the plan
+	// would otherwise read as though the scout never found that file at
+	// all, and the only way to notice would be to diff the plan against a
+	// handoff nobody kept.
+	Dropped []string `json:"-"`
 }
 
 // Approach is one way the work could be done.
@@ -167,6 +179,13 @@ var fileLine = regexp.MustCompile(`^[^\s:]+:\d+(-\d+)?(,\d+(-\d+)?)*$`)
 // it must satisfy. An error means nothing is written: the caller has no
 // scope, and half a scope on a ticket is worse than none, because it reads
 // like a whole one.
+//
+// Cosmetic defects are fixed up rather than treated as fatal — currently,
+// file citations dropped for lacking a line number. Those land in
+// [Draft.Dropped] rather than in an error, and travel with the draft so
+// that both the journal and the plan a human reads can say what was
+// trimmed. A drop nobody is told about is how a scope quietly becomes less
+// than the scout actually found.
 func ParseDraft(raw json.RawMessage, cov covenant.Covenant) (Draft, error) {
 	if len(raw) == 0 {
 		return Draft{}, errors.New("the worker wrote no handoff")
@@ -181,7 +200,7 @@ func ParseDraft(raw json.RawMessage, cov covenant.Covenant) (Draft, error) {
 	return d, nil
 }
 
-func (d Draft) validate(cov covenant.Covenant) error {
+func (d *Draft) validate(cov covenant.Covenant) error {
 	switch d.Premise {
 	case PremiseWrong:
 		if strings.TrimSpace(d.Reason) == "" {
@@ -261,19 +280,37 @@ func isRecommended(d Draft, a Approach) bool {
 	return strings.EqualFold(strings.TrimSpace(a.Name), strings.TrimSpace(d.Recommendation.Approach))
 }
 
-func (d Draft) validateFiles() error {
+// validateFiles keeps structural defects fatal and cosmetic ones merely
+// warned about. A citation with nothing said about why it matters is not
+// fixable by dropping anything — the scout has not done that part of the
+// job. A citation whose location lacks a line number is different: the
+// scout did the job and formatted one field of one entry imperfectly, so
+// that citation is dropped into [Draft.Dropped] — where the journal and
+// the rendered plan both pick it up — instead of the whole handoff being
+// discarded over it. Only if every citation turns out to be cosmetically
+// unusable does the draft fall back to "cites no files": a scope with zero
+// citations left is still not a scope, however it got to zero.
+func (d *Draft) validateFiles() error {
 	if len(d.Files) == 0 {
 		return errors.New("the handoff cites no files; a scope whose reader has to find the code again did half the job")
 	}
+	var kept []FileRef
+	var dropped []string
 	for _, f := range d.Files {
 		loc := strings.TrimSpace(f.Location)
-		if !fileLine.MatchString(loc) {
-			return fmt.Errorf("file citation %q is not path:line (path:line-line for a range, or a comma-separated list of either, like path:12,14,20-24) — the line is what makes it a citation rather than a filename", f.Location)
-		}
 		if strings.TrimSpace(f.Note) == "" {
 			return fmt.Errorf("file citation %q says nothing about why it matters", loc)
 		}
+		if !fileLine.MatchString(loc) {
+			dropped = append(dropped, f.Location)
+			continue
+		}
+		kept = append(kept, f)
 	}
+	if len(kept) == 0 {
+		return errors.New("the handoff cites no files; a scope whose reader has to find the code again did half the job")
+	}
+	d.Files, d.Dropped = kept, dropped
 	return nil
 }
 

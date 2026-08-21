@@ -203,8 +203,12 @@ result to Todo is yours — an agent does not bless its own plan.
 
 Two rules carry most of the weight. **A handoff that fails validation
 writes nothing at all**: one to three approaches each with a trade-off, a
-recommendation naming one of them, files cited as `path:line`, an estimate
-on the covenant's scale, and a plan with ordered steps and a test story.
+recommendation naming one of them, at least one file cited as `path:line`,
+an estimate on the covenant's scale, and a plan with ordered steps and a
+test story. Structural defects are fatal, cosmetic ones are not — a
+citation missing its line number is dropped and named in the plan rather
+than costing the whole research pass, because discarding a scout's work
+over one malformed field is a loss out of all proportion to the mistake.
 Half a scope reads like a whole one, and a human blesses it on the strength
 of the argument beside it. And **each deliverable lands before the
 transition that advertises it** — Scoped says "there is a finished plan

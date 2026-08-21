@@ -119,6 +119,21 @@ func (r *Run) HandoffPath() string {
 	return filepath.Join(r.ScratchDir(), fmt.Sprintf("%s-%d.handoff.json", slug(r.phase), r.round))
 }
 
+// RejectedHandoffPath is where a caller may persist a handoff that failed
+// validation, named for the same phase and round HandoffPath uses so it
+// sits beside — and never collides with — that phase's own handoff file.
+// It exists because a worker's raw handoff is otherwise gone the moment its
+// caller rejects it: nothing else in a run directory keeps the bytes a
+// validator refused.
+func (r *Run) RejectedHandoffPath() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.phase == "" {
+		return filepath.Join(r.ScratchDir(), "rejected.json")
+	}
+	return filepath.Join(r.ScratchDir(), fmt.Sprintf("%s-%d.rejected.json", slug(r.phase), r.round))
+}
+
 // StartPhase journals a phase and renews the lease, then returns. The
 // caller spawns the worker afterwards — never before.
 //
