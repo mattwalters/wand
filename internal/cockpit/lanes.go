@@ -162,6 +162,42 @@ func Reconcile(lanes []Lane, reports []journal.Report) []Lane {
 		}
 		kept = append(kept, lane)
 	}
+	return collapseParked(kept)
+}
+
+// collapseParked keeps only the most recent parked lane per ticket.
+//
+// The operative state is one parked label per ticket, written by
+// verbs.ReportPark and cleared by a person — but a ticket that has parked
+// more than once still has one run per park in the journal, and each of
+// those becomes its own [LaneParked] lane. A ticket does not have several
+// parks waiting on a human; it has one current park and the rest history,
+// so only the newest reason belongs on the board. Other lane kinds are
+// per-process, not per-ticket, and pass through untouched.
+func collapseParked(lanes []Lane) []Lane {
+	newest := make(map[string]Lane, len(lanes))
+	for _, lane := range lanes {
+		if lane.Kind != LaneParked {
+			continue
+		}
+		if cur, ok := newest[lane.Ticket]; !ok || lane.Since.After(cur.Since) {
+			newest[lane.Ticket] = lane
+		}
+	}
+
+	kept := make([]Lane, 0, len(lanes))
+	seen := make(map[string]bool, len(newest))
+	for _, lane := range lanes {
+		if lane.Kind != LaneParked {
+			kept = append(kept, lane)
+			continue
+		}
+		if seen[lane.Ticket] {
+			continue
+		}
+		seen[lane.Ticket] = true
+		kept = append(kept, newest[lane.Ticket])
+	}
 	return kept
 }
 
