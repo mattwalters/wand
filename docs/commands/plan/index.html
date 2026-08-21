@@ -215,7 +215,27 @@ whatever did land, and nothing claiming to be finished.</p>
 <p>The comment comes before the estimate for the same reason: a ticket carrying
 the argument for an estimate it does not have is recoverable, while a ticket
 carrying a number nothing explains is a number nobody can weigh.</p>
-<p>Promoting the result to Todo is yours. An agent does not bless its own plan.</p>
+<p>Promoting the result to Todo is yours: promotion to Todo <em>is</em> approval of
+the plan. An agent does not bless its own plan.</p>
+<h2 id="the-plan-review-loop">The plan review loop</h2>
+<p>Planning is not one shot. A draft almost always ends with things the scout
+could not resolve, and the questions it composed for <code>--interactive</code> (see
+below) go into the options comment too — the same questions, the same
+blast-radius order, the same verbatim quoting, just posted to the board
+instead of asked over stdin. Answer any of them in a comment, then label
+the ticket <code>re-plan</code>: <a href="../sweep/"><code>wand sweep</code></a> hands it back into In
+Planning (not Needs Input — the comments already are the answer), and
+<code>wand dispatch</code> treats a re-plan-labeled In Planning ticket exactly like a
+fresh To Plan one, so the cycle resumes with no second blessing needed.
+<code>wand plan &lt;identifier&gt;</code> also works run by hand against such a ticket.</p>
+<p>A re-plan does not draft from nothing: a fresh cold reviser reads the plan
+already on the ticket and every comment since it was posted, and revises
+the fenced region <em>in place</em>. What replaces the full &ldquo;plan superseded&rdquo;
+comment WND-77 gave a To Plan re-plan is a diff-shaped account — what was
+asked, what moved, what stayed and why — posted as the re-plan&rsquo;s own
+comment, so the reasoning trail stays a chain of comments rather than a
+stack of dead plans. Blessing to Todo with a question left unanswered is a
+legitimate choice too; the implementer is told it went unanswered.</p>
 <h2 id="nothing-is-written-unless-the-whole-handoff-is-valid">Nothing is written unless the whole handoff is valid</h2>
 <p>The scout&rsquo;s handoff is validated before the first Linear call, and a handoff
 that fails validation writes <strong>nothing at all</strong>. Half a plan on a ticket is
@@ -431,6 +451,7 @@ description and every comment, in one piece.</p>
     <li><a href="#synopsis">Synopsis</a></li>
     <li><a href="#the-ticket-must-be-in-to-plan">The ticket must be in To Plan</a></li>
     <li><a href="#what-it-writes-and-in-what-order">What it writes, and in what order</a></li>
+    <li><a href="#the-plan-review-loop">The plan review loop</a></li>
     <li><a href="#nothing-is-written-unless-the-whole-handoff-is-valid">Nothing is written unless the whole handoff is valid</a>
       <ul>
         <li><a href="#when-the-scout-says-the-ticket-is-wrong">When the scout says the ticket is wrong</a></li>

@@ -186,15 +186,22 @@ after a person has already been told otherwise.</li>
 <li><strong>A re-review label.</strong> A human labeled a converged ticket
 <code>re-review</code> — another cycle, asked for explicitly. Sweep hands it back
 to a human with a comment naming the label.</li>
+<li><strong>A re-plan label.</strong> The planning-side twin of the above: a human
+labeled a Plan Review ticket <code>re-plan</code> after answering the plan&rsquo;s
+questions in a comment. Sweep hands it back into In Planning, not Needs
+Input — the comments already are the answer, so the next <code>wand plan</code>
+pass (or <code>wand dispatch</code>, which now treats a re-plan-labeled In Planning
+ticket the same as a fresh To Plan one) resumes the cycle without a
+second blessing, reads what was said, and revises the plan in place.</li>
 <li><strong>An unresolved thread on a ready-for-human PR.</strong> Necessarily left
 <em>after</em> convergence: <code>wand run</code>&rsquo;s own check for this runs only at the
 moment of converging, so a human review posted afterward is exactly
 what nothing else catches. Sweep hands the ticket back, quoting the
 thread count and the PR.</li>
 </ol>
-<p>Ranked by severity, then oldest first: a dead lease before a re-review
-before an unresolved thread, because a zombie is the one state actively
-lying about itself on the board. A candidate whose preflight refuses it —
+<p>Ranked by severity, then oldest first: a dead lease before a re-review or a
+re-plan before an unresolved thread, because a zombie is the one state
+actively lying about itself on the board. A candidate whose preflight refuses it —
 resolved in the interim, or the ticket closed — is skipped in the same
 pass, never retried within it, so one unstartable candidate cannot starve
 every other one behind it forever. The next pass re-evaluates everything
@@ -234,9 +241,10 @@ key comes from unless <code>--team-key</code> overrides it.</p>
 <h2 id="see-also">See also</h2>
 <p><a href="../dispatch/"><code>wand dispatch</code></a> is the selector that runs a ticket in the
 first place; <a href="../run/"><code>wand run</code></a> is where the re-review and
-unresolved-thread conditions originate; the <code>re-review</code> label is covenant
-topology, created by <a href="../init/"><code>wand init</code></a> like <code>ready-for-human</code>,
-<code>human-only</code> and <code>parked</code>.</p>
+unresolved-thread conditions originate, and <a href="../plan/"><code>wand plan</code></a> is
+where a re-plan cycle reads the comments this hand-back makes possible; the
+<code>re-review</code> and <code>re-plan</code> labels are covenant topology, created by
+<a href="../init/"><code>wand init</code></a> like <code>ready-for-human</code>, <code>human-only</code> and <code>parked</code>.</p>
 
 
     </main>
