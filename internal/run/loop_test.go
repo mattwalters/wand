@@ -15,7 +15,7 @@ import (
 	"github.com/mattwalters/wand/internal/covenant"
 	"github.com/mattwalters/wand/internal/journal"
 	"github.com/mattwalters/wand/internal/linear"
-	"github.com/mattwalters/wand/internal/verbs"
+	"github.com/mattwalters/wand/internal/queue"
 	"github.com/mattwalters/wand/internal/worker"
 )
 
@@ -311,7 +311,7 @@ func newFixture(t *testing.T) *fixture {
 			},
 			labels: map[string]linear.Label{
 				ReadyForHumanLabel: {ID: "label-rfh", Name: ReadyForHumanLabel},
-				verbs.ParkedLabel:  {ID: "label-parked", Name: verbs.ParkedLabel},
+				queue.ParkedLabel:  {ID: "label-parked", Name: queue.ParkedLabel},
 			},
 		},
 		git:     &fakeGit{ahead: 1},

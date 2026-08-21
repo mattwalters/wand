@@ -30,6 +30,21 @@ import (
 // it (see covenant.Default).
 const HumanOnlyLabel = "human-only"
 
+// ParkedLabel marks a ticket whose last run stopped without deciding. It is
+// written by verbs.ReportPark and cleared by a person.
+//
+// It lives here, beside HumanOnlyLabel, because both are labels that stop
+// an agent starting work — and because verbs imports this package, so the
+// constant cannot live there and be read by the vetting that needs it.
+//
+// Vetting on it is what makes a park cost one run instead of a stream of
+// them. Without it the next pass ranks a just-parked ticket exactly as
+// before and buys the identical failure again: WND-54 parked three times
+// that way, WND-37 three times. Clearing the label is the retry, and it is
+// a person's act — which is the same thing the covenant says about every
+// other authorization.
+const ParkedLabel = "parked"
+
 // Skip is an issue vetted out of the queue, with the reason it was.
 type Skip struct {
 	Issue  linear.Issue
@@ -111,6 +126,12 @@ func Vet(issue linear.Issue) string {
 	for _, label := range issue.Labels {
 		if strings.EqualFold(label, HumanOnlyLabel) {
 			reasons = append(reasons, "labeled "+HumanOnlyLabel)
+			break
+		}
+	}
+	for _, label := range issue.Labels {
+		if strings.EqualFold(label, ParkedLabel) {
+			reasons = append(reasons, "labeled "+ParkedLabel+"; clear the label to run it again")
 			break
 		}
 	}

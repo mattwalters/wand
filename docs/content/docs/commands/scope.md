@@ -24,7 +24,9 @@ wand scope <identifier> [--interactive] [--harness NAME] [--model M] [--effort E
 
 Blessing research is a human act, the same way blessing building is: a
 ticket in Scoping is one you have decided is worth spending a scout on.
-`scope` refuses anything else, and refuses a `human-only` ticket outright.
+`scope` refuses anything else, and refuses a `human-only` or `parked`
+ticket outright — a scope is a full cold research pass, and re-buying one
+that already stopped is the most expensive way to learn nothing.
 
 It does **not** refuse a blocked ticket. A ticket waiting on another is
 often exactly the one worth scoping early — the blocker stops the building,

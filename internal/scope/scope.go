@@ -179,6 +179,15 @@ func Vet(issue linear.Issue) string {
 			return "labeled " + queue.HumanOnlyLabel
 		}
 	}
+	// A scope that already parked is not worth re-buying blindly: the
+	// scout costs a full cold research pass, and the reference journal has
+	// the same ticket scoped and parked three times over for one defect.
+	// Clearing the label is how a person says it is worth another.
+	for _, label := range issue.Labels {
+		if strings.EqualFold(label, queue.ParkedLabel) {
+			return "labeled " + queue.ParkedLabel
+		}
+	}
 	return ""
 }
 
