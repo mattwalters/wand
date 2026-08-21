@@ -337,7 +337,7 @@ else&rsquo;s.</p>
 			</tr>
 			<tr>
 					<td><code>3</code></td>
-					<td>Parked. The run stopped without deciding — an unusable handoff, a worker failure, a write that failed part-way. The journal says which, and how much reached the ticket.</td>
+					<td>Parked. The run stopped without deciding — an unusable handoff, a worker failure, a write that failed part-way. The journal says which, and how much reached the ticket; the ticket itself carries the reason as a comment and the <code>parked</code> label.</td>
 			</tr>
 	</tbody>
 </table>
@@ -345,8 +345,11 @@ else&rsquo;s.</p>
 <p>Every scope is a journaled run: each phase recorded before it happens, the
 scout&rsquo;s handoff kept as a note, and exactly one terminal record. Runs live
 under <code>$XDG_STATE_HOME/wand/runs</code> (or <code>WAND_STATE_DIR</code>), outside every
-repository. A park is journal-only, deliberately — it has to be reachable
-when Linear itself is what failed.</p>
+repository. The journal is written before the ticket is, deliberately — a
+park has to be reachable when Linear itself is what failed. Once it is
+journaled, the ticket gets the same sentence as a comment and the <code>parked</code>
+label, best-effort: a scope never owns its ticket&rsquo;s status, so the mark is
+a label and the ticket stays in Scoping where a human put it.</p>
 <h2 id="requirements">Requirements</h2>
 <p><code>LINEAR_API_KEY</code> in the environment, the harness on <code>PATH</code>, and a git
 repository to run in. The workers get none of that: the credential strip

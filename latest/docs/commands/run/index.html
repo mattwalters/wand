@@ -229,9 +229,15 @@ final-round finding as &ldquo;a disagreement&rdquo; hands work back unattempted.
 the recorded reason), a worker that left no parseable handoff, a dirty
 tree, a worker timeout. A reviewer that produces no parseable handoff
 <strong>parks</strong> rather than converges — anything else would turn every reviewer
-crash into a clean pass. Parking writes only the journal, deliberately, so
-it is reachable even when Linear itself is what failed. The worktree is
-preserved for inspection.</p>
+crash into a clean pass. The journal is written first and is the run&rsquo;s real
+ending, so a park is reachable even when Linear itself is what failed; the
+ticket then gets the same sentence as a comment and the <code>parked</code> label,
+best-effort and never fatal. The worktree is preserved for inspection.</p>
+<p>The mark is a label rather than a status move. A park reports that the
+machine stopped, not that the work was judged — often for a reason that has
+nothing to do with the ticket, like a host that slept mid-phase — so the
+ticket keeps its place and its blessing. Remove the label once you have
+looked and the ticket is dispatchable again.</p>
 <p>A later run of the same ticket resumes its branch: a preserved worktree
 that is clean (everything committed on the branch) is removed and replaced;
 one holding uncommitted work makes the new run refuse, naming the old
@@ -300,7 +306,7 @@ the place its account gets dropped.</p>
 			</tr>
 			<tr>
 					<td><code>3</code></td>
-					<td>Parked: the journal has the reason; the worktree is preserved.</td>
+					<td>Parked: the journal has the reason, the ticket carries it as a comment and the <code>parked</code> label, and the worktree is preserved.</td>
 			</tr>
 	</tbody>
 </table>
