@@ -361,6 +361,22 @@ park has to be reachable when Linear itself is what failed. Once it is
 journaled, the ticket gets the same sentence as a comment and the <code>parked</code>
 label, best-effort: a scope never owns its ticket&rsquo;s status, so the mark is
 a label and the ticket stays in Scoping where a human put it.</p>
+<h3 id="the-failure-that-retries-instead">The failure that retries instead</h3>
+<p>A scout that died of infrastructure — a provider error, a host suspended
+mid-response — does not park on the first try. When the harness&rsquo;s own
+report says the failure was about the machine rather than the research, the
+phase respawns a fresh cold scout, up to <code>caps.worker_retries</code> times (one by
+default; <code>0</code> switches it off). A scout costs a whole model call and produces
+nothing at all until it hands off, so a provider error is the most
+expensive possible thing to mistake for a verdict.</p>
+<p>The rules are <a href="../run/"><code>wand run</code></a>&rsquo;s, with one that is scope&rsquo;s own: no
+retry ever happens into a checkout the scout changed. <code>scope</code> reads the
+repository you ran it in — usually your own working copy, not a worktree the
+run owns — so a stray edit is about to be handed back to you untouched.
+Respawning a second scout into it first would write more into a directory
+you are about to be asked to look at. Timeouts and interrupts are not
+retried either, and a harness that cannot report transience parks exactly as
+before.</p>
 <h2 id="requirements">Requirements</h2>
 <p><code>LINEAR_API_KEY</code> in the environment, the harness on <code>PATH</code>, and a git
 repository to run in. The workers get none of that: the credential strip
@@ -403,7 +419,11 @@ description and every comment, in one piece.</p>
     <li><a href="#one-scope-per-ticket">One scope per ticket</a></li>
     <li><a href="#flags">Flags</a></li>
     <li><a href="#exit-codes">Exit codes</a></li>
-    <li><a href="#the-journal">The journal</a></li>
+    <li><a href="#the-journal">The journal</a>
+      <ul>
+        <li><a href="#the-failure-that-retries-instead">The failure that retries instead</a></li>
+      </ul>
+    </li>
     <li><a href="#requirements">Requirements</a></li>
     <li><a href="#examples">Examples</a></li>
     <li><a href="#see-also">See also</a></li>
