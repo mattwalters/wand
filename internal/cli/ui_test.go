@@ -29,7 +29,9 @@ func TestDumpScreenNeedsNothing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ui --dump-screen: %v", err)
 	}
-	for _, want := range []string{"wand", "Triage", "Needs Input", "Ready for human", "Stalled", sampleNotice} {
+	// The bare dump lands on home: three views and how much is waiting in
+	// each, not the queues themselves — those are one nav key away.
+	for _, want := range []string{"wand", "Decide", "Review", "Unblock", sampleNotice} {
 		if !strings.Contains(out, want) {
 			t.Errorf("dump is missing %q; screen was:\n%s", want, out)
 		}
@@ -40,7 +42,7 @@ func TestDumpScreenNeedsNothing(t *testing.T) {
 // dump has to be able to reach it — while refusing, on that screen, to
 // write.
 func TestDumpScreenReachesTheBlessingScreenAndRefuses(t *testing.T) {
-	out, err := runUI(t, "--dump-screen", "--script", "t")
+	out, err := runUI(t, "--dump-screen", "--script", "1,t")
 	if err != nil {
 		t.Fatalf("ui --dump-screen --script t: %v", err)
 	}

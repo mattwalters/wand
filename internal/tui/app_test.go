@@ -101,21 +101,24 @@ func run(t *testing.T, m Model, cmd tea.Cmd) Model {
 
 // --- Tier 0: pure Update transitions -------------------------------------
 
+// TestCursorMoves covers the Decide view: two Triage rows, and nothing to
+// cross into. Review's and Unblock's own cursor motion — including the
+// section-boundary crossing this table used to test by walking off Decide
+// entirely — get their own tests below, because that crossing is no longer
+// reachable by one script now that each view scopes its own cursor order.
 func TestCursorMoves(t *testing.T) {
 	tests := []struct {
 		name    string
 		script  string
 		want    int
-		wantRow string // identifier or stalled run's ticket under the cursor
+		wantRow string
 	}{
-		{name: "starts on the first row", script: "", want: 0, wantRow: "WND-42"},
-		{name: "j moves down", script: "j", want: 1, wantRow: "WND-41"},
-		{name: "arrow moves down", script: "down", want: 1, wantRow: "WND-41"},
-		{name: "k moves back up", script: "j,k", want: 0, wantRow: "WND-42"},
-		{name: "crosses a section boundary", script: "j,j", want: 2, wantRow: "WND-44"},
-		{name: "reaches the stalled", script: "j,j,j,j,j", want: 5, wantRow: "WND-36"},
-		{name: "stops at the last row", script: "j,j,j,j,j,j,j,j", want: 6, wantRow: "WND-33"},
-		{name: "stops at the first row", script: "k,k,k", want: 0, wantRow: "WND-42"},
+		{name: "starts on the first row", script: "1", want: 0, wantRow: "WND-42"},
+		{name: "j moves down", script: "1,j", want: 1, wantRow: "WND-41"},
+		{name: "arrow moves down", script: "1,down", want: 1, wantRow: "WND-41"},
+		{name: "k moves back up", script: "1,j,k", want: 0, wantRow: "WND-42"},
+		{name: "stops at the last row", script: "1,j,j,j", want: 1, wantRow: "WND-41"},
+		{name: "stops at the first row", script: "1,k,k,k", want: 0, wantRow: "WND-42"},
 	}
 
 	for _, tt := range tests {
@@ -139,11 +142,70 @@ func TestCursorMoves(t *testing.T) {
 	}
 }
 
+// The Review view's three sections (Plan Review, Needs Input, Ready for
+// human) are exactly one row each, so moving down crosses a section
+// boundary on every step — the replacement for TestCursorMoves' old
+// "crosses a section boundary" case, now that the boundary it crossed sits
+// inside one view rather than between two.
+func TestCursorMovesInReviewView(t *testing.T) {
+	tests := []struct {
+		name    string
+		script  string
+		want    int
+		wantRow string
+	}{
+		{name: "starts on Plan Review", script: "2", want: 0, wantRow: "WND-44"},
+		{name: "crosses into Needs Input", script: "2,j", want: 1, wantRow: "WND-38"},
+		{name: "crosses into Ready for human", script: "2,j,j", want: 2, wantRow: "WND-35"},
+		{name: "stops at the last row", script: "2,j,j,j", want: 2, wantRow: "WND-35"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, _ := apply(t, board(t, &fakeBackend{}), tt.script)
+			if m.cursor != tt.want {
+				t.Errorf("cursor = %d, want %d", m.cursor, tt.want)
+			}
+			row, ok := m.current()
+			if !ok || row.Issue.Identifier != tt.wantRow {
+				t.Errorf("row under cursor = %+v, want %q", row, tt.wantRow)
+			}
+		})
+	}
+}
+
+// The Unblock view is Stalled alone — the replacement for TestCursorMoves'
+// old "reaches the stalled" case, now that reaching it means selecting this
+// view rather than walking off the end of a flat board.
+func TestCursorMovesInUnblockView(t *testing.T) {
+	tests := []struct {
+		name    string
+		script  string
+		want    int
+		wantRow string
+	}{
+		{name: "starts on the stuck run", script: "3", want: 0, wantRow: "WND-36"},
+		{name: "reaches the parked run", script: "3,j", want: 1, wantRow: "WND-33"},
+		{name: "stops at the last row", script: "3,j,j", want: 1, wantRow: "WND-33"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m, _ := apply(t, board(t, &fakeBackend{}), tt.script)
+			if m.cursor != tt.want {
+				t.Errorf("cursor = %d, want %d", m.cursor, tt.want)
+			}
+			row, ok := m.current()
+			if !ok || row.Stalled.Ticket != tt.wantRow {
+				t.Errorf("row under cursor = %+v, want %q", row, tt.wantRow)
+			}
+		})
+	}
+}
+
 // Running rows are chrome, not cursor stops: an active run is not a ticket
 // a person disposits, so it must not shift the cursor order the four
 // queues already have, nor be reachable by it.
 func TestRunningRowsAreNotInTheCursorOrder(t *testing.T) {
-	plain := board(t, &fakeBackend{})
+	plain := board(t, &fakeBackend{}).selectView(home.ViewDecide)
 
 	withRunning := home.Sample()
 	withRunning.Active = []home.Active{{RunID: "r", Ticket: "WND-99", Phase: "implement", Verb: "run"}}
@@ -152,7 +214,7 @@ func TestRunningRowsAreNotInTheCursorOrder(t *testing.T) {
 		Backend:  &fakeBackend{},
 		Width:    screen.DefaultWidth,
 		Height:   screen.DefaultHeight,
-	})
+	}).selectView(home.ViewDecide)
 
 	if got, want := len(m.rows()), len(plain.rows()); got != want {
 		t.Errorf("rows = %d, want %d: the Active run must not appear in the cursor order", got, want)
@@ -205,7 +267,7 @@ func TestDispositionKeysOpenTheConfirmation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.key, func(t *testing.T) {
-			m, _ := apply(t, board(t, &fakeBackend{}), tt.key)
+			m, _ := apply(t, board(t, &fakeBackend{}), "1,"+tt.key)
 			if m.state != stateConfirm {
 				t.Fatalf("state = %v, want stateConfirm", m.state)
 			}
@@ -222,22 +284,29 @@ func TestDispositionKeysOpenTheConfirmation(t *testing.T) {
 	}
 }
 
-// Stalled and ready-for-human rows are read-only by design: the act each is
-// asking for happens somewhere other than a status field.
-func TestRowsWithoutDispositions(t *testing.T) {
-	for _, script := range []string{"j,j,j,j", "j,j,j,j,j"} {
-		t.Run(script, func(t *testing.T) {
-			m, _ := apply(t, board(t, &fakeBackend{}), script+",t")
-			if m.state != stateBoard {
-				t.Errorf("state = %v, want stateBoard: this row offers no judgments", m.state)
-			}
-		})
+// Ready-for-human rows are read-only by design: the act that row is asking
+// for happens on the pull request, not on a status field.
+func TestReadyForHumanRowsOfferNoDisposition(t *testing.T) {
+	// Review view: Plan Review, Needs Input, then Ready for human (WND-35).
+	m, _ := apply(t, board(t, &fakeBackend{}), "2,j,j,t")
+	if m.state != stateBoard {
+		t.Errorf("state = %v, want stateBoard: this row offers no judgments", m.state)
+	}
+}
+
+// A non-parked stalled row is read-only: resolving it means going to the
+// machine, not writing a status.
+func TestNonParkedStalledRowsOfferNoDisposition(t *testing.T) {
+	// Unblock view's first row is WND-36, a stuck (non-parked) run.
+	m, _ := apply(t, board(t, &fakeBackend{}), "3,t")
+	if m.state != stateBoard {
+		t.Errorf("state = %v, want stateBoard: this row offers no judgments", m.state)
 	}
 }
 
 func TestBlessWritesAndDropsTheRow(t *testing.T) {
 	back := &fakeBackend{}
-	m, cmd := apply(t, board(t, back), "t,enter")
+	m, cmd := apply(t, board(t, back), "1,t,enter")
 	if !m.busy {
 		t.Error("model is not busy after confirming; the write should be in flight")
 	}
@@ -272,7 +341,8 @@ func TestBlessWritesAndDropsTheRow(t *testing.T) {
 // judged issue does.
 func TestClearParkedWritesAndDropsTheRow(t *testing.T) {
 	back := &fakeBackend{}
-	m, _ := apply(t, board(t, back), "j,j,j,j,j,j")
+	// Unblock view: WND-36 (stuck), then WND-33 (parked).
+	m, _ := apply(t, board(t, back), "3,j")
 	row, ok := m.current()
 	if !ok || !row.IsStalled() || row.Stalled.Ticket != "WND-33" {
 		t.Fatalf("row under cursor = %+v, want the WND-33 parked run", row)
@@ -309,7 +379,7 @@ func TestClearParkedWritesAndDropsTheRow(t *testing.T) {
 // if the screen is still holding the text.
 func TestRefusedWriteStaysOnTheConfirmation(t *testing.T) {
 	back := &fakeBackend{err: errors.New("linear: no issue \"WND-999\"")}
-	m, cmd := apply(t, board(t, back), "d,W,N,D,-,9,9,9,enter")
+	m, cmd := apply(t, board(t, back), "1,d,W,N,D,-,9,9,9,enter")
 	m = run(t, m, cmd)
 
 	if m.state != stateConfirm {
@@ -332,10 +402,10 @@ func TestConfirmRefusesAnIncompleteIntent(t *testing.T) {
 		name   string
 		script string
 	}{
-		{name: "cancel with no reason", script: "x,enter"},
-		{name: "duplicate with no target", script: "d,enter"},
-		{name: "duplicate of itself", script: "d,W,N,D,-,4,2,enter"},
-		{name: "backlog with no priority", script: "j,b,enter"},
+		{name: "cancel with no reason", script: "1,x,enter"},
+		{name: "duplicate with no target", script: "1,d,enter"},
+		{name: "duplicate of itself", script: "1,d,W,N,D,-,4,2,enter"},
+		{name: "backlog with no priority", script: "1,j,b,enter"},
 	}
 
 	for _, tt := range tests {
@@ -355,7 +425,7 @@ func TestConfirmRefusesAnIncompleteIntent(t *testing.T) {
 func TestPriorityKeysPickARank(t *testing.T) {
 	back := &fakeBackend{}
 	// WND-41 is unranked, so the confirmation starts with nothing chosen.
-	m, _ := apply(t, board(t, back), "j,b")
+	m, _ := apply(t, board(t, back), "1,j,b")
 	if m.pending.Priority != 0 {
 		t.Errorf("seeded priority = %d, want 0 for an unranked ticket", m.pending.Priority)
 	}
@@ -374,7 +444,7 @@ func TestPriorityKeysPickARank(t *testing.T) {
 // a judgment somebody already made, and retyping it is not the decision the
 // screen is asking for.
 func TestRankedTicketSeedsItsOwnPriority(t *testing.T) {
-	m, _ := apply(t, board(t, &fakeBackend{}), "b")
+	m, _ := apply(t, board(t, &fakeBackend{}), "1,b")
 	if m.pending.Priority != 4 {
 		t.Errorf("seeded priority = %d, want 4 (WND-42 is Low)", m.pending.Priority)
 	}
@@ -386,9 +456,10 @@ func TestEscapeReturnsWhereItCameFrom(t *testing.T) {
 		script string
 		want   state
 	}{
-		{name: "from the board", script: "t,esc", want: stateBoard},
-		{name: "from the detail screen", script: "enter,t,esc", want: stateDetail},
-		{name: "detail back to the board", script: "enter,esc", want: stateBoard},
+		{name: "from the board", script: "1,t,esc", want: stateBoard},
+		{name: "from the detail screen", script: "1,enter,t,esc", want: stateDetail},
+		{name: "detail back to the board", script: "1,enter,esc", want: stateBoard},
+		{name: "board back to home", script: "1,esc", want: stateHome},
 	}
 
 	for _, tt := range tests {
@@ -401,12 +472,43 @@ func TestEscapeReturnsWhereItCameFrom(t *testing.T) {
 	}
 }
 
+// Every view is reachable from home, and every view is escapable back to
+// it — the state machine's two basic promises, checked directly rather than
+// inferred from the individual screens above.
+func TestEveryViewIsReachableAndEscapable(t *testing.T) {
+	for _, vi := range home.Views {
+		t.Run(vi.Title, func(t *testing.T) {
+			m, _ := apply(t, board(t, &fakeBackend{}), vi.Key)
+			if m.state != stateBoard {
+				t.Fatalf("state = %v, want stateBoard after pressing %q", m.state, vi.Key)
+			}
+			if m.view != vi.View {
+				t.Fatalf("view = %v, want %v", m.view, vi.View)
+			}
+			back, _ := apply(t, m, "esc")
+			if back.state != stateHome {
+				t.Errorf("state after esc = %v, want stateHome", back.state)
+			}
+		})
+	}
+}
+
+// A view key pressed while already inside a view jumps straight to the
+// other view, rather than being swallowed or requiring a detour through
+// home first.
+func TestViewKeysSwitchDirectlyBetweenViews(t *testing.T) {
+	m, _ := apply(t, board(t, &fakeBackend{}), "1,3")
+	if m.state != stateBoard || m.view != home.ViewUnblock {
+		t.Errorf("state/view = %v/%v, want stateBoard/ViewUnblock", m.state, m.view)
+	}
+}
+
 // The read-only model is the one an agent can reach, through
 // `wand ui --dump-screen`. It must walk every screen and write nothing.
 func TestReadOnlyModelWalksButNeverWrites(t *testing.T) {
 	m := New(Config{Snapshot: home.Sample(), Width: 80, Height: 24})
 
-	got, cmd := apply(t, m, "t,enter")
+	got, cmd := apply(t, m, "1,t,enter")
 	if got.state != stateConfirm {
 		t.Errorf("state = %v, want stateConfirm: --dump-screen must be able to show the blessing screen", got.state)
 	}
@@ -423,7 +525,7 @@ func TestRefreshReplacesTheBoard(t *testing.T) {
 		Team:   "WND",
 		Triage: []linear.Issue{{Identifier: "WND-99", Title: "filed since you looked"}},
 	}}
-	m, cmd := apply(t, board(t, back), "r")
+	m, cmd := apply(t, board(t, back), "1,r")
 	m = run(t, m, cmd)
 
 	if back.reads != 1 {
@@ -439,7 +541,7 @@ func TestRefreshReplacesTheBoard(t *testing.T) {
 }
 
 func TestQuitKeys(t *testing.T) {
-	for _, script := range []string{"q", "ctrl+c", "enter,q"} {
+	for _, script := range []string{"q", "ctrl+c", "1,enter,q"} {
 		t.Run(script, func(t *testing.T) {
 			_, cmd := apply(t, board(t, &fakeBackend{}), script)
 			if cmd == nil {
@@ -455,7 +557,7 @@ func TestQuitKeys(t *testing.T) {
 // "q" is a letter. Someone half-way through typing a cancellation reason
 // must not lose it to a quit.
 func TestQuitDoesNotFireWhileTyping(t *testing.T) {
-	m, cmd := apply(t, board(t, &fakeBackend{}), "x,q")
+	m, cmd := apply(t, board(t, &fakeBackend{}), "1,x,q")
 	if cmd != nil {
 		if _, ok := cmd().(tea.QuitMsg); ok {
 			t.Fatal("q quit the program while a reason was being typed")
@@ -471,6 +573,19 @@ func TestQuitDoesNotFireWhileTyping(t *testing.T) {
 	}
 }
 
+// "1", "2" and "3" are view keys everywhere else, but on the confirm
+// screen's free-text fields they are letters someone may be typing into a
+// reason — the same guard TestQuitDoesNotFireWhileTyping proves for "q".
+func TestViewKeysDoNotFireWhileTyping(t *testing.T) {
+	m, _ := apply(t, board(t, &fakeBackend{}), "1,x,1,2,3")
+	if m.state != stateConfirm {
+		t.Fatalf("state = %v, want stateConfirm: a view key must not navigate away mid-type", m.state)
+	}
+	if got := m.input.Value(); got != "123" {
+		t.Errorf("input = %q, want %q", got, "123")
+	}
+}
+
 func TestWindowResizeIsRecorded(t *testing.T) {
 	next, _ := board(t, &fakeBackend{}).Update(tea.WindowSizeMsg{Width: 100, Height: 40})
 	got := next.(Model)
@@ -482,7 +597,7 @@ func TestWindowResizeIsRecorded(t *testing.T) {
 // --- Tier 1: wiring through the real runtime -----------------------------
 
 func TestProgramWiring(t *testing.T) {
-	final, trace := tuitest.FinalModel(t, board(t, &fakeBackend{}), "j,enter")
+	final, trace := tuitest.FinalModel(t, board(t, &fakeBackend{}), "1,j,enter")
 
 	m, ok := final.(Model)
 	if !ok {
@@ -497,7 +612,7 @@ func TestProgramWiring(t *testing.T) {
 
 	// The runtime should have seen exactly the keys we sent, in order. This is
 	// what distinguishes a wiring failure from a rendering one.
-	want := []string{"j", "enter"}
+	want := []string{"1", "j", "enter"}
 	got := trace.Keys()
 	if len(got) != len(want) {
 		t.Fatalf("keys = %v, want %v", got, want)
@@ -516,27 +631,73 @@ func TestScreens(t *testing.T) {
 		golden string
 		script string
 	}{
-		{golden: "board", script: ""},
-		{golden: "board-stalled-selected", script: "j,j,j,j,j"},
-		{golden: "board-parked-selected", script: "j,j,j,j,j,j"},
-		{golden: "clear-parked", script: "j,j,j,j,j,j,c"},
-		{golden: "detail", script: "j,enter"},
-		{golden: "detail-stalled", script: "j,j,j,j,j,enter"},
-		{golden: "detail-plan-review", script: "j,j,enter"},
-		{golden: "bless-todo", script: "t"},
-		{golden: "bless-todo-unranked", script: "j,t"},
-		{golden: "bless-to-plan", script: "s"},
-		{golden: "backlog-ranked", script: "b"},
-		{golden: "backlog-unranked", script: "u"},
-		{golden: "duplicate", script: "d,W,N,D,-,4,1"},
-		{golden: "cancel", script: "x,o,b,s,o,l,e,t,e"},
-		{golden: "bless-plan-review-todo", script: "j,j,t"},
-		{golden: "reject-plan", script: "j,j,b,w,r,o,n,g"},
+		// The landing screen, and each of the three views at rest.
+		{golden: "home", script: ""},
+		{golden: "decide", script: "1"},
+		{golden: "review", script: "2"},
+		{golden: "unblock", script: "3"},
+
+		{golden: "unblock-stuck-selected", script: "3"},
+		{golden: "unblock-parked-selected", script: "3,j"},
+		{golden: "clear-parked", script: "3,j,c"},
+
+		{golden: "detail", script: "1,j,enter"},
+		{golden: "detail-stalled", script: "3,enter"},
+		{golden: "detail-plan-review", script: "2,enter"},
+
+		{golden: "bless-todo", script: "1,t"},
+		{golden: "bless-todo-unranked", script: "1,j,t"},
+		{golden: "bless-to-plan", script: "1,s"},
+		{golden: "backlog-ranked", script: "1,b"},
+		{golden: "backlog-unranked", script: "1,u"},
+		{golden: "duplicate", script: "1,d,W,N,D,-,4,1"},
+		{golden: "cancel", script: "1,x,o,b,s,o,l,e,t,e"},
+		{golden: "bless-plan-review-todo", script: "2,t"},
+		{golden: "reject-plan", script: "2,b,w,r,o,n,g"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.golden, func(t *testing.T) {
 			tuitest.AssertScreen(t, tt.golden, board(t, &fakeBackend{}), tt.script)
+		})
+	}
+}
+
+// Two of the three views are empty on a board where only one job has
+// anything to do — the common case this whole ticket exists to serve, and
+// each has to say what would appear there rather than rendering nothing.
+func TestEmptyViews(t *testing.T) {
+	tests := []struct {
+		golden string
+		snap   func() home.Snapshot
+		script string
+	}{
+		{golden: "decide-empty", snap: func() home.Snapshot {
+			s := home.Sample()
+			s.Triage = nil
+			return s
+		}, script: "1"},
+		{golden: "review-empty", snap: func() home.Snapshot {
+			s := home.Sample()
+			s.PlanReview, s.NeedsInput, s.ReadyForHuman = nil, nil, nil
+			return s
+		}, script: "2"},
+		{golden: "unblock-empty", snap: func() home.Snapshot {
+			s := home.Sample()
+			s.Stalled = nil
+			return s
+		}, script: "3"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.golden, func(t *testing.T) {
+			m := New(Config{
+				Snapshot: tt.snap(),
+				Backend:  &fakeBackend{},
+				Width:    screen.DefaultWidth,
+				Height:   screen.DefaultHeight,
+			})
+			tuitest.AssertScreen(t, tt.golden, m, tt.script)
 		})
 	}
 }
@@ -562,13 +723,13 @@ func TestPlanReviewDetailAtOtherSizes(t *testing.T) {
 				Width:    tt.width,
 				Height:   tt.height,
 			})
-			tuitest.AssertScreenSized(t, tt.golden, m, "j,j,enter", tt.width, tt.height)
+			tuitest.AssertScreenSized(t, tt.golden, m, "2,enter", tt.width, tt.height)
 		})
 	}
 }
 
-// The empty board is the answer home exists to be able to give, and
-// it has to say so rather than showing five blank headings.
+// The empty landing screen is the answer home exists to be able to give,
+// and it has to say so rather than showing three blank counts.
 func TestEmptyBoard(t *testing.T) {
 	m := New(Config{
 		Snapshot: home.Snapshot{Team: "WND"},
@@ -576,10 +737,10 @@ func TestEmptyBoard(t *testing.T) {
 		Width:    screen.DefaultWidth,
 		Height:   screen.DefaultHeight,
 	})
-	tuitest.AssertScreen(t, "board-empty", m, "")
+	tuitest.AssertScreen(t, "home-empty", m, "")
 }
 
-// The read-only board is what `wand ui --dump-screen` and `wand ui --sample`
+// The read-only home is what `wand ui --dump-screen` and `wand ui --sample`
 // render, notice and all.
 func TestSampleBoardScreens(t *testing.T) {
 	sample := func() Model {
@@ -590,15 +751,16 @@ func TestSampleBoardScreens(t *testing.T) {
 			Notice:   "sample board — reads no Linear team, and writes none",
 		})
 	}
-	tuitest.AssertScreen(t, "board-sample", sample(), "")
-	tuitest.AssertScreen(t, "bless-read-only", sample(), "t")
+	tuitest.AssertScreen(t, "home-sample", sample(), "")
+	tuitest.AssertScreen(t, "bless-read-only", sample(), "1,t")
 }
 
 // The Running strip is what WND-41 adds: what a live process is doing right
-// now, above the four queues and outside their cursor order. One alive run
-// and one whose own liveness judgment already says its holder is gone —
-// the "possibly dead, sweep will confirm" note is that judgment surfacing,
-// never a second one this screen invents from the heartbeat's age.
+// now, outside every view's cursor order and rendered on home alone. One
+// alive run and one whose own liveness judgment already says its holder is
+// gone — the "possibly dead, sweep will confirm" note is that judgment
+// surfacing, never a second one this screen invents from the heartbeat's
+// age.
 func TestRunningStripScreen(t *testing.T) {
 	now := time.Date(2026, 3, 5, 9, 30, 0, 0, time.UTC)
 	snap := home.Sample()
@@ -623,7 +785,7 @@ func TestRunningStripScreen(t *testing.T) {
 		Height:   screen.DefaultHeight,
 		Now:      now,
 	})
-	tuitest.AssertScreen(t, "board-running", m, "")
+	tuitest.AssertScreen(t, "home-running", m, "")
 }
 
 // --- refreshing from the detail screen -----------------------------------
@@ -635,7 +797,7 @@ func TestRunningStripScreen(t *testing.T) {
 // displayed, it is judged.
 func TestRefreshOnDetailResyncsTheOpenedRow(t *testing.T) {
 	back := &fakeBackend{}
-	m, _ := apply(t, board(t, back), "enter") // open WND-42
+	m, _ := apply(t, board(t, back), "1,enter") // open WND-42
 	if m.state != stateDetail {
 		t.Fatalf("state = %v, want the detail screen", m.state)
 	}
@@ -697,7 +859,7 @@ func without(t *testing.T, issues []linear.Issue, identifier string) []linear.Is
 // the key having quit the screen.
 func TestRefreshOnDetailLeavesWhenTheRowIsGone(t *testing.T) {
 	back := &fakeBackend{}
-	m, _ := apply(t, board(t, back), "enter")
+	m, _ := apply(t, board(t, back), "1,enter")
 	gone := m.detail.Issue.Identifier
 
 	next := home.Sample()
@@ -724,7 +886,7 @@ func TestRefreshOnDetailLeavesWhenTheRowIsGone(t *testing.T) {
 // rows believing they just re-read them.
 func TestRefreshFailureIsVisibleOnTheDetailScreen(t *testing.T) {
 	back := &fakeBackend{readErr: errors.New("linear is unreachable")}
-	m, _ := apply(t, board(t, back), "enter")
+	m, _ := apply(t, board(t, back), "1,enter")
 	before := m.View().Content
 
 	m, cmd := apply(t, m, "r")
@@ -750,8 +912,8 @@ func TestRefreshFailureIsVisibleOnTheDetailScreen(t *testing.T) {
 // second time.
 func TestRetryCarriesTheProgressOfAFailedJudgment(t *testing.T) {
 	back := &fakeBackend{err: errors.New("linear: refused the issue update"), preWritten: true}
-	m, _ := apply(t, board(t, back), "x") // cancel, with reason
-	m, _ = apply(t, m, "n,o,p,e")         // a reason to post
+	m, _ := apply(t, board(t, back), "1,x") // cancel, with reason
+	m, _ = apply(t, m, "n,o,p,e")           // a reason to post
 	m, cmd := apply(t, m, "enter")
 	m = run(t, m, cmd)
 
@@ -783,7 +945,7 @@ func TestRetryCarriesTheProgressOfAFailedJudgment(t *testing.T) {
 // anywhere.
 func TestASpentFieldStopsTakingKeystrokes(t *testing.T) {
 	back := &fakeBackend{err: errors.New("refused"), preWritten: true}
-	m, _ := apply(t, board(t, back), "x")
+	m, _ := apply(t, board(t, back), "1,x")
 	m, _ = apply(t, m, "h,i")
 	m, cmd := apply(t, m, "enter")
 	m = run(t, m, cmd)

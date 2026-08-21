@@ -19,9 +19,10 @@ read-mostly pass that picks the one ticket to run next through `run` or
 detached children; `sweep` is everything that happens after a run exits —
 a re-review label, an unresolved PR thread on a ready-for-human ticket, or
 a lease whose owner is provably dead, one action per pass; and `ui` opens
-home: the five queues waiting on a human, and the only surface in wand
-that performs the transitions the guard forbids — blessing is a human act,
-so it has a human door. [PLAN.md](./PLAN.md) is the build order and the
+home: a landing screen naming three views — Decide, Review, Unblock, one
+job each over the five queues waiting on a human — and the only surface in
+wand that performs the transitions the guard forbids — blessing is a human
+act, so it has a human door. [PLAN.md](./PLAN.md) is the build order and the
 reasoning — a deliberately mortal document; the Linear tickets are the
 authoritative version of the work. The TUI's verification layer is described
 below; read that before changing anything under `internal/tui`.
@@ -35,9 +36,10 @@ internal/linear/     the Linear GraphQL client — raw net/http, no GraphQL libr
 internal/covenant/   the process contract: fixed topology, parameterized covenant
 internal/bootstrap/  planner/executor over the covenant; all decisions in the pure Plan
 internal/guard/      the one verdict function: which ticket writes an agent may never make
-internal/home/       what is waiting on a human: the five queues, the seven judgments,
-                     the one write path that deliberately does not call the guard, and
-                     the read-only Running strip over the journal and lease store
+internal/home/       what is waiting on a human: the five queues grouped into three
+                     views (Decide, Review, Unblock), the seven judgments, the one
+                     write path that deliberately does not call the guard, and the
+                     read-only Running strip over the journal and lease store
 internal/doctor/     read-only drift report: bootstrap.Plan as the diff, plus what Plan cannot express
 internal/shim/       generates the PreToolUse hook entry that routes save_issue to wand guard
 internal/worker/     the harness seam: an Adapter turns a Spec into one headless invocation;

@@ -1,7 +1,7 @@
- wand · WND                                               nothing waiting on you
+ wand · WND · Review                                      nothing waiting on you
 
-  Triage
-    nothing filed since you last looked.
+  nothing to review right now — plans awaiting a blessing, parked questions and
+  ready-for-human work will land here.
 
   Plan Review
     no plan is waiting on a blessing.
@@ -11,8 +11,5 @@
 
   Ready for human
     nothing is labeled ready-for-human.
-
-  Stalled
-    every run is either finished or being driven.
 
   ↑/k ↓/j move • enter open • r refresh • q quit

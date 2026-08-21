@@ -1,0 +1,9 @@
+ wand · WND · Unblock                                     nothing waiting on you
+
+  nothing to unblock right now — stalled runs a person has to resolve will land
+  here.
+
+  Stalled
+    every run is either finished or being driven.
+
+  ↑/k ↓/j move • enter open • r refresh • q quit

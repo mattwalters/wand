@@ -1,0 +1,13 @@
+ wand · WND · Review                                            3 waiting on you
+
+  Plan Review  1 to bless
+› WND-44  Urgent     home: a fifth queue for plans awaiting blessing
+
+  Needs Input  1 to answer
+  WND-38  High       Second harness adapter: which one?
+
+  Ready for human  1 to look at
+  WND-35  In Review  Run journal and lease store
+
+  judge  t ✦Todo  b Backlog
+  ↑/k ↓/j move • enter open • r refresh • q quit

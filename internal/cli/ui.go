@@ -40,13 +40,20 @@ func newUICmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "ui",
-		Short: "Open home: everything waiting on a human",
-		Long: "Open wand's home screen — one screen answering one question: what is\n" +
-			"waiting on me? Triage to judge, Needs Input to answer, ready-for-human\n" +
-			"work to look at, and stalled runs no process is driving any more.\n\n" +
-			"Blessing lives here. Promotion to Todo and to To Plan is the transition\n" +
-			"the guard refuses everywhere else, because it hands out authorization an\n" +
-			"agent does not have; this screen is the one place a person grants it.\n\n" +
+		Short: "Open home: three views, one job each",
+		Long: "Open wand's home screen. A person sitting down at wand has come to do\n" +
+			"one of three jobs, not to scan one flat list — so home lands on a\n" +
+			"landing screen naming the three, and a number key opens one:\n\n" +
+			"  1 Decide   judge the pool, rank it, promote it (Triage)\n" +
+			"  2 Review   bless plans, answer questions, merge PRs (Plan Review,\n" +
+			"             Needs Input, Ready for human)\n" +
+			"  3 Unblock  clear parks, resolve stuck lanes (Stalled)\n\n" +
+			"esc from a view returns to the landing screen; a number key jumps\n" +
+			"straight to another view without detouring back through it.\n\n" +
+			"Blessing lives in Decide. Promotion to Todo and to To Plan is the\n" +
+			"transition the guard refuses everywhere else, because it hands out\n" +
+			"authorization an agent does not have; this screen is the one place a\n" +
+			"person grants it.\n\n" +
 			"With --dump-screen, a built-in sample board is rendered to plain text and\n" +
 			"printed, which needs no terminal and no API key. Combined with --script\n" +
 			"this makes any screen reachable from a single command, which is how an\n" +
@@ -69,7 +76,7 @@ func newUICmd() *cobra.Command {
 		Example: "  wand ui --team-key WND\n" +
 			"  wand ui --sample\n" +
 			"  wand ui --dump-screen\n" +
-			"  wand ui --script j,enter --dump-screen",
+			"  wand ui --script \"1,j,enter\" --dump-screen",
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			// A --team-key that would be silently ignored is worse than a
 			// refusal: it reads as "this is my board" on a screen that is

@@ -230,9 +230,10 @@ func TestBinaryRendersAndQuitsCleanly(t *testing.T) {
 		_, _ = io.Copy(screen, pty)
 	}()
 
-	// Home should render all five queues without any input.
-	got := screen.waitForText(t, "Needs Input")
-	for _, want := range []string{"wand", "Triage", "Plan Review", "Needs Input", "Ready for human", "Stalled"} {
+	// Home lands on the three-view landing screen without any input — the
+	// queues themselves are one nav key away, not on this screen.
+	got := screen.waitForText(t, "Unblock")
+	for _, want := range []string{"wand", "Decide", "Review", "Unblock"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("home is missing %q; screen was:\n%s", want, got)
 		}

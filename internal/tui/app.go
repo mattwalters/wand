@@ -1,5 +1,7 @@
-// Package tui holds wand's Bubble Tea models — the home screen, and nothing
-// else. One screen, one question: what is waiting on a human?
+// Package tui holds wand's Bubble Tea models — home, and nothing else. Home
+// is a landing screen naming three views (see home.View) plus the views
+// themselves: one job each, not one flat list of everything waiting on a
+// human.
 //
 // Everything here obeys the determinism rules in CLAUDE.md: Update is a pure
 // function of (model, msg), View is a pure function of model state, and
@@ -119,7 +121,11 @@ type Config struct {
 type state int
 
 const (
-	stateBoard state = iota
+	// stateHome is the landing screen: three views, one line each, naming
+	// the job and how much is waiting on it. It is the zero value, so a
+	// freshly built Model starts here rather than on a view nobody chose.
+	stateHome state = iota
+	stateBoard
 	stateDetail
 	stateConfirm
 )
@@ -130,6 +136,11 @@ type Model struct {
 	snap   home.Snapshot
 	board  home.Board
 	cursor int
+	// view is which of the three jobs stateBoard, stateDetail or
+	// stateConfirm is presently scoped to. Meaningless on stateHome — there
+	// is no active view yet — and left at its zero value (home.ViewDecide)
+	// until a view key sets it.
+	view home.View
 
 	backend Backend
 	cov     covenant.Covenant
@@ -232,8 +243,14 @@ func New(cfg Config) Model {
 // name for it: the screen still reads, refreshes and navigates.
 func (m Model) readOnly() bool { return m.backend == nil }
 
-// rows is the flat cursor order across every section.
-func (m Model) rows() []home.Row { return m.board.Rows() }
+// rows is the flat cursor order across the active view's sections. Empty on
+// stateHome, where there is no active view and nothing to put a cursor on.
+func (m Model) rows() []home.Row {
+	if m.state == stateHome {
+		return nil
+	}
+	return m.board.RowsIn(m.view)
+}
 
 // current returns the row under the cursor, if there is one.
 func (m Model) current() (home.Row, bool) {
@@ -438,10 +455,17 @@ func (m Model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.quit()
 	}
 
+	if v, ok := m.matchView(msg); ok {
+		return m.selectView(v), nil
+	}
+
 	switch {
 	case key.Matches(msg, m.keys.Back):
-		if m.state == stateDetail {
+		switch m.state {
+		case stateDetail:
 			m.state = stateBoard
+		case stateBoard:
+			m.state = stateHome
 		}
 		return m, nil
 
@@ -492,6 +516,31 @@ func (m Model) onKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// blessing screen it could not reach would be the one screen in wand
 	// nobody could inspect — which is exactly the one worth inspecting.
 	return m.begin(row, disp), nil
+}
+
+// matchView reports which view a key selects, when one does. Live on
+// stateHome, where a view key is the only way into a view, and on
+// stateBoard, where the same keys jump straight to another view without
+// detouring back through home first.
+func (m Model) matchView(msg tea.KeyPressMsg) (home.View, bool) {
+	if m.state != stateHome && m.state != stateBoard {
+		return 0, false
+	}
+	for i, vi := range home.Views {
+		if key.Matches(msg, m.keys.View[i]) {
+			return vi.View, true
+		}
+	}
+	return 0, false
+}
+
+// selectView moves to a view's board, cursor reset to its own first row —
+// a row index from a different view's order would be meaningless here.
+func (m Model) selectView(v home.View) Model {
+	m.state = stateBoard
+	m.view = v
+	m.cursor = 0
+	return m
 }
 
 // readOnlyRefusal is what the confirm key does when there is no writer. It

@@ -1,0 +1,7 @@
+ wand · WND                                               nothing waiting on you
+
+  1  Decide   nothing waiting  judge the pool, rank it, promote it
+  2  Review   nothing waiting  bless plans, answer questions, merge PRs
+  3  Unblock  nothing waiting  clear parks, resolve stuck lanes
+
+  1 Decide • 2 Review • 3 Unblock • r refresh • q quit

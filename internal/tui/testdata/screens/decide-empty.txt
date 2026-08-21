@@ -1,0 +1,9 @@
+ wand · WND · Decide                                      nothing waiting on you
+
+  nothing to decide right now — new Triage tickets and a ranked Backlog slice
+  will land here.
+
+  Triage
+    nothing filed since you last looked.
+
+  ↑/k ↓/j move • enter open • r refresh • q quit

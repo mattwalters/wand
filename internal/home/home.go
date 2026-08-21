@@ -1,21 +1,28 @@
-// Package home answers one question: what is waiting on a human?
+// Package home answers one question: what is waiting on a human? — but not
+// as one flat list. The five queues are not one job; they are three, and a
+// person sitting down at wand has come to do exactly one of them: [Decide]
+// what to start (Triage), [Review] what came back (Plan Review, Needs
+// Input, Ready for human), or [Unblock] the machine (Stalled). A landing
+// screen names the three and how much is waiting in each; picking one
+// scopes the screen to that job alone. See [View] and [Board.SectionsFor].
 //
-// Five queues, and nothing else. Triage to judge, Plan Review to bless a
-// plan, Needs Input to answer, ready-for-human work to look at, and stalled
-// runs no process is driving any more. Each is a queue that nothing drains
-// on its own — the failure mode PLAN.md names "queues nothing drains" — and
-// each is invisible until something puts it on one screen.
+// Five queues still, and nothing else besides them. Triage to judge, Plan
+// Review to bless a plan, Needs Input to answer, ready-for-human work to
+// look at, and stalled runs no process is driving any more. Each is a queue
+// that nothing drains on its own — the failure mode PLAN.md names "queues
+// nothing drains" — and each is invisible until something puts it on
+// screen. [Build] always returns all five; a [View] is a lens over that one
+// board, not a second construction path.
 //
 // What is deliberately *not* here: Backlog. A Backlog ticket is not waiting
 // on you; it is the pool, and browsing a pool is Linear's job, done better
 // there. Home shows what has stopped, not what exists.
 //
-// Alongside the four queues sits one strip that answers a different
-// question — not "what is waiting on a human?" but "what is the machine
-// doing right now?" (see [Active] and [Board.Running]). It is read-only,
-// rendered from the journal and lease store alone, and it counts toward
-// nothing: a run being actively driven is, by definition, not waiting on
-// anyone.
+// Alongside the queues sits one strip that answers a different question —
+// not "what is waiting on a human?" but "what is the machine doing right
+// now?" (see [Active] and [Board.Running]). It is read-only, rendered from
+// the journal and lease store alone, and it counts toward nothing: a run
+// being actively driven is, by definition, not waiting on anyone.
 //
 // # Blessing
 //
@@ -81,6 +88,51 @@ const (
 	KindStalled       Kind = "stalled"
 )
 
+// View is one of the three jobs a person comes to home to do. It groups
+// Kinds; it does not change what [Build] reads or returns.
+type View int
+
+const (
+	// ViewDecide is judging the pool: rank it, promote it. Sourced from
+	// Triage today; a ranked Backlog slice is a later, one-line addition to
+	// [kindView], not a reason to change this type.
+	ViewDecide View = iota
+	// ViewReview is blessing plans, answering questions and merging PRs:
+	// judgment on work that already exists, not on what to start.
+	ViewReview
+	// ViewUnblock is repairing the tooling, not judging the work: clearing
+	// parks and resolving runs no process is driving.
+	ViewUnblock
+)
+
+// kindView is the fixed Kind→View table every view is built from. Adding a
+// Kind to a view — a ranked Backlog slice into ViewDecide, say — is the one
+// line this map needs; nothing else in this file changes shape.
+var kindView = map[Kind]View{
+	KindTriage:        ViewDecide,
+	KindPlanReview:    ViewReview,
+	KindNeedsInput:    ViewReview,
+	KindReadyForHuman: ViewReview,
+	KindStalled:       ViewUnblock,
+}
+
+// ViewInfo names one view for the landing screen and the docs: the key that
+// selects it, what it is called, and the job it exists to do.
+type ViewInfo struct {
+	View  View
+	Key   string
+	Title string
+	Job   string
+}
+
+// Views lists the three, in the order the landing screen shows them and the
+// order their keys count up in.
+var Views = []ViewInfo{
+	{View: ViewDecide, Key: "1", Title: "Decide", Job: "judge the pool, rank it, promote it"},
+	{View: ViewReview, Key: "2", Title: "Review", Job: "bless plans, answer questions, merge PRs"},
+	{View: ViewUnblock, Key: "3", Title: "Unblock", Job: "clear parks, resolve stuck lanes"},
+}
+
 // Row is one line a human can put a cursor on: an issue in one of the four
 // issue queues, or a stalled run. Exactly one of Issue and Stalled is
 // meaningful, and [Row.IsStalled] says which.
@@ -137,6 +189,40 @@ func (b Board) Rows() []Row {
 		rows = append(rows, s.Rows...)
 	}
 	return rows
+}
+
+// SectionsFor is one view's slice of the board: the sections whose Kind
+// belongs to v, in board order. A lens over [Board.Sections], not a second
+// construction path — [Build] still returns all five every time.
+func (b Board) SectionsFor(v View) []Section {
+	var out []Section
+	for _, s := range b.Sections {
+		if kindView[s.Kind] == v {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// RowsIn flattens one view's sections into cursor order, the same way
+// [Board.Rows] does for the whole board. A screen scoped to a view indexes
+// its cursor into this rather than into Rows.
+func (b Board) RowsIn(v View) []Row {
+	var rows []Row
+	for _, s := range b.SectionsFor(v) {
+		rows = append(rows, s.Rows...)
+	}
+	return rows
+}
+
+// WaitingIn counts rows within one view — the per-view answer to what
+// [Board.Waiting] answers globally.
+func (b Board) WaitingIn(v View) int {
+	n := 0
+	for _, s := range b.SectionsFor(v) {
+		n += len(s.Rows)
+	}
+	return n
 }
 
 // Build turns a snapshot into a board. The sections are always all five,

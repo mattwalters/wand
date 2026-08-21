@@ -1,0 +1,8 @@
+ wand · WND                                                     7 waiting on you
+  engaged · dispatched WND-9 (run) · next poll in 60s
+
+  1  Decide   2 waiting  judge the pool, rank it, promote it
+  2  Review   3 waiting  bless plans, answer questions, merge PRs
+  3  Unblock  2 waiting  clear parks, resolve stuck lanes
+
+  1 Decide • 2 Review • 3 Unblock • r refresh • e disengage • q quit

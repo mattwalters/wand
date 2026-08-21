@@ -1,6 +1,10 @@
 package tui
 
-import "charm.land/bubbles/v2/key"
+import (
+	"charm.land/bubbles/v2/key"
+
+	"github.com/mattwalters/wand/internal/home"
+)
 
 // keyMap collects every binding the app responds to. Keeping them in one
 // struct means the help line and the Update switch cannot drift apart.
@@ -22,6 +26,12 @@ type keyMap struct {
 	// cancellation reason, and losing that text to a quit is the kind of
 	// small betrayal that makes people stop using a screen.
 	ForceQuit key.Binding
+	// View selects one of the three views by number, from home or from
+	// another view. Plain digits are the only keys free of every
+	// disposition (t/s/b/u/d/x), engage (e), refresh (r), quit (q/ctrl+c)
+	// and move (j/k) — see TestDispositionKeysAvoidNavigation and its
+	// tui-side analogue.
+	View [3]key.Binding
 }
 
 func defaultKeyMap() keyMap {
@@ -66,5 +76,19 @@ func defaultKeyMap() keyMap {
 			key.WithKeys("ctrl+c"),
 			key.WithHelp("ctrl+c", "quit"),
 		),
+		View: viewKeys(),
 	}
+}
+
+// viewKeys builds the three view bindings from home.Views, so the digit
+// each one answers to has one source rather than a copy kept in sync here.
+func viewKeys() [3]key.Binding {
+	var out [3]key.Binding
+	for i, vi := range home.Views {
+		out[i] = key.NewBinding(
+			key.WithKeys(vi.Key),
+			key.WithHelp(vi.Key, vi.Title),
+		)
+	}
+	return out
 }

@@ -70,45 +70,40 @@ wand version                # build info, and the covenant schema this binary sp
 
 ## Home
 
-`wand ui` is one screen answering one question: **what is waiting on me?**
+`wand ui` opens on a landing screen naming three views — one job each,
+rather than one flat list of everything waiting on you:
 
 ```
  wand · WND                                                     7 waiting on you
 
-  Triage  2 to judge
-› WND-42  Low        doctor prints an empty drift section on a clean board
-  WND-41  —          guard: a raw state UUID is not matched
+  1  Decide   2 waiting  judge the pool, rank it, promote it
+  2  Review   3 waiting  bless plans, answer questions, merge PRs
+  3  Unblock  2 waiting  clear parks, resolve stuck lanes
 
-  Plan Review  1 to bless
-  WND-44  Urgent     home: a fifth queue for plans awaiting blessing
-
-  Needs Input  1 to answer
-  WND-38  High       Second harness adapter: which one?
-
-  Ready for human  1 to look at
-  WND-35  In Review  Run journal and lease store
-
-  Stalled  2 to resolve
-  WND-36  stuck      held by pid 48213 on studio.local, which is gone; the run …
-  WND-33  parked     the worktree was dirty at handoff; refusing to park noise …
-
-  judge  t ✦Todo  s ✦To Plan  b Backlog  u unranked  d duplicate  x cancel
-  ↑/k ↓/j move • enter open • r refresh • q quit
+  1 Decide • 2 Review • 3 Unblock • r refresh • q quit
 ```
 
-Five queues, and nothing else. Each is one that nothing drains on its own,
-and each is invisible until something puts it on one screen. Backlog is
-deliberately absent: a Backlog ticket is not waiting on you, it is the pool,
-and browsing a pool is Linear's job.
+**Decide** (`1`) is Triage: judge what agents filed, rank it, promote it.
+**Review** (`2`) is Plan Review, Needs Input and Ready for human together:
+bless plans, answer questions, merge PRs — judgment on work that already
+exists, not on what to start. **Unblock** (`3`) is Stalled: clear parks,
+resolve runs no process is driving any more — a repair of the tooling, not
+a judgment about the work. A number key opens a view; `esc` returns here.
 
-**Plan Review is where a plan gets judged.** A ticket lands there with the plan
-`wand plan` wrote in its description, and opening the row shows that plan in
-place — nothing else in the description, and no comment. Judging it has two
-answers: bless it into Todo, the same way Triage does, or send it back to
-Backlog with the reasoning as a comment, so the next plan run over the ticket
-starts from why the last plan did not land instead of guessing.
+Five queues behind the three views, and nothing else. Each is one that
+nothing drains on its own, and each is invisible until something puts it on
+screen. Backlog is deliberately absent: a Backlog ticket is not waiting on
+you, it is the pool, and browsing a pool is Linear's job.
 
-**Blessing lives here.** Promoting a ticket to Todo or To Plan is the
+**Plan Review, in the Review view, is where a plan gets judged.** A ticket
+lands there with the plan `wand plan` wrote in its description, and opening
+the row shows that plan in place — nothing else in the description, and no
+comment. Judging it has two answers: bless it into Todo, the same way
+Triage does, or send it back to Backlog with the reasoning as a comment, so
+the next plan run over the ticket starts from why the last plan did not
+land instead of guessing.
+
+**Blessing lives in Decide.** Promoting a ticket to Todo or To Plan is the
 transition [the guard](#the-guard) refuses everywhere else, because it hands
 out authorization an agent does not have. Home is the one place a
 person grants it, and it is a deliberate moment rather than a keystroke:
@@ -136,8 +131,9 @@ reason `handback` posts its question first: the status write is what ends
 the ticket's visibility, so anything a reader will later need has to already
 be on it.
 
-`wand ui --sample` opens the same screen against a built-in board, so you can
-walk the whole interface without an API key or a team.
+`wand ui --sample` opens the same interface against a built-in board, so you
+can walk it — landing screen, all three views, blessing included — without
+an API key or a team.
 
 Press `e` to **engage**: home then polls Todo and To Plan on an
 interval, spawning a winner as a detached process, and also drains sweep's
