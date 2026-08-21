@@ -24,11 +24,11 @@
 // downward move an agent may make, and it is safe because it removes
 // authorization rather than granting it. Note which direction is blocked:
 // moving a ticket *into* Scoping is a promotion and is refused; moving one
-// *out* of Scoping is what every scope ends with, and both ways it can end
-// are allowed — to Needs Input, the scout has a blocking question, or to
+// *out* of Scoping is what every plan run ends with, and both ways it can
+// end are allowed — to Needs Input, the scout has a blocking question, or to
 // Scoped, the plan is finished — the guard sees only the destination.
 //
-// Scoped is the research-side analog of In Review: it is the scope
+// Scoped is the research-side analog of In Review: it is the plan
 // orchestrator's terminal write, the plan-review equivalent of "this code is
 // ready to look at". An agent may set it unattended, the same as In Review,
 // and it may never move a ticket *out* of Scoped — that destination is
@@ -117,12 +117,12 @@ const (
 		"Todo is. Scoping blesses research: a ticket sitting in it is one a " +
 		"dispatcher may spend a scout on unattended, so putting work there " +
 		"authorizes it rather than describing it.\n\n" +
-		"If you are a scout finishing a scope, the move you want is **Needs " +
+		"If you are a scout finishing a plan, the move you want is **Needs " +
 		"Input** — post the approaches, the recommendation and the estimate, then " +
 		"transition there (`wand handback` does both, in the order that cannot " +
 		"strand a question-less ticket). That is allowed, and it is what hands " +
 		"the decision back to a person.\n\n" +
-		"If you have found something that ought to be scoped, say so in a comment " +
+		"If you have found something that ought to be planned, say so in a comment " +
 		"and leave the status alone. A human promotes it."
 
 	reasonAmbiguousUnstarted = "`unstarted` is a state *type*, not a status, and this team has four of " +

@@ -5,7 +5,7 @@ summary: Act on one thing left over after a run ended — everything dispatch's 
 ---
 
 `sweep` is everything that happens after [`wand run`](../run/) or
-[`wand scope`](../scope/) exits. Each orchestrator ends in exactly one
+[`wand plan`](../plan/) exits. Each orchestrator ends in exactly one
 terminal state, and each terminal state is where its own responsibility
 stops; three things can still become true of a ticket afterward, and
 nothing else in wand watches for them.

@@ -137,14 +137,16 @@ type Meta struct {
 	ID string `json:"id"`
 	// Ticket is the Linear identifier the run works, e.g. "WND-7".
 	Ticket string `json:"ticket"`
-	// Verb names the orchestrator: "run", "scope".
+	// Verb names the orchestrator: "run", "plan" ("scope" in a run
+	// journaled before this rename — the cockpit and dispatch.LanesUsed
+	// both read the two as synonyms rather than migrating old runs).
 	Verb string `json:"verb"`
 	// Repo is the absolute path of the repository the run acts on. A
 	// sweeper needs it to find the worktree of a run whose process is
 	// gone.
 	Repo string `json:"repo"`
 	// Harness names the worker adapter, when one is chosen. Optional:
-	// scope-style runs pick their harness per phase.
+	// plan-style runs pick their harness per phase.
 	Harness string `json:"harness,omitempty"`
 }
 

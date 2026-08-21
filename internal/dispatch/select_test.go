@@ -39,8 +39,8 @@ func TestSelectFallsBackToScopingWhenLanesAreFull(t *testing.T) {
 	if !ok {
 		t.Fatal("expected a winner")
 	}
-	if winner.Verb != VerbScope || winner.Issue.Identifier != "WND-9" {
-		t.Errorf("winner = %+v, want the Scoping issue via scope — a scope needs no lane", winner)
+	if winner.Verb != VerbPlan || winner.Issue.Identifier != "WND-9" {
+		t.Errorf("winner = %+v, want the Scoping issue via plan — a plan run needs no lane", winner)
 	}
 }
 
@@ -51,8 +51,8 @@ func TestSelectFallsBackToScopingWhenTodoIsEmpty(t *testing.T) {
 	if !ok {
 		t.Fatal("expected a winner")
 	}
-	if winner.Verb != VerbScope {
-		t.Errorf("winner.Verb = %s, want scope: a free lane with nothing to build should not leave research idle", winner.Verb)
+	if winner.Verb != VerbPlan {
+		t.Errorf("winner.Verb = %s, want plan: a free lane with nothing to build should not leave research idle", winner.Verb)
 	}
 }
 
@@ -101,7 +101,8 @@ func TestLanesUsedCountsOnlyLiveRunsForThisRepo(t *testing.T) {
 		report("/repo/a", "run", false, journal.Alive),
 		report("/repo/a", "run", false, journal.Alive),
 		report("/repo/b", "run", false, journal.Alive),   // a different repo
-		report("/repo/a", "scope", false, journal.Alive), // a scope needs no lane
+		report("/repo/a", "plan", false, journal.Alive),  // a plan run needs no lane
+		report("/repo/a", "scope", false, journal.Alive), // pre-rename journal value, same as "plan": still no lane
 		report("/repo/a", "run", true, journal.Alive),    // ended: not occupying anything
 		report("/repo/a", "run", false, journal.Dead),    // gc'd: provably dead
 	}
@@ -119,8 +120,8 @@ func TestLanesUsedCountsUnknownLiveness(t *testing.T) {
 	}
 }
 
-// WND-71. The park costs one run, not a stream of them. A scope is a full
-// cold research pass, and the reference journal has the same ticket scoped
+// WND-71. The park costs one run, not a stream of them. A plan run is a full
+// cold research pass, and the reference journal has the same ticket planned
 // and parked three times over for one defect — three passes bought, one
 // failure. Selection is where that stops.
 func TestSelectSkipsAParkedScopingTicket(t *testing.T) {

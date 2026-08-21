@@ -1,4 +1,4 @@
-package scope
+package plan
 
 import (
 	"fmt"
@@ -15,8 +15,8 @@ import (
 // future implementer is handed as the specification, and an implementer
 // reading the rejected options re-litigates them.
 
-// PlanSectionID is the marker-fenced region of the description the scope
-// owns. Every scope of a ticket replaces it whole; every byte outside it
+// PlanSectionID is the marker-fenced region of the description the plan run
+// owns. Every plan of a ticket replaces it whole; every byte outside it
 // belongs to whoever wrote it.
 const PlanSectionID = "plan"
 
@@ -51,7 +51,7 @@ func PlanMarkdown(d Draft) string {
 		}
 		b.WriteString(". The scout cited them; the file map takes only citations a reader can jump to.\n")
 	}
-	b.WriteString("\nThe next scope of this ticket rewrites this region whole; notes of your own " +
+	b.WriteString("\nThe next plan run of this ticket rewrites this region whole; notes of your own " +
 		"live outside it, where nothing machine-written touches them.\n")
 	return b.String()
 }
@@ -61,18 +61,18 @@ func PlanMarkdown(d Draft) string {
 // recommendation, the estimate, what the plan rests on, and what is still
 // unanswered — then the explicit request for a blessing an agent may not
 // grant itself. statusName is the covenant's display name for the terminal
-// status the scope is about to move the ticket to (its "scoped" key), so
+// status the plan run is about to move the ticket to (its "scoped" key), so
 // the comment names whatever a covenant file calls it rather than a
 // hardcoded default.
 func OptionsComment(d Draft, scale, statusName string, prov Provenance) string {
 	var b strings.Builder
-	b.WriteString("## Scope\n\n")
+	b.WriteString("## Plan\n\n")
 	b.WriteString(Argument(d, scale))
 	b.WriteString("\n### Over to you\n\n")
-	fmt.Fprintf(&b, "The plan is in this ticket's description, in the region `wand scope` owns. "+
+	fmt.Fprintf(&b, "The plan is in this ticket's description, in the region `wand plan` owns. "+
 		"This ticket is now in %s: promoting it to Todo is what blesses building it, "+
 		"and that is a human's act — an agent does not bless its own plan. "+
-		"If the recommendation is wrong, say so here and scope it again.\n", statusName)
+		"If the recommendation is wrong, say so here and plan it again.\n", statusName)
 	b.WriteString("\n")
 	b.WriteString(prov.line())
 	return b.String()
@@ -84,9 +84,9 @@ func OptionsComment(d Draft, scale, statusName string, prov Provenance) string {
 //
 // It is separate from the comment around it because the critic and the
 // reviser are shown exactly this — the argument as a human would read it,
-// without the ask addressed to the human or the provenance of a scope that
-// has not happened yet. Judging the artifact is the point; judging its JSON
-// encoding is not.
+// without the ask addressed to the human or the provenance of a plan run
+// that has not happened yet. Judging the artifact is the point; judging its
+// JSON encoding is not.
 func Argument(d Draft, scale string) string {
 	var b strings.Builder
 	b.WriteString("**What I take this ticket to be asking.** ")
@@ -125,7 +125,7 @@ func Argument(d Draft, scale string) string {
 }
 
 // Provenance is how the draft got here, printed under the argument. A
-// human weighing a scope wants to know whether anything argued with it:
+// human weighing a plan wants to know whether anything argued with it:
 // one cold scout's first draft and a draft that survived a critic and an
 // interview are not the same artifact, and only the footer says which this
 // is.
@@ -174,29 +174,30 @@ func SortedAssumptions(d Draft) []Assumption {
 // and judge it, not a summary of it.
 func premiseComment(reason string, prov Provenance) string {
 	var b strings.Builder
-	b.WriteString("I did not scope this ticket. The scout reading the code judged the ticket's " +
-		"premise wrong, and scoping around a wrong premise produces a well-argued plan for the " +
+	b.WriteString("I did not plan this ticket. The scout reading the code judged the ticket's " +
+		"premise wrong, and planning around a wrong premise produces a well-argued plan for the " +
 		"wrong work. Its account, verbatim:\n\n")
 	b.WriteString(blockquote(reason))
 	b.WriteString("\n\nNothing was written to the description and no estimate was set. " +
-		"If the premise holds after all, say so here and scope it again; if it does not, " +
+		"If the premise holds after all, say so here and plan it again; if it does not, " +
 		"the ticket needs rewriting or closing, and both are yours.\n\n")
 	b.WriteString(prov.line())
 	return b.String()
 }
 
-// supersededComment is posted before a scope overwrites a plan region that
-// already carries one. Every scope of a ticket rewrites [PlanSectionID]
-// whole — the next paragraph in this file's package doc says so — which
-// means the plan a human read and blessed otherwise vanishes the moment a
-// later scope runs, surviving only in whatever PR was already merged from
-// it. Dated and marked superseded, quoted verbatim, so the ticket keeps its
-// own history instead of only its newest answer.
+// supersededComment is posted before a plan run overwrites a plan region
+// that already carries one. Every plan run of a ticket rewrites
+// [PlanSectionID] whole — the next paragraph in this file's package doc
+// says so — which means the plan a human read and blessed otherwise
+// vanishes the moment a later plan run happens, surviving only in whatever
+// PR was already merged from it. Dated and marked superseded, quoted
+// verbatim, so the ticket keeps its own history instead of only its newest
+// answer.
 func supersededComment(prior string, prov Provenance) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "## Plan superseded, %s\n\n", time.Now().UTC().Format(time.RFC3339))
-	b.WriteString("This ticket is being scoped again, and the plan below is about to be replaced " +
-		"in the description — every scope rewrites that region whole. It is kept here, verbatim, " +
+	b.WriteString("This ticket is being planned again, and the plan below is about to be replaced " +
+		"in the description — every plan run rewrites that region whole. It is kept here, verbatim, " +
 		"so the ticket does not disagree with its own history:\n\n")
 	b.WriteString(blockquote(prior))
 	fmt.Fprintf(&b, "\n\nSuperseded by run `%s`.\n", prov.RunID)

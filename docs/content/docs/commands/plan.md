@@ -1,10 +1,12 @@
 ---
-title: wand scope
+title: wand plan
 weight: 195
 summary: Research one Scoping ticket into a plan a human can bless.
+aliases:
+  - /docs/commands/scope/
 ---
 
-`scope` is the research orchestrator. It sends a cold, read-only scout over
+`plan` is the research orchestrator. It sends a cold, read-only scout over
 your repository to research one ticket, validates what the scout hands back,
 and writes the result onto the ticket: the plan into the description, the
 approaches and their trade-offs as a comment, the estimate, and Scoped
@@ -17,19 +19,19 @@ you let it write code.
 ## Synopsis
 
 ```
-wand scope <identifier> [--interactive] [--harness NAME] [--model M] [--effort E]
+wand plan <identifier> [--interactive] [--harness NAME] [--model M] [--effort E]
 ```
 
 ## The ticket must be in Scoping
 
 Blessing research is a human act, the same way blessing building is: a
 ticket in Scoping is one you have decided is worth spending a scout on.
-`scope` refuses anything else, and refuses a `human-only` or `parked`
-ticket outright — a scope is a full cold research pass, and re-buying one
+`plan` refuses anything else, and refuses a `human-only` or `parked`
+ticket outright — a plan run is a full cold research pass, and re-buying one
 that already stopped is the most expensive way to learn nothing.
 
 It does **not** refuse a blocked ticket. A ticket waiting on another is
-often exactly the one worth scoping early — the blocker stops the building,
+often exactly the one worth planning early — the blocker stops the building,
 not the reading. That is a deliberate difference from `wand claim`, which
 does refuse.
 
@@ -39,7 +41,7 @@ Four writes, and the order is the contract:
 
 1. **The plan**, into a marker-fenced region of the description
    (`<!-- wand:plan -->`). Every byte outside that region belongs to
-   whoever wrote it; the region is replaced whole on every scope, never
+   whoever wrote it; the region is replaced whole on every plan run, never
    merged and never appended to.
 2. **The options comment**: what the scout took the ticket to be asking,
    every approach with its trade-off, which one is recommended and why,
@@ -61,7 +63,7 @@ Promoting the result to Todo is yours. An agent does not bless its own plan.
 ## Nothing is written unless the whole handoff is valid
 
 The scout's handoff is validated before the first Linear call, and a handoff
-that fails validation writes **nothing at all**. Half a scope on a ticket is
+that fails validation writes **nothing at all**. Half a plan on a ticket is
 worse than none, because it reads like a whole one — a human blesses the
 plan on the strength of the argument beside it, and nobody re-derives
 afterwards whether that argument held together.
@@ -88,7 +90,7 @@ A misspelled field is a loud failure rather than a silently absent one.
 
 A scout that finds the ticket built on something untrue — work already done,
 a mechanism that does not work the way the ticket says — reports that
-instead of scoping around it. Then nothing is written to the description and
+instead of planning around it. Then nothing is written to the description and
 no estimate is set: its account goes on the ticket verbatim, the ticket
 moves to Needs Input, and the command exits `2`.
 
@@ -98,7 +100,7 @@ There is no worktree. The scout reads the checkout you ran the command
 from — usually yours, with your uncommitted work in it — and is told not to
 change it. wand records `git status` before and after every worker and
 **parks** if anything moved, leaving the change in front of you rather than
-writing a scope over a checkout somebody quietly edited. The handoff is
+writing a plan over a checkout somebody quietly edited. The handoff is
 journaled before that check, so a park does not throw the research away.
 
 ## `--interactive`: the draft-then-grill interview
@@ -121,18 +123,18 @@ nothing, nothing is revised and no extra model call is spent.
 Your answers go to a **second, fresh session**, never back to the one that
 wrote the draft — a session that has just argued for an approach defends it,
 and what comes back is the same plan with your objections explained away.
-The reviser produces a whole new scope, validated exactly as strictly.
+The reviser produces a whole new plan, validated exactly as strictly.
 
 The flag needs a terminal. An unattended caller must not pass it: it is
 refused with exit `1` rather than left blocked on a read nobody will answer.
-A covenant that turns the stage off (`toggles.scope_interview = false`)
+A covenant that turns the stage off (`toggles.plan_interview = false`)
 refuses the flag too — the two settings answer different questions, and
 resolving the contradiction silently would mean one of them was never
 load-bearing.
 
 ## The critic
 
-`toggles.scope_critic = true` in [`wand.toml`](../../covenant/) inserts a
+`toggles.plan_critic = true` in [`wand.toml`](../../covenant/) inserts a
 cold critic between the draft and the interview: a fresh session prompted to
 attack the draft, whose objections are validated like any other handoff and
 handed to a reviser. An objection must state what it costs if the draft
@@ -140,21 +142,22 @@ ships as written; an objection with no consequence is a preference, and a
 revision round is too expensive to spend on one. A critic that finds nothing
 costs one call and changes nothing.
 
-It is off by default. It spends a whole extra model call per scope, and
+It is off by default. It spends a whole extra model call per plan run, and
 unlike the rest of the covenant it is not a rule the reference system has
 finished paying for.
 
 The footer of the options comment says which stages ran, so you can tell a
-first draft from a scope that survived a critic and an interview.
+first draft from a plan that survived a critic and an interview.
 
-## One scope per ticket
+## One plan run per ticket
 
-`wand scope` takes a per-ticket lock for the life of the process. `wand run`
+`wand plan` takes a per-ticket lock for the life of the process. `wand run`
 does not need one — it claims its ticket out of Todo, so the board is its
-mutex — but a scope's ticket sits in Scoping from the first read to the last
-write, so nothing on the board can keep a second scope out. Two scopes of
-one ticket would write two plans into one fenced region and argue two
-recommendations at a reader who cannot tell which the estimate belongs to.
+mutex — but a plan run's ticket sits in Scoping from the first read to the
+last write, so nothing on the board can keep a second plan run out. Two plan
+runs over one ticket would write two plans into one fenced region and argue
+two recommendations at a reader who cannot tell which the estimate belongs
+to.
 
 The lock is a file in wand's state directory, released by the operating
 system when the process dies, however it dies. It is machine-local: it
@@ -176,14 +179,14 @@ A scheduler contract, and the one `wand run` publishes too.
 
 | Code | Meaning |
 |---|---|
-| `0` | Scoped. The plan, the options and the estimate are on the ticket, and it is in Scoped for a human to judge. |
+| `0` | Planned. The plan, the options and the estimate are on the ticket, and it is in Scoped for a human to judge. |
 | `1` | The run never started: no API key, the ticket is not in Scoping, `--interactive` with no terminal, another process holds the ticket. Nothing was written. |
 | `2` | Handed back. The scout judged the ticket's premise wrong; its account is on the ticket, no plan was written, and it is in Needs Input for a human to answer. |
 | `3` | Parked. The run stopped without deciding — an unusable handoff, a worker failure, a write that failed part-way. The journal says which, and how much reached the ticket; the ticket itself carries the reason as a comment and the `parked` label. |
 
 ## The journal
 
-Every scope is a journaled run: each phase recorded before it happens, the
+Every plan run is a journaled run: each phase recorded before it happens, the
 scout's handoff kept as a note, and exactly one terminal record. A handoff
 that fails validation is kept too, written to the run's `scratch/` as
 `<phase>-<round>.rejected.json` before the park — the worker's own copy is
@@ -194,7 +197,7 @@ under `$XDG_STATE_HOME/wand/runs` (or `WAND_STATE_DIR`), outside every
 repository. The journal is written before the ticket is, deliberately — a
 park has to be reachable when Linear itself is what failed. Once it is
 journaled, the ticket gets the same sentence as a comment and the `parked`
-label, best-effort: a scope never owns its ticket's status, so the mark is
+label, best-effort: a plan run never owns its ticket's status, so the mark is
 a label and the ticket stays in Scoping where a human put it.
 
 ### The failure that retries instead
@@ -207,8 +210,8 @@ default; `0` switches it off). A scout costs a whole model call and produces
 nothing at all until it hands off, so a provider error is the most
 expensive possible thing to mistake for a verdict.
 
-The rules are [`wand run`](../run/)'s, with one that is scope's own: no
-retry ever happens into a checkout the scout changed. `scope` reads the
+The rules are [`wand run`](../run/)'s, with one that is plan's own: no
+retry ever happens into a checkout the scout changed. `plan` reads the
 repository you ran it in — usually your own working copy, not a worktree the
 run owns — so a stray edit is about to be handed back to you untouched.
 Respawning a second scout into it first would write more into a directory
@@ -226,11 +229,11 @@ wand's conformance suite.
 ## Examples
 
 ```bash
-wand scope WND-42
+wand plan WND-42
 ```
 
 ```
-scoping WND-42 (Scoping), journaling to ~/.local/state/wand/runs/WND-42-20260819T120000Z
+planning WND-42 (Scoping), journaling to ~/.local/state/wand/runs/WND-42-20260819T120000Z
 phase scout: spawning a cold worker (claude-code)
 wrote the plan into the ticket's description
 posted the options comment
@@ -241,10 +244,10 @@ run WND-42-20260819T120000Z ended: converged — scoped: …
 Grilled first:
 
 ```bash
-wand scope WND-42 --interactive
+wand plan WND-42 --interactive
 ```
 
 ## See also
 
-[`wand ticket`](../ticket/) renders the scope for a cold reader — the
+[`wand ticket`](../ticket/) renders the plan for a cold reader — the
 description and every comment, in one piece.

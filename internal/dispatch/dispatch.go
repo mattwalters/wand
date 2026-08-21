@@ -1,9 +1,9 @@
 // Package dispatch is the selector over the loop: a thin, read-mostly pass
 // that picks the one ticket a repository works next and runs it through the
-// same orchestrators `wand run` and `wand scope` already ship.
+// same orchestrators `wand run` and `wand plan` already ship.
 //
 // The Todo gate lives here, deliberately, and not in run.Execute or
-// scope.Execute themselves: a human typing `wand run WND-9` has made the
+// plan.Execute themselves: a human typing `wand run WND-9` has made the
 // decision that WND-9 is the ticket to work; an unattended selector has
 // not; the covenant's ranking and vetting is where that decision is made
 // instead, the same read layer `wand queue` prints.
@@ -27,9 +27,9 @@ import (
 	"net/url"
 
 	"github.com/mattwalters/wand/internal/journal"
+	"github.com/mattwalters/wand/internal/plan"
 	"github.com/mattwalters/wand/internal/queue"
 	"github.com/mattwalters/wand/internal/run"
-	"github.com/mattwalters/wand/internal/scope"
 )
 
 // Kind is how a dispatch pass ended, for the caller and the scheduler.
@@ -47,7 +47,7 @@ const (
 
 // Exit codes are a contract a scheduler can read: a status and a log is a
 // scheduler's whole view of a pass, so every ending it needs to tell apart
-// gets its own code. 0 and 1 keep the meaning `wand run` and `wand scope`
+// gets its own code. 0 and 1 keep the meaning `wand run` and `wand plan`
 // already gave them; the rest are new to dispatch.
 const (
 	ExitConverged    = 0
@@ -168,7 +168,7 @@ func (d Deps) selectWinner(ctx context.Context, store *journal.Store) (Winner, b
 }
 
 // runWinner hands the winner to the orchestrator it belongs to. An error
-// here means the claim raced and lost, or the run/scope journal would not
+// here means the claim raced and lost, or the run/plan journal would not
 // open — the winner was chosen honestly and starting it was refused, which
 // is [KindRefused] rather than a wand bug.
 func (d Deps) runWinner(ctx context.Context, store *journal.Store, winner Winner) (Result, error) {
@@ -192,8 +192,8 @@ func (d Deps) runWinner(ctx context.Context, store *journal.Store, winner Winner
 		}
 		return Result{Kind: Kind(out.Kind), Winner: winner, Reason: out.Reason, RunID: out.RunID}, nil
 
-	case VerbScope:
-		out, err := scope.Execute(ctx, scope.Deps{
+	case VerbPlan:
+		out, err := plan.Execute(ctx, plan.Deps{
 			Board:   d.Board,
 			Cov:     d.Cov,
 			Workers: d.Workers,

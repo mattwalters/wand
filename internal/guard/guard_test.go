@@ -68,9 +68,9 @@ func TestEvaluate(t *testing.T) {
 		{"In Review (ship)", linearTool, map[string]any{"id": "WND-1", "state": "In Review"}, false},
 		{"Needs Input (handback)", linearTool, map[string]any{"id": "WND-1", "state": "Needs Input"}, false},
 		{"needs input, loosely typed", linearTool, map[string]any{"id": "WND-1", "state": "needs input"}, false},
-		// Scoped is the research-side analog of In Review: the scope
+		// Scoped is the research-side analog of In Review: the plan
 		// orchestrator's terminal write, allowed the same way In Review is.
-		{"Scoped (scope's terminal write)", linearTool, map[string]any{"id": "WND-1", "state": "Scoped"}, false},
+		{"Scoped (plan's terminal write)", linearTool, map[string]any{"id": "WND-1", "state": "Scoped"}, false},
 		{"scoped, loosely typed", linearTool, map[string]any{"id": "WND-1", "state": "scoped"}, false},
 		{"Backlog (abandon)", linearTool, map[string]any{"id": "WND-1", "state": "Backlog"}, false},
 		{"backlog type", linearTool, map[string]any{"id": "WND-1", "state": "backlog"}, false},

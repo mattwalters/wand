@@ -78,7 +78,7 @@ type BlessOutcome struct {
 // exactly what landed) and, implicitly, exit 1 for a refusal before
 // anything was written — a proposal file that fails validation, or one
 // whose board has drifted since it was drafted. That "1" is the same
-// "the run never started" meaning scope and dispatch give it, so bless
+// "the run never started" meaning plan and dispatch give it, so bless
 // returns a plain error for it rather than a BlessOutcome, the same way
 // Execute does for propose's own never-started cases.
 const ExitFiled = 0

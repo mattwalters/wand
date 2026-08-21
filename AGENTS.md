@@ -3,19 +3,19 @@
 A Go CLI and TUI, built on Cobra + [fang](https://github.com/charmbracelet/fang)
 and [Bubble Tea v2](https://charm.land/bubbletea/v2). Public, MIT licensed.
 
-`init`, `guard`, `doctor`, `scope`, `run`, `dispatch`, `sweep` and `ui` are
+`init`, `guard`, `doctor`, `plan`, `run`, `dispatch`, `sweep` and `ui` are
 real: `init` bootstraps a Linear team to the covenant (parameterized by a
 checked-in `wand.toml` when present) and installs the guard's hook shim;
 `guard` is the status verdict oracle the shim routes Linear writes through;
 `doctor` diffs the live team against the covenant and reports drift (exit 0
-clean, 1 drift, 2 could not check); `scope` is the first orchestrator — a
+clean, 1 drift, 2 could not check); `plan` is the first orchestrator — a
 cold read-only scout over one Scoping ticket, whose hard-validated handoff
 becomes a plan in the ticket body and argued options in a comment, ending
 at Needs Input; `run` is the core orchestrator — implement → CI → review →
 revise over cold workers, exit 0 converged, 2 handed back, 3 parked, 1
 never started; `dispatch` is the selector over that loop — a thin,
 read-mostly pass that picks the one ticket to run next through `run` or
-`scope` and runs it, one ticket per pass, with `--watch` to poll and spawn
+`plan` and runs it, one ticket per pass, with `--watch` to poll and spawn
 detached children; `sweep` is everything that happens after a run exits —
 a re-review label, an unresolved PR thread on a ready-for-human ticket, or
 a lease whose owner is provably dead, one action per pass; and `ui` is the
@@ -47,13 +47,13 @@ internal/worker/     the harness seam: an Adapter turns a Spec into one headless
 internal/workertest/ the isolation conformance suite every adapter must pass
 internal/journal/    the crash-only run journal, lease and lock: journal before you act,
                      exactly one terminal record, and a dead holder provably dead
-internal/scope/      the research orchestrator: cold scout -> hard handoff validation ->
+internal/plan/       the research orchestrator: cold scout -> hard handoff validation ->
                      optional critic and interview -> four writes in a fixed order
 internal/run/        the core orchestrator behind `wand run`: implement → CI → review →
                      revise, a cold worker per phase, every external write the
                      orchestrator's, exactly one journaled terminal state per run
 internal/dispatch/   the selector behind `wand dispatch`: lock, gc dead leases, rank
-                     and vet Todo and Scoping, run the winner through run/scope
+                     and vet Todo and Scoping, run the winner through run/plan
 internal/sweep/      everything behind `wand sweep`: re-review labels, unresolved PR
                      threads and dead leases, ranked, one write per pass
 internal/tui/        Bubble Tea models — the cockpit itself
@@ -78,7 +78,7 @@ the goldens identical.
 | 0 | `internal/tui/*_test.go` | `Update` transitions. Pure, instant. **Most tests belong here.** |
 | 1 | `tuitest.FinalModel` | Wiring: keys reach the right branch, commands fire |
 | 2 | `tuitest.AssertScreen` | What the user actually sees, as a golden screen |
-| 3 | `e2e/` | TTY detection, alt-screen, signals, exit codes. One pty smoke test — keep it that way — plus the exit-code contracts of the guard hook, doctor, scope and run (plain exec, no pty). |
+| 3 | `e2e/` | TTY detection, alt-screen, signals, exit codes. One pty smoke test — keep it that way — plus the exit-code contracts of the guard hook, doctor, plan and run (plain exec, no pty). |
 
 Off to the side of the tiers sits the **isolation conformance suite**
 (`internal/workertest`): its structural half runs with `make test`, and its

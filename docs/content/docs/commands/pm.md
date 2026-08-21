@@ -6,8 +6,8 @@ summary: Propose a set of tickets from a decided product brief, then bless the s
 
 `pm` is the stage-zero orchestrator: a decided product brief in, a
 hard-validated set of proposed tickets out. It is the sibling of
-[`wand scope`](../scope/) one stage earlier in the lifecycle —
-idea → pm → (bless) → scope → (bless) → run — and it borrows scope's
+[`wand plan`](../plan/) one stage earlier in the lifecycle —
+idea → pm → (bless) → plan → (bless) → run — and it borrows plan's
 central discipline whole: an invalid proposal writes nothing.
 
 The brainstorm itself does not need wand; that happens in any chat. What pm
@@ -43,7 +43,7 @@ wand pm bless <proposal-file> [--team-key KEY]
    relation last, once every ticket in the batch exists.
 
 Nothing here promotes anything. Every ticket lands in Triage; blessing it
-onward to Todo, the same as blessing a scope's Scoped plan, stays a human's
+onward to Todo, the same as blessing a Scoped plan, stays a human's
 act. That is also why `wand pm bless` is a CLI command at all, unlike the
 promotion a human makes in [`wand ui`](../ui/): filing into Triage is a
 status an agent may already set on its own (`wand file` does exactly this
@@ -68,7 +68,7 @@ proposal file or Linear:
 - titles are unique within the set — `blocked_by` resolves by title, and
   two tickets sharing one could not be told apart.
 
-A misspelled field is a loud failure, the same as in `wand scope`'s
+A misspelled field is a loud failure, the same as in `wand plan`'s
 handoff.
 
 ### When the scout says the brief is wrong
@@ -157,7 +157,7 @@ and nothing is silently missing.
 
 ## The journal
 
-Both commands are journaled runs, the same discipline `wand scope` and
+Both commands are journaled runs, the same discipline `wand plan` and
 `wand run` follow: every phase recorded before it happens, exactly one
 terminal record. Because pm's input is a brief rather than an existing
 Linear ticket, the journal names a synthetic identifier derived from the
@@ -194,5 +194,5 @@ wand pm bless ~/.local/state/wand/runs/pm-4f2a9c1e0b7d-20260820T090000Z/proposal
 
 ## See also
 
-[`wand scope`](../scope/) is the next stage: once a human promotes one of
-pm's filed tickets into Scoping, scope researches it into a plan.
+[`wand plan`](../plan/) is the next stage: once a human promotes one of
+pm's filed tickets into Scoping, plan researches it into a plan.

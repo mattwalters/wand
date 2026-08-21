@@ -24,7 +24,7 @@ import (
 //	<!-- /wand:plan -->
 //
 // What the fence governs is what a machine writes REPEATEDLY — the plan a
-// scope regenerates on every run, whose previous copy nobody wants kept. A
+// plan run regenerates on every run, whose previous copy nobody wants kept. A
 // one-off write (a description correction) uses an anchored patch instead:
 // the two are the same caution against different risks — a repeated write
 // needs a region it owns outright, a one-off write needs an anchor that

@@ -10,19 +10,19 @@ import (
 	"github.com/mattwalters/wand/internal/covenant"
 	"github.com/mattwalters/wand/internal/journal"
 	"github.com/mattwalters/wand/internal/linear"
+	"github.com/mattwalters/wand/internal/plan"
 	"github.com/mattwalters/wand/internal/run"
-	"github.com/mattwalters/wand/internal/scope"
 	"github.com/mattwalters/wand/internal/worker"
 )
 
 // Board is the slice of the Linear client dispatch reads through: enough to
 // read Todo and Scoping itself, plus everything run.Execute and
-// scope.Execute need once a winner is chosen — the same client value is
+// plan.Execute need once a winner is chosen — the same client value is
 // handed to both, and Go's structural typing is what lets one interface
 // satisfy three.
 type Board interface {
 	run.Board
-	scope.Board
+	plan.Board
 	TeamIssuesByState(ctx context.Context, teamKey, stateName string) ([]linear.Issue, error)
 }
 
@@ -35,14 +35,14 @@ type Runs interface {
 }
 
 // Workers spawns one cold worker and collects its handoff. Both run.Workers
-// and scope.Workers have this exact shape, so one value passed to each
+// and plan.Workers have this exact shape, so one value passed to each
 // Deps satisfies both.
 type Workers interface {
 	Run(ctx context.Context, spec worker.Spec) (worker.Result, error)
 }
 
 // Deps is everything one dispatch pass acts through: a Board and Runs to
-// read, plus every interface run.Execute and scope.Execute need to run the
+// read, plus every interface run.Execute and plan.Execute need to run the
 // winner's loop — dispatch does not reimplement either orchestrator, it
 // wires the same Deps they already take.
 type Deps struct {
@@ -53,7 +53,7 @@ type Deps struct {
 	Git     run.Git
 	Hub     run.Hub
 	Shell   run.Shell
-	Tree    scope.Tree
+	Tree    plan.Tree
 	Workers Workers
 
 	TeamKey string

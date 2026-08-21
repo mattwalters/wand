@@ -118,7 +118,7 @@ ships with the first orchestrator that has a phase graph to re-enter
 owns *what comes next*, and a verb shipped before the second half exists
 would only be able to refuse.
 
-**Phase 5 — the first orchestrator (WAND-9).** `wand scope`: a cold scout
+**Phase 5 — the first orchestrator (WAND-9).** `wand plan`: a cold scout
 researches one blessed ticket, a validated handoff becomes a plan in the
 ticket body and argued options in a comment, ending at Needs Input. Lowest
 risk (read-only worker, no branch, no CI), yet it exercises every new

@@ -23,7 +23,7 @@ func newPMCmd() *cobra.Command {
 			"should exist: titles, bodies stating the goal and what is still open,\n" +
 			"project assignments (including new projects), and blocking order between\n" +
 			"the tickets it proposes.\n\n" +
-			"The proposal is validated exactly as strictly as wand scope validates a\n" +
+			"The proposal is validated exactly as strictly as wand plan validates a\n" +
 			"plan, then written to a file under this run's journal directory — as JSON\n" +
 			"and as a human-readable rendering beside it. Nothing is written to\n" +
 			"Linear: read the file, edit it if you want to, then run\n" +
@@ -34,7 +34,7 @@ func newPMCmd() *cobra.Command {
 			"Requires LINEAR_API_KEY, and the harness on PATH. Run it inside a repo.",
 		Args: cobra.MaximumNArgs(1),
 		// Run, not RunE: the exit code is the contract, the same reason
-		// scope's own command exits itself rather than returning to fang.
+		// plan's own command exits itself rather than returning to fang.
 		Run: func(cmd *cobra.Command, args []string) {
 			if code := runPM(cmd, args, teamKey, harness, model, effort); code != pm.ExitProposed {
 				os.Exit(code)

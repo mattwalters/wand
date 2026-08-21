@@ -11,18 +11,18 @@ import (
 	"testing"
 )
 
-// TestScopeExitContract pins the never-started half of scope's exit-code
+// TestPlanExitContract pins the never-started half of plan's exit-code
 // contract on the compiled binary: 1, and only 1, for everything that fails
-// before a run exists. A scheduler reads 0/2/3 as outcomes of a scope that
-// happened — scoped, handed back, parked — so a missing API key or a
+// before a run exists. A scheduler reads 0/2/3 as outcomes of a plan run that
+// happened — planned, handed back, parked — so a missing API key or a
 // terminal-less interview must not land in that range and be counted as a
-// scope's verdict. Those are the codes only this tier can reach, because
+// plan run's verdict. Those are the codes only this tier can reach, because
 // the command exits itself rather than returning an error to fang.
 //
 // The outcome codes need workers and a live board, and are covered
-// in-process against fakes in internal/scope. Like the guard and doctor
+// in-process against fakes in internal/plan. Like the guard and doctor
 // tests, this is a plain exec test — no pty, no network.
-func TestScopeExitContract(t *testing.T) {
+func TestPlanExitContract(t *testing.T) {
 	bin := buildWand(t)
 
 	// The ambient environment minus any real Linear credential, so a
@@ -36,7 +36,7 @@ func TestScopeExitContract(t *testing.T) {
 
 	run := func(t *testing.T, stdin string, args ...string) (code int, stderr string) {
 		t.Helper()
-		cmd := exec.Command(bin, append([]string{"scope"}, args...)...)
+		cmd := exec.Command(bin, append([]string{"plan"}, args...)...)
 		cmd.Dir = t.TempDir()
 		cmd.Env = env
 		cmd.Stdin = strings.NewReader(stdin)
@@ -50,7 +50,7 @@ func TestScopeExitContract(t *testing.T) {
 		case errors.As(err, &exit):
 			return exit.ExitCode(), errBuf.String()
 		default:
-			t.Fatalf("running wand scope: %v", err)
+			t.Fatalf("running wand plan: %v", err)
 			return 0, ""
 		}
 	}

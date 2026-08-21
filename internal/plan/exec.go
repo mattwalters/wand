@@ -1,4 +1,4 @@
-package scope
+package plan
 
 import (
 	"bytes"

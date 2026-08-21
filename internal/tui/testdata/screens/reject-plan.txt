@@ -4,8 +4,8 @@
     Scoped → Backlog
 
     Backlog is the pool. The reason is posted as a comment before the status
-    moves, because a rejected plan with no reason on it leaves the next scope of
-    this ticket guessing at what was wrong.
+    moves, because a rejected plan with no reason on it leaves the next plan run
+    over this ticket guessing at what was wrong.
 
     reason       wrong
 

@@ -1,4 +1,4 @@
-// Package scope is the research orchestrator: one process turning one
+// Package plan is the research orchestrator: one process turning one
 // blessed-for-research ticket into a plan a human can bless for building.
 //
 // It is the lowest-risk orchestrator wand has — a read-only scout, no
@@ -10,10 +10,10 @@
 // The rules, and what each is against:
 //
 //   - **Scoping or nothing.** Research is blessed the same way building
-//     is, by a human moving the ticket. A scope of an unblessed ticket is
-//     an agent choosing what the team works on next.
+//     is, by a human moving the ticket. A plan run over an unblessed
+//     ticket is an agent choosing what the team works on next.
 //
-//   - **An invalid handoff writes nothing.** A scope is read as a
+//   - **An invalid handoff writes nothing.** A plan is read as a
 //     decision: a human blesses the plan in the body on the strength of
 //     the argument in the comment, and nobody re-derives afterwards
 //     whether the argument held together. A draft missing its trade-offs
@@ -24,21 +24,22 @@
 //     them.** Plan into the description's fenced region, then the options
 //     comment, then the estimate, and Scoped last. Each write is
 //     something the next one refers to; the status move says "there is a
-//     scope here to read", and it is made only once there is.
+//     plan here to read", and it is made only once there is.
 //
 //     The comment comes before the estimate for the same reason: a ticket
 //     carrying the argument for an estimate it does not have is
 //     recoverable, and a ticket carrying a number nothing explains is a
 //     number nobody can weigh.
 //
-//   - **A re-scope preserves what it replaces.** The plan region is
-//     rewritten whole on every scope (render.go), so a plan a human read
-//     and blessed would otherwise vanish the moment a later scope ran,
-//     surviving nowhere but a closed PR. Before the region is overwritten,
-//     whatever is already there is posted as a dated, superseded comment —
-//     preservePriorPlan, ahead of UpsertSection in [scoping.write] the same
-//     way the options comment is ahead of the estimate. Re-scoping itself
-//     stays legitimate; only the silent loss was the defect.
+//   - **A re-plan preserves what it replaces.** The plan region is
+//     rewritten whole on every plan run (render.go), so a plan a human
+//     read and blessed would otherwise vanish the moment a later plan run
+//     happened, surviving nowhere but a closed PR. Before the region is
+//     overwritten, whatever is already there is posted as a dated,
+//     superseded comment — preservePriorPlan, ahead of UpsertSection in
+//     [planning.write] the same way the options comment is ahead of the
+//     estimate. Re-planning itself stays legitimate; only the silent loss
+//     was the defect.
 //
 //   - **Every extra pass is a fresh, cold process.** The critic attacks
 //     the draft, the reviser rewrites it, and neither is the session that
@@ -46,17 +47,17 @@
 //     it, and what comes back is the same plan with the objections
 //     explained away.
 //
-//   - **One scope per ticket at a time.** `wand run` claims its ticket out
-//     of Todo, so the board is its mutex; a scope's ticket sits in Scoping
-//     from the first read to the last write, so it has no such move and
-//     takes an explicit per-ticket lock instead (journal.Store.LockTicket).
-//     Two scopes of one ticket write two plans into one fenced region and
-//     argue two recommendations at a human who cannot tell which the
-//     estimate belongs to.
+//   - **One plan run per ticket at a time.** `wand run` claims its ticket
+//     out of Todo, so the board is its mutex; a plan run's ticket sits in
+//     Scoping from the first read to the last write, so it has no such
+//     move and takes an explicit per-ticket lock instead
+//     (journal.Store.LockTicket). Two plan runs over one ticket write two
+//     plans into one fenced region and argue two recommendations at a
+//     human who cannot tell which the estimate belongs to.
 //
 // Parking writes only the journal, deliberately: a park has to be
 // reachable when Linear itself is what failed.
-package scope
+package plan
 
 import (
 	"context"
@@ -75,7 +76,7 @@ import (
 	"github.com/mattwalters/wand/internal/worker"
 )
 
-// Outcome is how the scope ended, for the caller and the scheduler.
+// Outcome is how the plan run ended, for the caller and the scheduler.
 type Outcome struct {
 	// Kind reuses the journal's vocabulary: converged, handed_back, parked.
 	Kind   journal.Outcome
@@ -88,7 +89,7 @@ type Outcome struct {
 // a run existed (bad flags, a ticket outside Scoping, no journal), which is
 // fang's generic failure exit.
 const (
-	// ExitScoped: the scope landed and the ticket is on a human's desk.
+	// ExitScoped: the plan landed and the ticket is on a human's desk.
 	ExitScoped = 0
 	// ExitHandedBack: the scout found the ticket's premise wrong; its
 	// account is on the ticket and no plan was written.
@@ -132,16 +133,22 @@ func Execute(ctx context.Context, d Deps, store *journal.Store, identifier strin
 	}
 
 	// The lock before the journal: a refusal here must cost nothing, not
-	// leave a run directory behind for a scope that never began.
+	// leave a run directory behind for a plan run that never began.
 	lock, err := store.LockTicket(issue.Identifier)
 	if err != nil {
 		return Outcome{}, err
 	}
 	defer lock.Release()
 
+	// The journal's Verb keeps writing "plan" only — a journal run predates
+	// this rename and may still carry "scope", but nothing here reads that
+	// back for its own sake; the cockpit and dispatch.LanesUsed are the
+	// readers, and both take "scope" as a synonym for "plan" rather than
+	// this package migrating 60+ existing local runs for a value nothing
+	// else needs.
 	r, err := store.Create(journal.Meta{
 		Ticket:  issue.Identifier,
-		Verb:    "scope",
+		Verb:    "plan",
 		Repo:    d.Repo,
 		Harness: d.Harness,
 	})
@@ -149,38 +156,38 @@ func Execute(ctx context.Context, d Deps, store *journal.Store, identifier strin
 		return Outcome{}, err
 	}
 	defer r.Close()
-	fmt.Fprintf(d.Out, "scoping %s (%s), journaling to %s\n", issue.Identifier, issue.State.Name, r.Dir())
+	fmt.Fprintf(d.Out, "planning %s (%s), journaling to %s\n", issue.Identifier, issue.State.Name, r.Dir())
 
-	s := &scoping{d: d, r: r, issue: issue, prov: Provenance{RunID: r.ID(), Harness: d.Harness}}
+	s := &planning{d: d, r: r, issue: issue, prov: Provenance{RunID: r.ID(), Harness: d.Harness}}
 	out := s.run(ctx)
 	out.RunID = r.ID()
 	fmt.Fprintf(d.Out, "run %s ended: %s — %s\n", r.ID(), out.Kind, out.Reason)
 	return out, nil
 }
 
-// vet refuses the tickets a scope may not take. It is deliberately not
+// vet refuses the tickets a plan run may not take. It is deliberately not
 // queue.Vet: that function answers "may an agent start building this?",
 // and the two questions differ on blockers. A ticket blocked by another is
-// exactly the ticket worth scoping early — the blocker stops the building,
+// exactly the ticket worth planning early — the blocker stops the building,
 // not the reading — so only the human-only label refuses here, and it
 // refuses absolutely.
 func vet(issue linear.Issue, scoping string) error {
 	if !strings.EqualFold(issue.State.Name, scoping) {
 		return fmt.Errorf(
-			"%s is in %q, not %q: scope researches blessed work, and blessing research is a human act — an issue outside %q is not yours to scope",
+			"%s is in %q, not %q: wand plan researches blessed work, and blessing research is a human act — an issue outside %q is not yours to plan",
 			issue.Identifier, issue.State.Name, scoping, scoping)
 	}
 	if reason := Vet(issue); reason != "" {
-		return fmt.Errorf("%s may not be scoped: %s", issue.Identifier, reason)
+		return fmt.Errorf("%s may not be planned: %s", issue.Identifier, reason)
 	}
 	return nil
 }
 
-// Vet returns why an issue in Scoping may not be scoped, or "" when it may.
+// Vet returns why an issue in Scoping may not be planned, or "" when it may.
 // Exported so `wand dispatch` can select Scoping candidates the same way
 // `wand queue` selects Todo ones: ranked, then vetted, skips never silent.
 // Deliberately not queue.Vet, for the same reason [vet] is not: a ticket
-// blocked by another is exactly the ticket worth scoping early, so only the
+// blocked by another is exactly the ticket worth planning early, so only the
 // human-only label refuses here.
 func Vet(issue linear.Issue) string {
 	for _, label := range issue.Labels {
@@ -188,9 +195,9 @@ func Vet(issue linear.Issue) string {
 			return "labeled " + queue.HumanOnlyLabel
 		}
 	}
-	// A scope that already parked is not worth re-buying blindly: the
+	// A plan run that already parked is not worth re-buying blindly: the
 	// scout costs a full cold research pass, and the reference journal has
-	// the same ticket scoped and parked three times over for one defect.
+	// the same ticket planned and parked three times over for one defect.
 	// Clearing the label is how a person says it is worth another.
 	for _, label := range issue.Labels {
 		if strings.EqualFold(label, queue.ParkedLabel) {
@@ -200,9 +207,9 @@ func Vet(issue linear.Issue) string {
 	return ""
 }
 
-// scoping is one run's working state. Methods that can end the run return
+// planning is one run's working state. Methods that can end the run return
 // *Outcome; nil means carry on.
-type scoping struct {
+type planning struct {
 	d     Deps
 	r     *journal.Run
 	issue linear.Issue
@@ -214,10 +221,10 @@ type scoping struct {
 
 // phaseDetail is what EndPhase journals about a worker, bounded so the
 // journal stays readable. Cross-harness comparison data lives here for
-// free — this struct, journaled once per phase, is the scope-verb half of
+// free — this struct, journaled once per phase, is the plan-verb half of
 // the stable ledger schema described in the package doc of
 // internal/journal. It carries the same operational fields as run's own
-// phaseDetail (internal/run/run.go) except DiffStat: a scope has no
+// phaseDetail (internal/run/run.go) except DiffStat: a plan run has no
 // worktree, so there is nothing for git diff to summarize.
 //
 // A metric a harness or this phase cannot report is omitted, never
@@ -266,7 +273,7 @@ func tailOf(s string) string {
 	return "[… clipped …]\n" + s[len(s)-journalTail:]
 }
 
-func (s *scoping) run(ctx context.Context) Outcome {
+func (s *planning) run(ctx context.Context) Outcome {
 	comments, err := s.d.Board.IssueComments(ctx, s.issue.ID)
 	if err != nil {
 		return *s.park(ctx, fmt.Sprintf("could not read the ticket's comments: %v", err))
@@ -292,7 +299,7 @@ func (s *scoping) run(ctx context.Context) Outcome {
 	}
 
 	// --- the critic, when the covenant asks for one --------------------
-	if s.d.Cov.Toggles.ScopeCritic {
+	if s.d.Cov.Toggles.PlanCritic {
 		revised, out := s.critique(ctx, draft)
 		if out != nil {
 			return *out
@@ -303,7 +310,7 @@ func (s *scoping) run(ctx context.Context) Outcome {
 		// because the critic showed the premise was wrong — and that
 		// verdict is as terminal coming from the reviser as from the
 		// scout. Carrying such a draft into the interview would grill a
-		// human over a scope with no understanding, no approaches and no
+		// human over a plan with no understanding, no approaches and no
 		// recommendation left in it, then spend another revision round on
 		// whatever they said to the blanks.
 		if out := s.wrongPremise(ctx, draft); out != nil {
@@ -322,7 +329,7 @@ func (s *scoping) run(ctx context.Context) Outcome {
 
 	// The same check after the last stage that can replace the draft: a
 	// human can be the one who says the thing that makes the premise
-	// wrong, and writing a plan over that would write the scope the last
+	// wrong, and writing a plan over that would write the plan the last
 	// two stages just argued out of existence.
 	if out := s.wrongPremise(ctx, draft); out != nil {
 		return *out
@@ -335,7 +342,7 @@ func (s *scoping) run(ctx context.Context) Outcome {
 // the description and no estimate is set: the account is the whole
 // deliverable, and a plan for work that should not happen is worse than no
 // plan at all.
-func (s *scoping) wrongPremise(ctx context.Context, draft Draft) *Outcome {
+func (s *planning) wrongPremise(ctx context.Context, draft Draft) *Outcome {
 	if draft.Premise != PremiseWrong {
 		return nil
 	}
@@ -345,9 +352,9 @@ func (s *scoping) wrongPremise(ctx context.Context, draft Draft) *Outcome {
 }
 
 // draft spawns the scout and validates what it wrote. Validation failure
-// parks: a scope nobody validated is not a scope, and there is nothing here
+// parks: a plan nobody validated is not a plan, and there is nothing here
 // to hand a human but a broken handoff.
-func (s *scoping) draft(ctx context.Context) (Draft, *Outcome) {
+func (s *planning) draft(ctx context.Context) (Draft, *Outcome) {
 	res, out := s.work(ctx, "scout", 1, scoutRules(), scoutPrompt(s.ticketText, s.d.Cov))
 	if out != nil {
 		return Draft{}, out
@@ -365,7 +372,7 @@ func (s *scoping) draft(ctx context.Context) (Draft, *Outcome) {
 // (worker.collect deletes it right after reading), so this is the only
 // remaining chance to keep the rejected handoff recoverable rather than a
 // total loss.
-func (s *scoping) parse(ctx context.Context, raw json.RawMessage, phase string) (Draft, *Outcome) {
+func (s *planning) parse(ctx context.Context, raw json.RawMessage, phase string) (Draft, *Outcome) {
 	draft, err := ParseDraft(raw, s.d.Cov)
 	if err != nil {
 		// Persist before parking: the reason names what was wrong, but only
@@ -386,7 +393,7 @@ func (s *scoping) parse(ctx context.Context, raw json.RawMessage, phase string) 
 }
 
 // critique runs the cold critic and, if anything stuck, a cold reviser.
-func (s *scoping) critique(ctx context.Context, draft Draft) (Draft, *Outcome) {
+func (s *planning) critique(ctx context.Context, draft Draft) (Draft, *Outcome) {
 	rendered := renderDraft(draft, s.d.Cov)
 	res, out := s.work(ctx, "critic", 1, criticRules(), criticPrompt(s.ticketText, rendered))
 	if out != nil {
@@ -416,7 +423,7 @@ func (s *scoping) critique(ctx context.Context, draft Draft) (Draft, *Outcome) {
 // the draft as it stands, and spending a model call to be told so would
 // only give a session the chance to talk itself into changes nobody asked
 // for.
-func (s *scoping) interview(ctx context.Context, draft Draft) (Draft, *Outcome) {
+func (s *planning) interview(ctx context.Context, draft Draft) (Draft, *Outcome) {
 	s.prov.Interview = true
 	answers, err := Interview(s.d.In, s.d.Out, Questions(draft))
 	if err != nil {
@@ -432,9 +439,9 @@ func (s *scoping) interview(ctx context.Context, draft Draft) (Draft, *Outcome) 
 
 // revise spawns a fresh session over the draft and whatever was said
 // against it. The result replaces the draft whole and is validated
-// identically: a revision is not allowed to be a weaker scope than the one
+// identically: a revision is not allowed to be a weaker plan than the one
 // it replaces.
-func (s *scoping) revise(ctx context.Context, draft Draft, round int, objections, source string) (Draft, *Outcome) {
+func (s *planning) revise(ctx context.Context, draft Draft, round int, objections, source string) (Draft, *Outcome) {
 	prompt := revisePrompt(s.ticketText, renderDraft(draft, s.d.Cov), objections, s.d.Cov, source)
 	res, out := s.work(ctx, "revise", round, scoutRules(), prompt)
 	if out != nil {
@@ -443,7 +450,7 @@ func (s *scoping) revise(ctx context.Context, draft Draft, round int, objections
 	revised, out := s.parse(ctx, res.Handoff, "reviser")
 	if out != nil {
 		// Falling back to the draft would silently discard what the critic
-		// or the human just said, and write a scope they had already
+		// or the human just said, and write a plan they had already
 		// argued with.
 		return draft, out
 	}
@@ -455,7 +462,7 @@ func (s *scoping) revise(ctx context.Context, draft Draft, round int, objections
 // naming exactly what did land: the ticket is still in Scoping, so nothing
 // is advertised that is not there, and a human reading the journal knows
 // what to expect on the ticket.
-func (s *scoping) write(ctx context.Context, draft Draft) Outcome {
+func (s *planning) write(ctx context.Context, draft Draft) Outcome {
 	// Resolve the status first. It is a pure read, and it is the one thing
 	// that can refuse for reasons nothing here can fix — a drifted board,
 	// or the guard — so it happens while nothing has been written. Scoped,
@@ -492,7 +499,7 @@ func (s *scoping) write(ctx context.Context, draft Draft) Outcome {
 	}
 
 	if err := s.d.Board.UpdateIssue(ctx, s.issue.ID, linear.IssueUpdate{StateID: stateID}); err != nil {
-		return *s.park(ctx, fmt.Sprintf("every deliverable is on the ticket, but the move to %s failed: %v — the scope is readable, it just is not on anyone's desk", s.d.Cov.StatusName("scoped"), err))
+		return *s.park(ctx, fmt.Sprintf("every deliverable is on the ticket, but the move to %s failed: %v — the plan is readable, it just is not on anyone's desk", s.d.Cov.StatusName("scoped"), err))
 	}
 
 	reason := fmt.Sprintf("scoped: %s recommended, plan and options on the ticket, %s for a human to judge",
@@ -504,16 +511,16 @@ func (s *scoping) write(ctx context.Context, draft Draft) Outcome {
 }
 
 // preservePriorPlan posts the description's existing plan region as a dated,
-// superseded comment before the write that is about to replace it. A scope
-// of an already-scoped ticket is a legitimate, deliberate human act — that
-// is what re-opens Scoping — but the plan region is rewritten whole on
-// every scope, so without this step the plan a human read and blessed
+// superseded comment before the write that is about to replace it. A plan
+// run over an already-scoped ticket is a legitimate, deliberate human act —
+// that is what re-opens Scoping — but the plan region is rewritten whole on
+// every plan run, so without this step the plan a human read and blessed
 // vanishes the moment the new one lands, leaving no trace on the ticket
 // that it ever existed. Called before [Board.UpsertSection], the same
-// comment-before-write discipline [scoping.write] uses everywhere else:
+// comment-before-write discipline [planning.write] uses everywhere else:
 // what could be destroyed is made safe before the write that would destroy
 // it runs. A ticket with no prior plan posts nothing.
-func (s *scoping) preservePriorPlan(ctx context.Context) *Outcome {
+func (s *planning) preservePriorPlan(ctx context.Context) *Outcome {
 	prior, ok, err := linear.ReadSection(s.issue.Description, PlanSectionID)
 	if err != nil {
 		return s.park(ctx, fmt.Sprintf("could not read the description's existing plan region: %v", err))
@@ -539,7 +546,7 @@ func (s *scoping) preservePriorPlan(ctx context.Context) *Outcome {
 // times at the same round. A scout costs a whole model call and produces
 // nothing until it hands off, so a provider error is the most expensive
 // possible thing to treat as a verdict.
-func (s *scoping) work(ctx context.Context, phase string, round int, rules []string, prompt string) (worker.Result, *Outcome) {
+func (s *planning) work(ctx context.Context, phase string, round int, rules []string, prompt string) (worker.Result, *Outcome) {
 	for attempt := 0; ; attempt++ {
 		if attempt == 0 {
 			fmt.Fprintf(s.d.Out, "phase %s: spawning a cold worker (%s)\n", phase, s.d.Harness)
@@ -614,14 +621,14 @@ func (s *scoping) work(ctx context.Context, phase string, round int, rules []str
 // "was this failure about the work"; everything here is about whether
 // retrying is safe in this repository.
 //
-// The safety check is scope's own: a scout is told to read, not write, and
+// The safety check is the plan run's own: a scout is told to read, not write, and
 // s.d.Repo is usually a person's own checkout rather than a worktree this
 // run owns. If a dying scout left a change behind, requireUntouched is
 // going to park and hand that checkout back to its owner — so respawning a
 // second scout into it first would be writing more into a directory
 // somebody is about to be asked to look at. A status git cannot read counts
 // as changed: an unknown checkout is not an untouched one.
-func (s *scoping) mayRetry(ctx context.Context, phase string, round, attempt int, res worker.Result, err error) bool {
+func (s *planning) mayRetry(ctx context.Context, phase string, round, attempt int, res worker.Result, err error) bool {
 	if !worker.Retryable(res, err, ctx.Err() != nil) {
 		return false
 	}
@@ -662,7 +669,7 @@ func (s *scoping) mayRetry(ctx context.Context, phase string, round, attempt int
 // keeps looking alive to a lease reader instead of going stale the moment it
 // passes its first minute. A renewal failure is narrated, never fatal — the
 // worker is mid-flight, and a lease write hiccup is not a reason to kill it.
-func (s *scoping) heartbeat(phase string, round int) func() {
+func (s *planning) heartbeat(phase string, round int) func() {
 	return func() {
 		if err := s.r.Heartbeat(); err != nil {
 			fmt.Fprintf(s.d.Out, "phase %s round %d: heartbeat renewal failed: %v\n", phase, round, err)
@@ -673,13 +680,13 @@ func (s *scoping) heartbeat(phase string, round int) func() {
 // requireUntouched parks if a worker changed the repository it was told to
 // read.
 //
-// A scope has no worktree of its own: the scout reads the checkout the
+// A plan run has no worktree of its own: the scout reads the checkout the
 // command was run from, which is usually a person's. So a stray edit is not
 // a mess in a directory this run owns and can throw away — it is a change
 // in somebody's working copy that they did not make and will not expect.
 // Parking is what puts it in front of them, and it is why the handoff is
 // journaled before this runs: the research survives the park.
-func (s *scoping) requireUntouched(ctx context.Context, phase string) *Outcome {
+func (s *planning) requireUntouched(ctx context.Context, phase string) *Outcome {
 	after, err := s.d.Tree.Status(ctx, s.d.Repo)
 	if err != nil {
 		return s.park(ctx, fmt.Sprintf("could not check the repository after the %s ran: %v", phase, err))
@@ -695,7 +702,7 @@ func (s *scoping) requireUntouched(ctx context.Context, phase string) *Outcome {
 // handback ends the run on a human's desk, through the verb that encodes
 // comment-before-status. If the writes fail, the run parks instead,
 // carrying both what it wanted to say and why it could not.
-func (s *scoping) handback(ctx context.Context, comment, reason string) *Outcome {
+func (s *planning) handback(ctx context.Context, comment, reason string) *Outcome {
 	if _, err := verbs.Handback(ctx, s.d.Board, s.d.Cov, s.issue.Identifier, comment); err != nil {
 		return s.park(ctx, fmt.Sprintf("hand-back failed: %v (the run was handing back because: %s)", err, reason))
 	}
@@ -718,7 +725,7 @@ func (s *scoping) handback(ctx context.Context, comment, reason string) *Outcome
 // sites here are. [verbs.ReportPark] then puts the same sentence on the
 // ticket, best-effort — it cannot fail this function and cannot re-enter
 // it.
-func (s *scoping) park(ctx context.Context, reason string) *Outcome {
+func (s *planning) park(ctx context.Context, reason string) *Outcome {
 	if ctx.Err() != nil {
 		reason = context.Cause(ctx).Error()
 	}
@@ -731,7 +738,7 @@ func (s *scoping) park(ctx context.Context, reason string) *Outcome {
 
 // note journals something worth reading later; failing to write one is
 // worth a line, never the run.
-func (s *scoping) note(message string, detail any) {
+func (s *planning) note(message string, detail any) {
 	if err := s.r.Note(message, detail); err != nil {
 		fmt.Fprintf(s.d.Out, "journal: %v\n", err)
 	}

@@ -47,7 +47,7 @@ type Deps struct {
 	// TeamKey is the Linear team whose board the scout reads.
 	TeamKey string
 	// Repo is the absolute path of the repository the run's journal is
-	// opened against — pm has no worktree, the same as scope, but the
+	// opened against — pm has no worktree, the same as plan, but the
 	// journal still needs a repository to name.
 	Repo string
 	// Harness names the worker adapter, for the journal and the rendered
@@ -81,8 +81,8 @@ func (d Deps) validate() error {
 }
 
 // AdapterWorkers is Workers over one harness adapter — the same thin
-// wrapper scope.AdapterWorkers is, kept as its own copy rather than shared
-// so pm does not import scope for a five-line type.
+// wrapper plan.AdapterWorkers is, kept as its own copy rather than shared
+// so pm does not import plan for a five-line type.
 type AdapterWorkers struct {
 	Adapter worker.Adapter
 }

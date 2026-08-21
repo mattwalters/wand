@@ -1,6 +1,6 @@
 // Package sweep is everything that happens after a run exits.
 //
-// wand run and wand scope each end in exactly one terminal state, and each
+// wand run and wand plan each end in exactly one terminal state, and each
 // terminal state is where their own responsibility stops. Three things can
 // still be true of a ticket after that:
 //

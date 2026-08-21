@@ -8,7 +8,7 @@ machinery — its covenant, and the blessing path work travels along.
 > rules; `queue` and `ticket` are the read layer; the lifecycle verbs
 > (`claim`, `handback`, `abandon`, `file`) are the write layer; `doctor`
 > reports a team's drift from the covenant; `ui` is the cockpit, where a
-> human blesses work; `scope` is the first orchestrator — a cold scout that
+> human blesses work; `plan` is the first orchestrator — a cold scout that
 > turns one blessed-for-research ticket into a plan a human can bless for
 > building; `run` drives one blessed ticket through the implement → CI →
 > review → revise loop; `dispatch` is the selector over that loop — it
@@ -60,7 +60,7 @@ wand claim WND-3            # take a blessed issue: In Progress + assignee, firs
 wand handback WND-3 -m "…"  # park it on a human: question first, Needs Input second
 wand abandon WND-3 -m "…"   # return it to Backlog with the evidence that undid it
 wand file "…" --team-key WND  # file a finding into Triage, duplicates searched first
-wand scope WND-3            # research one Scoping ticket into a plan, ending at Scoped
+wand plan WND-3             # research one Scoping ticket into a plan, ending at Scoped
 wand run WND-3              # own one blessed ticket: implement → CI → review → revise
 wand dispatch --team-key WND  # pick the one ticket to run next, and run it
 wand sweep --team-key WND   # act on one thing left over after a run ended
@@ -102,10 +102,10 @@ deliberately absent: a Backlog ticket is not waiting on you, it is the pool,
 and browsing a pool is Linear's job.
 
 **Scoped is where a plan gets judged.** A ticket lands there with the plan
-`wand scope` wrote in its description, and opening the row shows that plan in
+`wand plan` wrote in its description, and opening the row shows that plan in
 place — nothing else in the description, and no comment. Judging it has two
 answers: bless it into Todo, the same way Triage does, or send it back to
-Backlog with the reasoning as a comment, so the next scope of the ticket
+Backlog with the reasoning as a comment, so the next plan run over the ticket
 starts from why the last plan did not land instead of guessing.
 
 **Blessing lives here.** Promoting a ticket to Todo or Scoping is the
@@ -193,9 +193,9 @@ those are machine config, not covenant. The test for the split: if two
 clones could legitimately differ, it is config; if a difference means two
 different processes, it is covenant.
 
-## The scope orchestrator
+## The plan orchestrator
 
-`wand scope WND-3` sends a cold, read-only scout over the repository to
+`wand plan WND-3` sends a cold, read-only scout over the repository to
 research one ticket, validates what it hands back, and writes the result:
 the plan into a marker-fenced region of the description, the approaches and
 their trade-offs as a comment, the estimate, then Scoped. Promoting the
@@ -209,7 +209,7 @@ test story. Structural defects are fatal, cosmetic ones are not — a
 citation missing its line number is dropped and named in the plan rather
 than costing the whole research pass, because discarding a scout's work
 over one malformed field is a loss out of all proportion to the mistake.
-Half a scope reads like a whole one, and a human blesses it on the strength
+Half a plan reads like a whole one, and a human blesses it on the strength
 of the argument beside it. And **each deliverable lands before the
 transition that advertises it** — Scoped says "there is a finished plan
 here to judge", so it is written last, and anything that fails before it
@@ -223,10 +223,10 @@ and a run whose worker touched the tree parks with the change left in front
 of you. `--interactive` grills you over the draft first — questions ordered
 worst-consequence first, each quoting the draft — and hands your answers to
 a second, fresh session, because a session that has just argued for an
-approach defends it. `toggles.scope_critic` adds a cold critic ahead of
+approach defends it. `toggles.plan_critic` adds a cold critic ahead of
 that.
 
-Exit codes are a scheduler contract: `0` scoped, `2` handed back (the scout
+Exit codes are a scheduler contract: `0` planned, `2` handed back (the scout
 judged the ticket's premise wrong), `3` parked, `1` never started.
 
 ## The doctor

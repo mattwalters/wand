@@ -12,8 +12,8 @@ import (
 )
 
 // TestPMExitContract pins the never-started half of pm's exit-code
-// contract on the compiled binary, the same way scope_exit_test.go pins
-// scope's: 1, and only 1, for everything that fails before a run exists. A
+// contract on the compiled binary, the same way plan_exit_test.go pins
+// plan's: 1, and only 1, for everything that fails before a run exists. A
 // scheduler reads 0/2/3 as outcomes of a propose that happened, so a
 // missing API key must not land in that range and be counted as one.
 func TestPMExitContract(t *testing.T) {

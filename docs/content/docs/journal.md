@@ -4,7 +4,7 @@ weight: 15
 summary: The append-only ledger every run writes, and the phase-metrics schema readers can build against.
 ---
 
-Every `wand run` and `wand scope` writes an append-only JSON Lines journal
+Every `wand run` and `wand plan` writes an append-only JSON Lines journal
 under the run's directory — one record per line, synced as it is written.
 It exists first as the crash-only record of what a run did: an orchestrator
 that dies mid-phase leaves a journal a resume can read, never a ticket
@@ -35,8 +35,8 @@ ticket has yet.
 Every `journal.Record` carries `kind`, `seq`, `at`, `phase` and `round` (see
 `internal/journal`'s package doc for the record stream's own guarantees).
 On a `phase.ended` record, `detail` is a JSON object shaped like this
-(`run`-verb fields on the left; `scope` carries every field except
-`diff_stat`, since a scope has no worktree):
+(`run`-verb fields on the left; `plan` carries every field except
+`diff_stat`, since a plan run has no worktree):
 
 | field | type | present when |
 |---|---|---|

@@ -1,4 +1,4 @@
-package scope_test
+package plan_test
 
 import (
 	"strings"
@@ -6,12 +6,12 @@ import (
 
 	"github.com/mattwalters/wand/internal/covenant"
 	"github.com/mattwalters/wand/internal/linear"
-	"github.com/mattwalters/wand/internal/scope"
+	"github.com/mattwalters/wand/internal/plan"
 )
 
-func parsedDraft(t *testing.T) scope.Draft {
+func parsedDraft(t *testing.T) plan.Draft {
 	t.Helper()
-	d, err := scope.ParseDraft(raw(t, goodDraft()), covenant.Default())
+	d, err := plan.ParseDraft(raw(t, goodDraft()), covenant.Default())
 	if err != nil {
 		t.Fatalf("ParseDraft: %v", err)
 	}
@@ -22,7 +22,7 @@ func parsedDraft(t *testing.T) scope.Draft {
 // implementer handed the rejected options re-litigates them, which is the
 // opposite of what a blessed plan is for.
 func TestPlanMarkdownCarriesThePlanAndNotTheArgument(t *testing.T) {
-	got := scope.PlanMarkdown(parsedDraft(t))
+	got := plan.PlanMarkdown(parsedDraft(t))
 
 	for _, want := range []string{
 		"Filter in Vet",                    // the recommended approach
@@ -45,29 +45,29 @@ func TestPlanMarkdownCarriesThePlanAndNotTheArgument(t *testing.T) {
 
 // The plan is written into a marker-fenced region of a human's
 // description, and a region that cannot be read back is a region the next
-// scope appends a second copy below. Round-tripping the real rendering
+// plan run appends a second copy below. Round-tripping the real rendering
 // through the real fencing is the only check that means anything here.
 func TestPlanMarkdownSurvivesTheFence(t *testing.T) {
-	plan := scope.PlanMarkdown(parsedDraft(t))
+	md := plan.PlanMarkdown(parsedDraft(t))
 	body := "A human wrote this, and it must still be here afterwards.\n"
 
-	next, err := linear.WithSection(body, scope.PlanSectionID, plan)
+	next, err := linear.WithSection(body, plan.PlanSectionID, md)
 	if err != nil {
 		t.Fatalf("WithSection: %v", err)
 	}
-	got, ok, err := linear.ReadSection(next, scope.PlanSectionID)
+	got, ok, err := linear.ReadSection(next, plan.PlanSectionID)
 	if err != nil || !ok {
 		t.Fatalf("ReadSection: %v (found %v)", err, ok)
 	}
-	if got != strings.TrimSpace(plan) {
+	if got != strings.TrimSpace(md) {
 		t.Errorf("the plan did not survive the fence:\n%s", got)
 	}
 	if !strings.Contains(next, body) {
 		t.Error("the human's own text was lost")
 	}
 
-	// A second scope replaces the region rather than stacking below it.
-	again, err := linear.WithSection(next, scope.PlanSectionID, plan)
+	// A second plan run replaces the region rather than stacking below it.
+	again, err := linear.WithSection(next, plan.PlanSectionID, md)
 	if err != nil {
 		t.Fatalf("WithSection twice: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestPlanMarkdownSurvivesTheFence(t *testing.T) {
 }
 
 func TestOptionsCommentArguesAndAsks(t *testing.T) {
-	got := scope.OptionsComment(parsedDraft(t), "fibonacci", "Scoped", scope.Provenance{RunID: "WND-9-x", Harness: "claude-code"})
+	got := plan.OptionsComment(parsedDraft(t), "fibonacci", "Scoped", plan.Provenance{RunID: "WND-9-x", Harness: "claude-code"})
 
 	for _, want := range []string{
 		"Filter in Vet",                      // both approaches, by name
@@ -98,17 +98,17 @@ func TestOptionsCommentArguesAndAsks(t *testing.T) {
 	}
 }
 
-// The footer is how a human weighs the scope: one cold session's first
+// The footer is how a human weighs the plan: one cold session's first
 // draft and a draft that survived a critic and an interview are not the
 // same artifact, and only this line says which is on the ticket.
 func TestProvenanceSaysWhatArguedWithTheDraft(t *testing.T) {
 	d := parsedDraft(t)
-	plain := scope.OptionsComment(d, "fibonacci", "Scoped", scope.Provenance{RunID: "r", Harness: "codex"})
+	plain := plan.OptionsComment(d, "fibonacci", "Scoped", plan.Provenance{RunID: "r", Harness: "codex"})
 	if !strings.Contains(plain, "Drafted by a cold codex scout") || strings.Contains(plain, "critic") {
-		t.Errorf("a plain scope claims more than happened:\n%s", plain)
+		t.Errorf("a plain plan claims more than happened:\n%s", plain)
 	}
 
-	full := scope.OptionsComment(d, "fibonacci", "Scoped", scope.Provenance{
+	full := plan.OptionsComment(d, "fibonacci", "Scoped", plan.Provenance{
 		RunID: "r", Harness: "codex", Critic: true, Objections: 2, Interview: true, Answers: 3,
 	})
 	for _, want := range []string{"2 objection(s)", "3 answer(s)"} {
@@ -117,7 +117,7 @@ func TestProvenanceSaysWhatArguedWithTheDraft(t *testing.T) {
 		}
 	}
 
-	quiet := scope.OptionsComment(d, "fibonacci", "Scoped", scope.Provenance{RunID: "r", Harness: "codex", Critic: true, Interview: true})
+	quiet := plan.OptionsComment(d, "fibonacci", "Scoped", plan.Provenance{RunID: "r", Harness: "codex", Critic: true, Interview: true})
 	if !strings.Contains(quiet, "nothing stuck") || !strings.Contains(quiet, "nothing to change") {
 		t.Errorf("a critic and an interview that changed nothing are not reported as such:\n%s", quiet)
 	}
@@ -130,11 +130,11 @@ func TestOptionsCommentOmitsAnEstimateThereIsNone(t *testing.T) {
 	cov.IssueEstimationType = "notUsed"
 	d := goodDraft()
 	delete(d, "estimate")
-	parsed, err := scope.ParseDraft(raw(t, d), cov)
+	parsed, err := plan.ParseDraft(raw(t, d), cov)
 	if err != nil {
 		t.Fatalf("ParseDraft: %v", err)
 	}
-	if got := scope.OptionsComment(parsed, "notUsed", "Scoped", scope.Provenance{RunID: "r", Harness: "h"}); strings.Contains(got, "### Estimate") {
+	if got := plan.OptionsComment(parsed, "notUsed", "Scoped", plan.Provenance{RunID: "r", Harness: "h"}); strings.Contains(got, "### Estimate") {
 		t.Errorf("an estimate section was written for a team that does not estimate:\n%s", got)
 	}
 }
@@ -153,12 +153,12 @@ func TestARecommendationIsMatchedTheWayValidationMatchedIt(t *testing.T) {
 	}
 	d["recommendation"] = map[string]any{"approach": "filter in vet", "why": "One vetting rule, one place."}
 
-	draft, err := scope.ParseDraft(raw(t, d), covenant.Default())
+	draft, err := plan.ParseDraft(raw(t, d), covenant.Default())
 	if err != nil {
 		t.Fatalf("ParseDraft refused a draft whose recommendation names an approach: %v", err)
 	}
 
-	arg := scope.Argument(draft, "fibonacci")
+	arg := plan.Argument(draft, "fibonacci")
 	if !strings.Contains(arg, "**1. Filter in Vet** — recommended") {
 		t.Errorf("the argument marks no approach as recommended:\n%s", arg)
 	}
@@ -166,8 +166,8 @@ func TestARecommendationIsMatchedTheWayValidationMatchedIt(t *testing.T) {
 		t.Errorf("the argument recommends the approach that was passed over:\n%s", arg)
 	}
 
-	for _, q := range scope.Questions(draft) {
-		if q.Topic != scope.TopicRecommendation {
+	for _, q := range plan.Questions(draft) {
+		if q.Topic != plan.TopicRecommendation {
 			continue
 		}
 		if strings.Contains(q.Ask, "Filter in Vet") {
@@ -180,7 +180,7 @@ func TestARecommendationIsMatchedTheWayValidationMatchedIt(t *testing.T) {
 }
 
 // A citation the validator trimmed is named in the plan. The file map is
-// the half of a scope a cold reader actually navigates by, so a citation
+// the half of a plan a cold reader actually navigates by, so a citation
 // vanishing from it without a word makes the plan quietly narrower than
 // the research behind it — and the only other way to notice would be to
 // diff against a handoff nobody kept.
@@ -188,14 +188,14 @@ func TestPlanMarkdownNamesDroppedCitations(t *testing.T) {
 	d := goodDraft()
 	d["files"] = []any{
 		map[string]any{"location": "docs/content/docs/covenant.md", "note": "the whole file is the thing"},
-		map[string]any{"location": "internal/scope/handoff.go:271", "note": "the gate itself"},
+		map[string]any{"location": "internal/plan/handoff.go:271", "note": "the gate itself"},
 	}
-	parsed, err := scope.ParseDraft(raw(t, d), covenant.Default())
+	parsed, err := plan.ParseDraft(raw(t, d), covenant.Default())
 	if err != nil {
 		t.Fatalf("ParseDraft: %v", err)
 	}
 
-	got := scope.PlanMarkdown(parsed)
+	got := plan.PlanMarkdown(parsed)
 	if !strings.Contains(got, "docs/content/docs/covenant.md") {
 		t.Errorf("the plan does not say which citation was dropped:\n%s", got)
 	}
@@ -206,7 +206,7 @@ func TestPlanMarkdownNamesDroppedCitations(t *testing.T) {
 
 // The clean case stays clean: nothing dropped, nothing said.
 func TestPlanMarkdownSaysNothingWhenNothingWasDropped(t *testing.T) {
-	if got := scope.PlanMarkdown(parsedDraft(t)); strings.Contains(got, "dropped") {
+	if got := plan.PlanMarkdown(parsedDraft(t)); strings.Contains(got, "dropped") {
 		t.Errorf("a plan with every citation intact still mentions dropping:\n%s", got)
 	}
 }

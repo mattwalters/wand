@@ -29,8 +29,8 @@ worker_retries = 2
 scale = "linear"
 
 [toggles]
-scope_interview = false
-scope_critic = true
+plan_interview = false
+plan_critic = true
 
 [commands]
 verify = "make check"
@@ -73,11 +73,11 @@ func TestParseFullFile(t *testing.T) {
 	if cov.IssueEstimationType != "linear" {
 		t.Errorf("IssueEstimationType = %q, want %q", cov.IssueEstimationType, "linear")
 	}
-	if cov.Toggles.ScopeInterview {
-		t.Error("ScopeInterview = true, want the file's false to override the default true")
+	if cov.Toggles.PlanInterview {
+		t.Error("PlanInterview = true, want the file's false to override the default true")
 	}
-	if !cov.Toggles.ScopeCritic {
-		t.Error("ScopeCritic = false, want the file's true to override the default false")
+	if !cov.Toggles.PlanCritic {
+		t.Error("PlanCritic = false, want the file's true to override the default false")
 	}
 	if cov.Commands.Verify != "make check" || cov.Commands.Provision != "make worktree" || cov.Commands.RunAgent != "claude -p" {
 		t.Errorf("Commands = %+v", cov.Commands)

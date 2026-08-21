@@ -112,8 +112,8 @@ type FileEstimates struct {
 // FileToggles switch optional lifecycle stages. Pointers, because "off" and
 // "not mentioned" are different answers.
 type FileToggles struct {
-	ScopeInterview *bool `toml:"scope_interview"`
-	ScopeCritic    *bool `toml:"scope_critic"`
+	PlanInterview *bool `toml:"plan_interview"`
+	PlanCritic    *bool `toml:"plan_critic"`
 }
 
 // FileCommands are the three pluggable commands.
@@ -295,11 +295,11 @@ func (f File) Covenant() Covenant {
 	if f.Caps.WorkerRetries != nil {
 		cov.Caps.WorkerRetries = *f.Caps.WorkerRetries
 	}
-	if f.Toggles.ScopeInterview != nil {
-		cov.Toggles.ScopeInterview = *f.Toggles.ScopeInterview
+	if f.Toggles.PlanInterview != nil {
+		cov.Toggles.PlanInterview = *f.Toggles.PlanInterview
 	}
-	if f.Toggles.ScopeCritic != nil {
-		cov.Toggles.ScopeCritic = *f.Toggles.ScopeCritic
+	if f.Toggles.PlanCritic != nil {
+		cov.Toggles.PlanCritic = *f.Toggles.PlanCritic
 	}
 	if f.Commands.Verify != "" {
 		cov.Commands.Verify = f.Commands.Verify

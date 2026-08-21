@@ -9,8 +9,8 @@ import (
 
 	"github.com/mattwalters/wand/internal/dispatch"
 	"github.com/mattwalters/wand/internal/journal"
+	"github.com/mattwalters/wand/internal/plan"
 	"github.com/mattwalters/wand/internal/run"
-	"github.com/mattwalters/wand/internal/scope"
 	"github.com/mattwalters/wand/internal/worker"
 )
 
@@ -25,9 +25,9 @@ func newDispatchCmd() *cobra.Command {
 		Long: "dispatch is the selector over the loop: a thin, read-mostly pass that\n" +
 			"picks the highest-ranked, vetted Todo issue — through wand run — or,\n" +
 			"when no lane is free or Todo has nothing startable, the highest-ranked,\n" +
-			"vetted Scoping issue — through wand scope, which needs no lane, so\n" +
+			"vetted Scoping issue — through wand plan, which needs no lane, so\n" +
 			"research is never starved by full lane occupancy. One ticket per pass.\n\n" +
-			"The Todo gate lives here, deliberately, and not in run or scope\n" +
+			"The Todo gate lives here, deliberately, and not in run or plan\n" +
 			"themselves: a human typing an identifier has already made that\n" +
 			"decision; an unattended selector has not.\n\n" +
 			"A repository dispatches from one process at a time — a directory and a\n" +
@@ -69,8 +69,8 @@ func newDispatchCmd() *cobra.Command {
 }
 
 // dispatchDeps builds what one pass, or one watch, needs — the same
-// wiring runRun and runScope already assemble, shared here because
-// dispatch hands the same interfaces to run.Execute and scope.Execute
+// wiring runRun and runPlan already assemble, shared here because
+// dispatch hands the same interfaces to run.Execute and plan.Execute
 // rather than reimplementing either.
 func dispatchDeps(cmd *cobra.Command, teamKey, harness, model, effort string) (dispatch.Deps, *journal.Store, error) {
 	var zero dispatch.Deps
@@ -106,7 +106,7 @@ func dispatchDeps(cmd *cobra.Command, teamKey, harness, model, effort string) (d
 		Git:     run.ExecGit{RunsRoot: store.Root},
 		Hub:     run.ExecHub{},
 		Shell:   run.ExecShell{},
-		Tree:    scope.ExecTree{},
+		Tree:    plan.ExecTree{},
 		Workers: run.AdapterWorkers{Adapter: adapter},
 		TeamKey: resolvedTeamKey,
 		Repo:    repo,

@@ -1,8 +1,8 @@
 // Package pm is the stage-zero orchestrator: a decided product brief in,
 // a hard-validated set of proposed tickets out.
 //
-// It is the sibling of internal/scope one stage earlier in the lifecycle —
-// idea -> pm -> (bless) -> scope -> (bless) -> run — and it borrows scope's
+// It is the sibling of internal/plan one stage earlier in the lifecycle —
+// idea -> pm -> (bless) -> plan -> (bless) -> run — and it borrows plan's
 // central discipline whole: an invalid handoff writes nothing, and every
 // deliverable a human blesses is checked rather than hoped for.
 //
@@ -22,7 +22,7 @@
 // Neither command promotes anything. Every ticket pm creates lands in
 // Triage, the same place `wand file` lands an agent's own finding: blessing
 // a proposal onward to Todo stays a human's act, exactly as promoting a
-// scope's Scoped to Todo is.
+// plan run's Scoped to Todo is.
 package pm
 
 import (
@@ -48,7 +48,7 @@ import (
 const SchemaVersion = 1
 
 // PremiseSound and PremiseWrong are the two verdicts a draft may carry, the
-// same vocabulary scope.Draft uses for the same reason: a brief built on
+// same vocabulary plan.Draft uses for the same reason: a brief built on
 // something untrue is reported, not proposed around.
 const (
 	PremiseSound = "sound"
@@ -101,7 +101,7 @@ type ProposedTicket struct {
 	Title string `json:"title"`
 	// Body is the goal and open questions, in Markdown — written into the
 	// issue's description inside the same kind of marker-fenced region
-	// scope.PlanSectionID owns, so a later pm proposal for the same ticket
+	// plan.PlanSectionID owns, so a later pm proposal for the same ticket
 	// replaces only what pm wrote.
 	Body string `json:"body"`
 	// Project names an existing project on the board or one of this
@@ -333,7 +333,7 @@ func TopoOrder(tickets []ProposedTicket) []ProposedTicket {
 }
 
 // strictUnmarshal decodes one JSON object, refusing unknown fields — the
-// same discipline scope.strictUnmarshal enforces, and for the same reason:
+// same discipline plan.strictUnmarshal enforces, and for the same reason:
 // a misspelled field should fail loudly rather than read as silently
 // absent.
 func strictUnmarshal(raw json.RawMessage, v any) error {

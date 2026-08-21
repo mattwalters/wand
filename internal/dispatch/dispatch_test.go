@@ -9,15 +9,15 @@ import (
 	"github.com/mattwalters/wand/internal/covenant"
 	"github.com/mattwalters/wand/internal/journal"
 	"github.com/mattwalters/wand/internal/linear"
+	"github.com/mattwalters/wand/internal/plan"
 	"github.com/mattwalters/wand/internal/run"
-	"github.com/mattwalters/wand/internal/scope"
 	"github.com/mattwalters/wand/internal/worker"
 )
 
 // fakeBoard implements dispatch.Board. Only TeamIssuesByState is exercised
 // by the tests here — every path that would reach the rest is refused
 // before it gets that far (lock/nothing-to-do/unreachable), or is already
-// covered end to end in internal/run and internal/scope.
+// covered end to end in internal/run and internal/plan.
 type fakeBoard struct {
 	todo, scoping []linear.Issue
 	err           error
@@ -76,7 +76,7 @@ func (f *fakeBoard) UpsertSection(context.Context, string, string, string, strin
 type unimplementedGit struct{ run.Git }
 type unimplementedHub struct{ run.Hub }
 type unimplementedShell struct{ run.Shell }
-type unimplementedTree struct{ scope.Tree }
+type unimplementedTree struct{ plan.Tree }
 type unimplementedWorkers struct{}
 
 func (unimplementedWorkers) Run(context.Context, worker.Spec) (worker.Result, error) {

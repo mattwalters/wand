@@ -1,4 +1,4 @@
-package scope
+package plan
 
 import (
 	"fmt"
@@ -19,7 +19,7 @@ import (
 // draft away.
 
 // scoutRules keep the scout's hands off the tree. There is no worktree, no
-// branch and no CI in a scope run: the repository the command was run from
+// branch and no CI in a plan run: the repository the command was run from
 // is the code being read, which is a human's checkout as often as not.
 //
 // This is the prose tier for what no adapter flag enforces today, backed
@@ -83,7 +83,7 @@ handoff that fails validation writes nothing at all — so:
 // scoutPrompt is the first phase's task: the ticket, whole.
 func scoutPrompt(ticketText string, cov covenant.Covenant) string {
 	var b strings.Builder
-	b.WriteString("Research the following ticket in this repository and produce a scope: what the " +
+	b.WriteString("Research the following ticket in this repository and produce a plan: what the " +
 		"work actually is, the ways it could be done, which one you recommend, and a plan a cold " +
 		"implementer could follow without repeating your reading.\n\n")
 	b.WriteString("Read the code before you decide anything. The ticket is a request, not a survey " +
@@ -107,7 +107,7 @@ func criticRules() []string {
 // act on.
 func criticPrompt(ticketText, rendered string) string {
 	var b strings.Builder
-	b.WriteString("Below is a draft scope for the ticket that follows it, written by another " +
+	b.WriteString("Below is a draft plan for the ticket that follows it, written by another " +
 		"session from the same code you can read. Attack it. Look for: a premise that is wrong, " +
 		"an approach that cannot work here, a recommendation that does not follow from its own " +
 		"trade-offs, a plan with a step that is impossible or a missing step that is load-bearing, " +
@@ -123,7 +123,7 @@ func criticPrompt(ticketText, rendered string) string {
  "objections": [{"target": "which part of the draft — the premise, an approach by name, the recommendation, the plan, the estimate, an assumption", "summary": "what is wrong", "consequence": "what it costs if the draft ships as written"}]}
 No other fields. "sound" means you tried and it held; it does not mean you had
 nothing to say, and it is a real answer.`)
-	b.WriteString("\n\n--- draft scope ---\n\n")
+	b.WriteString("\n\n--- draft plan ---\n\n")
 	b.WriteString(rendered)
 	b.WriteString("\n\n--- ticket ---\n\n")
 	b.WriteString(ticketText)
@@ -137,11 +137,11 @@ nothing to say, and it is a real answer.`)
 // survives an interview.
 func revisePrompt(ticketText, rendered, objections string, cov covenant.Covenant, source string) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "Below is a draft scope for the ticket that follows it, written by another "+
-		"session, and %s. Produce the scope that should stand now.\n\n", source)
+	fmt.Fprintf(&b, "Below is a draft plan for the ticket that follows it, written by another "+
+		"session, and %s. Produce the plan that should stand now.\n\n", source)
 	b.WriteString("You did not write the draft and you owe it nothing. Where what follows is " +
-		"right, change the scope — including the recommendation, the plan, the estimate or the " +
-		"premise, if that is what it takes. Where it is wrong, say why in the part of the scope " +
+		"right, change the plan — including the recommendation, the steps, the estimate or the " +
+		"premise, if that is what it takes. Where it is wrong, say why in the part of the plan " +
 		"it bears on, and leave that part standing. Read the code again for anything you change: " +
 		"a revision argued from the draft alone inherits whatever the draft got wrong.\n\n")
 	b.WriteString("Your handoff replaces the draft whole, and is validated the same way, so " +
@@ -149,7 +149,7 @@ func revisePrompt(ticketText, rendered, objections string, cov covenant.Covenant
 	b.WriteString(draftSchema(cov))
 	b.WriteString("\n\n--- what was said against the draft ---\n\n")
 	b.WriteString(objections)
-	b.WriteString("\n\n--- draft scope ---\n\n")
+	b.WriteString("\n\n--- draft plan ---\n\n")
 	b.WriteString(rendered)
 	b.WriteString("\n\n--- ticket ---\n\n")
 	b.WriteString(ticketText)

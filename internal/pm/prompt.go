@@ -10,7 +10,7 @@ import (
 
 // scoutRules keep the scout's hands off everything but its own handoff. pm
 // has no worktree at all — there is no ticket yet, let alone one to check
-// out — so the rule here is simpler than scope's read-only promise: there
+// out — so the rule here is simpler than plan's read-only promise: there
 // is nothing to read from disk except the brief it was handed.
 func scoutRules() []string {
 	return []string{
@@ -22,7 +22,7 @@ func scoutRules() []string {
 	}
 }
 
-// draftSchema documents the Draft JSON, the same pairing scope.draftSchema
+// draftSchema documents the Draft JSON, the same pairing plan.draftSchema
 // keeps with handoff.go: every constraint stated here is enforced there.
 func draftSchema() string {
 	return `Write your handoff as this JSON object:

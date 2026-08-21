@@ -51,7 +51,7 @@ func (a Active) Stale() bool { return a.Live != journal.Alive }
 func (a Active) PhaseLabel() string { return phaseLabel(a.Phase, a.Round) }
 
 // HarnessLabel is the harness a person reads, or an explicit placeholder
-// when there is none — a scope-style run picks its harness per phase rather
+// when there is none — a plan-style run picks its harness per phase rather
 // than fixing one for the whole run, so an empty Harness is an honest
 // "not fixed", not a fact this package failed to read.
 func (a Active) HarnessLabel() string {

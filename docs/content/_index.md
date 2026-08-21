@@ -51,7 +51,7 @@ written. `wand ui --team-key WND` shows your team's.
 > **Status: early.** `init` bootstraps a Linear team to the covenant and
 > installs the guard hook, `guard` enforces the covenant's authorization
 > rules, `queue` and `ticket` are the read layer, `doctor` reports drift,
-> and `scope` and `run` are the first two orchestrators. `dispatch`, the
+> and `plan` and `run` are the first two orchestrators. `dispatch`, the
 > last one, is not built yet.
 
 **A covenant, not a config file.** The state graph — Triage → Backlog →
@@ -73,7 +73,7 @@ prose, where it was followed only sometimes: the question is posted before
 the ticket parks on it, the evidence before the demotion, the duplicate
 search before the filing.
 
-**Orchestrators that hand back.** [`wand scope`](docs/commands/scope/) sends
+**Orchestrators that hand back.** [`wand plan`](docs/commands/plan/) sends
 a cold, read-only scout over one ticket and writes a plan plus the argued
 options a human blesses it on — ending at Scoped, never at Todo.
 [`wand run`](docs/commands/run/) takes a ticket a human *has* blessed and
