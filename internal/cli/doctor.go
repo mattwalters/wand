@@ -11,7 +11,19 @@ import (
 	"github.com/mattwalters/wand/internal/covenant"
 	"github.com/mattwalters/wand/internal/doctor"
 	"github.com/mattwalters/wand/internal/linear"
+	"github.com/mattwalters/wand/internal/shim"
 )
+
+// repoShimPaths are the two harness shims init writes, paired with the
+// function that says whether a given file already carries the guard hook —
+// the same pairing installShim uses in init.go, reused here so doctor's
+// repo-check recognizes exactly the files init would write.
+func repoShimPaths() []doctor.ShimPath {
+	return []doctor.ShimPath{
+		{Path: settingsPath, Ensure: shim.Ensure},
+		{Path: codexHooksPath, Ensure: shim.EnsureCodex},
+	}
+}
 
 func newDoctorCmd() *cobra.Command {
 	var teamKey string
@@ -71,5 +83,9 @@ func runDoctor(cmd *cobra.Command, teamKey string) int {
 	ctx, cancel := context.WithTimeout(cmd.Context(), 2*time.Minute)
 	defer cancel()
 
-	return doctor.Run(ctx, &linear.Client{APIKey: apiKey}, out, errOut, resolvedTeamKey, cov)
+	repoFindings, repoErr := doctor.RepoCheck(repoShimPaths(), os.ReadFile, func(path string) shim.TrackStatus {
+		return shim.Tracked(ctx, ".", path)
+	})
+
+	return doctor.Run(ctx, &linear.Client{APIKey: apiKey}, out, errOut, resolvedTeamKey, cov, repoFindings, repoErr)
 }

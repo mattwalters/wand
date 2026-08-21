@@ -11,12 +11,14 @@ import (
 	"testing"
 )
 
-// TestDoctorExitContract pins the could-not-check half of doctor's exit-code
-// contract on the compiled binary: 2, never fang's generic 1, because a
+// TestDoctorExitContract pins the precondition half of doctor's could-not-check
+// exit code on the compiled binary: 2, never fang's generic 1, because a
 // caller scripting doctor must be able to tell "drift" from "the check did
-// not run". The clean and drift codes need a live team and are covered
-// in-process in internal/doctor; the os.Exit path in the cobra layer is what
-// only this tier can reach.
+// not run". These preconditions (no LINEAR_API_KEY, no team key) fail before
+// doctor.Run is ever reached, which is what only this tier can exercise: the
+// os.Exit path in the cobra layer. The clean and drift codes, and the
+// repo-local shim check merged into them, all need a live or faked Linear
+// team to exercise and are covered in-process in internal/doctor instead.
 //
 // Like the guard test above, this is a plain exec test — no pty, no network.
 func TestDoctorExitContract(t *testing.T) {
