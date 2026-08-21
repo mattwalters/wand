@@ -215,8 +215,12 @@ afterwards whether that argument held together.</p>
 <ul>
 <li>one to three approaches, each with a real trade-off;</li>
 <li>a recommendation naming one of those approaches, with the argument for it;</li>
-<li>at least one file citation, every one of them <code>path:line</code> — the line is
-what makes it a citation rather than a filename;</li>
+<li>at least one usable file citation, cited <code>path:line</code> (a range or a
+comma-separated list of either also counts) — the line is what makes it a
+citation rather than a filename. A citation carrying no line is <strong>dropped,
+not fatal</strong>: it leaves the file map, the plan says which one went and why,
+and the run carries on. Only a draft with no usable citation left is
+refused, and then for citing nothing rather than for the formatting;</li>
 <li>an estimate on the covenant&rsquo;s scale (Linear silently adjusts an off-scale
 estimate to fit, which would land a number nobody chose; a team whose
 scale is <code>notUsed</code> gets no estimate and is not asked for one);</li>
@@ -343,7 +347,12 @@ else&rsquo;s.</p>
 </table>
 <h2 id="the-journal">The journal</h2>
 <p>Every scope is a journaled run: each phase recorded before it happens, the
-scout&rsquo;s handoff kept as a note, and exactly one terminal record. Runs live
+scout&rsquo;s handoff kept as a note, and exactly one terminal record. A handoff
+that fails validation is kept too, written to the run&rsquo;s <code>scratch/</code> as
+<code>&lt;phase&gt;-&lt;round&gt;.rejected.json</code> before the park — the worker&rsquo;s own copy is
+already gone by then, and a refusal you cannot read afterwards makes the
+validator&rsquo;s one-line complaint the only surviving account of a research
+pass that may have cost minutes and millions of tokens. Runs live
 under <code>$XDG_STATE_HOME/wand/runs</code> (or <code>WAND_STATE_DIR</code>), outside every
 repository. The journal is written before the ticket is, deliberately — a
 park has to be reachable when Linear itself is what failed. Once it is
