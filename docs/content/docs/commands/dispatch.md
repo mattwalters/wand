@@ -5,7 +5,7 @@ summary: Pick the one ticket to run next, and run it — the selector over the l
 ---
 
 `dispatch` is a thin selector over [`wand run`](../run/) and
-[`wand scope`](../scope/): a read-mostly pass that picks the one ticket a
+[`wand plan`](../plan/): a read-mostly pass that picks the one ticket a
 repository works next and runs it through whichever of those two
 orchestrators the ticket belongs to.
 
@@ -18,7 +18,7 @@ wand dispatch [--team-key <key>] --watch [--interval <duration>] [...]
 
 ## What it does
 
-The Todo gate lives here, deliberately, and not in `run` or `scope`
+The Todo gate lives here, deliberately, and not in `run` or `plan`
 themselves: a human typing `wand run WND-9` has already made the decision
 that WND-9 is the ticket to work. An unattended selector has not, so
 `dispatch` makes it the same way [`wand queue`](../queue/) prints it —
@@ -41,11 +41,11 @@ One pass is:
    `wand queue` ranks Todo.
 4. **Pick the winner.** The highest-ranked, vetted Todo issue when a lane
    is free, through `wand run`; otherwise the highest-ranked, vetted
-   Scoping issue, through `wand scope`. A scope needs no lane, so an
+   Scoping issue, through `wand plan`. A plan run needs no lane, so an
    eligible Scoping ticket dispatches even at full lane occupancy —
    research is never starved by full lane occupancy — and it is also what
    a pass falls back to when Todo simply has nothing startable.
-5. **Run it.** One ticket per pass, to one of `run`'s or `scope`'s own
+5. **Run it.** One ticket per pass, to one of `run`'s or `plan`'s own
    terminal states.
 
 ## `--watch`
@@ -67,7 +67,7 @@ second `wand dispatch` process racing the first's selection — that second
 process refuses, locked, exactly as a single-shot pass would.
 
 Each spawned child's own narration (the same lines `wand run` or
-`wand scope` prints when you run them yourself) goes to a log file under
+`wand plan` prints when you run them yourself) goes to a log file under
 the run journal's state directory, one file per child, since the journal
 itself only carries the structured half of that account.
 
@@ -87,7 +87,7 @@ single-shot pass can reach gets its own code:
 |---|---|
 | `0` | Converged. |
 | `1` | Refused: nothing started (bad flags, missing configuration), or the winner was chosen but its claim raced and lost. |
-| `2` | Handed back or parked — the run/scope journal has the detail. |
+| `2` | Handed back or parked — the run/plan journal has the detail. |
 | `3` | Locked: another dispatch process already holds this repo's selector lock. |
 | `4` | Nothing to do: Todo and Scoping are both empty or fully vetted out. |
 | `5` | Linear could not be reached (a transport-level failure — DNS, connection refused, a timeout — as opposed to a reachable API answering with an error). |
@@ -108,7 +108,7 @@ each pass it dispatches is a detached child, not this process's own exit.
 
 ## Requirements
 
-Same as `wand run` and `wand scope`: `LINEAR_API_KEY`, an authenticated
+Same as `wand run` and `wand plan`: `LINEAR_API_KEY`, an authenticated
 `gh`, `commands.verify` in [`wand.toml`](../../covenant/), run from inside
 the repository — which is also where the team key comes from, unless
 `--team-key` overrides it.
@@ -118,7 +118,7 @@ runs at once (default `1`); a Scoping ticket never counts against it.
 
 ## See also
 
-[`wand run`](../run/) and [`wand scope`](../scope/) are the two
+[`wand run`](../run/) and [`wand plan`](../plan/) are the two
 orchestrators a winner runs through; [`wand sweep`](../sweep/) is
 everything that happens after one of them exits; [`wand queue`](../queue/)
 is the same read layer this selector's ranking reuses.

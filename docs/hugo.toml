@@ -135,8 +135,8 @@ weight = 190
 mono = true
 
 [[menus.main]]
-name = "wand scope"
-pageRef = "/docs/commands/scope"
+name = "wand plan"
+pageRef = "/docs/commands/plan"
 weight = 195
 [menus.main.params]
 mono = true

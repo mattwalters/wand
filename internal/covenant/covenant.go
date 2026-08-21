@@ -84,14 +84,14 @@ type Caps struct {
 
 // Toggles switch the lifecycle's optional stages.
 type Toggles struct {
-	// ScopeInterview allows `wand scope --interactive` to grill a human
+	// PlanInterview allows `wand plan --interactive` to grill a human
 	// over its draft before writing anything.
-	ScopeInterview bool
-	// ScopeCritic runs a cold critic over the draft scope before the
+	PlanInterview bool
+	// PlanCritic runs a cold critic over the draft plan before the
 	// interview. Off by default: it costs a whole extra model call per
-	// scope, and unlike the rest of this covenant it is not a rule the
+	// plan run, and unlike the rest of this covenant it is not a rule the
 	// reference system has finished paying for.
-	ScopeCritic bool
+	PlanCritic bool
 }
 
 // Commands are the three pluggable commands the lifecycle shells out to.
@@ -191,21 +191,21 @@ func Default() Covenant {
 			WorkerRetries: 1,
 		},
 		Toggles: Toggles{
-			ScopeInterview: true,
-			ScopeCritic:    false,
+			PlanInterview: true,
+			PlanCritic:    false,
 		},
 	}
 }
 
 // estimateScales are the values Linear's issueEstimationType accepts, mapped
 // to the points each offers — zero excluded, because Linear's zero is "no
-// estimate" rather than a size, and a scope whose estimate is "none" has not
+// estimate" rather than a size, and a plan whose estimate is "none" has not
 // estimated. "notUsed" is a known scale with no points: a team that does not
 // estimate is configured, not broken.
 //
 // These are Linear's base scales. Its extended-estimates setting adds larger
 // values to each, and the covenant does not carry that flag yet — a team
-// running extended estimates will see `wand scope` refuse the extra values
+// running extended estimates will see `wand plan` refuse the extra values
 // until it does.
 var estimateScales = map[string][]int{
 	"notUsed":     nil,

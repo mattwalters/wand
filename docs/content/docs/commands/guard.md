@@ -54,8 +54,8 @@ description. A guard that blocked ordinary work would be routed around
 within a day.
 
 Note the direction. Moving a ticket *into* Scoping is a promotion and is
-refused; moving one *out* of Scoping is what every scope ends with, either
-way it ends — to Needs Input, a blocking question, or to Scoped, a
+refused; moving one *out* of Scoping is what every plan run ends with,
+either way it ends — to Needs Input, a blocking question, or to Scoped, a
 finished plan — and both are allowed. The guard sees only the destination.
 
 ### The block message is most of the value

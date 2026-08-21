@@ -173,7 +173,7 @@ func TestDispositionKeysAvoidNavigation(t *testing.T) {
 	}
 }
 
-// PlanSection reads exactly the region scope fences, leaving whatever a
+// PlanSection reads exactly the region `wand plan` fences, leaving whatever a
 // human wrote around it alone — the same contract [linear.WithSection]
 // promises the other direction.
 func TestPlanSection(t *testing.T) {
@@ -194,7 +194,7 @@ func TestPlanSection(t *testing.T) {
 	}
 }
 
-// A ticket that has never been scoped — or whose fence a human broke by hand
+// A ticket that has never been planned — or whose fence a human broke by hand
 // — is reported rather than guessed at.
 func TestPlanSectionAbsent(t *testing.T) {
 	_, ok, err := PlanSection(linear.Issue{Description: "just a plain description"})

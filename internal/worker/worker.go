@@ -53,7 +53,7 @@ import (
 // prompt; a Spec that leaves something to be discovered is invalid by
 // design, which is why the fields below are required rather than defaulted.
 type Spec struct {
-	// Mode names the kind of run, stated to the worker verbatim — "scope
+	// Mode names the kind of run, stated to the worker verbatim — "scout
 	// (read-only research)", "implement", "review". The worker acts on this
 	// statement, never on what its environment appears to allow.
 	Mode string
@@ -553,7 +553,7 @@ func AdapterFor(name string) (Adapter, error) {
 // about the run says stop.
 //
 // It is the whole "is this worth another try" policy in one pure function,
-// exported because run and scope both ask the question and a second copy is
+// exported because run and plan both ask the question and a second copy is
 // how two orchestrators quietly grow two different answers. What it
 // deliberately does not know is the rest of the decision: how much retry
 // budget is left (covenant.Caps.WorkerRetries) and whether the working tree

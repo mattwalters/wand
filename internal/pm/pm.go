@@ -29,7 +29,7 @@ type Outcome struct {
 	ProposalPath string
 }
 
-// Exit codes, the same contract style scope publishes: 1 is deliberately
+// Exit codes, the same contract style plan publishes: 1 is deliberately
 // absent, meaning the run never started (bad flags, no journal, an empty
 // brief) — fang's generic failure exit.
 const (
@@ -111,7 +111,7 @@ type proposing struct {
 	brief string
 }
 
-// phaseDetail mirrors scope's: bounded so the journal stays readable, and
+// phaseDetail mirrors plan's: bounded so the journal stays readable, and
 // what lets a crashed run be told from a converged one by reading alone.
 type phaseDetail struct {
 	ExitCode   int    `json:"exit_code"`

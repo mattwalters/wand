@@ -48,8 +48,8 @@ run at the root. Run the first three from the repo root.
 success and `1` on any failure, with the reason on stderr. Several commands
 say otherwise, and each of their codes is a contract something else depends
 on: `guard` (the harness hook), `doctor` (CI), `file` (a refusal to file a
-duplicate is a failure, on purpose), the orchestrators `scope`, `pm` and
-`run`, whose `0`/`2`/`3` tell a scheduler how a run ended — scoped or
+duplicate is a failure, on purpose), the orchestrators `plan`, `pm` and
+`run`, whose `0`/`2`/`3` tell a scheduler how a run ended — planned or
 converged (or proposed), handed back, or parked — leaving `1` for a run
 that never started; `pm bless`, whose own `0`/`1`/`3` mark a batched write
 rather than a single one — filed, refused before any write, or a write

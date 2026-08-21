@@ -164,7 +164,7 @@ func TestActivePhaseLabel(t *testing.T) {
 	}
 }
 
-// A scope-style run picks its harness per phase rather than fixing one for
+// A plan-style run picks its harness per phase rather than fixing one for
 // the whole run, so an empty Harness is a fact, not a gap this package
 // failed to read — and the label says so rather than printing nothing.
 func TestActiveHarnessLabel(t *testing.T) {

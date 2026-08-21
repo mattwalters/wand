@@ -68,8 +68,8 @@ func TestWatchSpawnsAndTracksPending(t *testing.T) {
 // TestWatchScopingWinnerDoesNotOccupyALane pins the addendum's invariant
 // down to pending, not just LanesUsed: a Scoping winner spawned this session
 // must not inflate the lane count while its child is still running, or a
-// long-lived scope would starve every Todo ticket behind it for the length
-// of its own pass — exactly backwards from "a scope needs no lane."
+// long-lived plan run would starve every Todo ticket behind it for the length
+// of its own pass — exactly backwards from "a plan run needs no lane."
 func TestWatchScopingWinnerDoesNotOccupyALane(t *testing.T) {
 	store := journal.New(t.TempDir())
 	board := &fakeBoard{scoping: []linear.Issue{
@@ -100,10 +100,10 @@ func TestWatchScopingWinnerDoesNotOccupyALane(t *testing.T) {
 		t.Errorf("summary = %q, want it to name WND-2", res.Summary)
 	}
 	if got := p.count(); got != 0 {
-		t.Fatalf("pending.count() = %d, want 0: a scope child holds no lane", got)
+		t.Fatalf("pending.count() = %d, want 0: a plan child holds no lane", got)
 	}
 
-	// A Todo ticket now shows up while the scope child is still (per
+	// A Todo ticket now shows up while the plan child is still (per
 	// sleeperBinary, briefly) running. With one lane and zero run winners
 	// pending, it must still be free to dispatch.
 	board.todo = []linear.Issue{
@@ -114,7 +114,7 @@ func TestWatchScopingWinnerDoesNotOccupyALane(t *testing.T) {
 		t.Fatalf("second tick: %v", err)
 	}
 	if !strings.Contains(res2.Summary, "WND-1") {
-		t.Errorf("second tick summary = %q, want it to dispatch WND-1: the in-flight scope must not have starved the lane", res2.Summary)
+		t.Errorf("second tick summary = %q, want it to dispatch WND-1: the in-flight plan run must not have starved the lane", res2.Summary)
 	}
 
 	waitForPending(t, p, 0)

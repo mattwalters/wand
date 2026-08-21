@@ -215,7 +215,7 @@ func TestDuplicateLinksBeforeItCloses(t *testing.T) {
 }
 
 // Same shape as Cancel, one disposition over and a different destination: a
-// rejected plan with no reason on it leaves the next scope guessing.
+// rejected plan with no reason on it leaves the next plan run guessing.
 func TestRejectPlanCommentsBeforeItMovesToBacklog(t *testing.T) {
 	cl := newFake()
 	_, err := Apply(context.Background(), cl, covenant.Default(),

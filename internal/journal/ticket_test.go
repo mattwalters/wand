@@ -22,7 +22,7 @@ func TestLockTicketRefusesASecondHolder(t *testing.T) {
 	defer first.Release()
 
 	// A second open of the same file description is refused exactly as
-	// another process would be: a scope cannot mistake itself for a
+	// another process would be: a plan run cannot mistake itself for a
 	// vacancy.
 	_, err = s.LockTicket("WND-9")
 	if err == nil {

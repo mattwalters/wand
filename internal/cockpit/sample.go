@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/mattwalters/wand/internal/linear"
-	"github.com/mattwalters/wand/internal/scope"
+	"github.com/mattwalters/wand/internal/plan"
 )
 
 // Sample is a fixed board: the same rows every time, on no team that exists.
@@ -52,7 +52,7 @@ func Sample() Snapshot {
 				Identifier: "WND-38", Title: "Second harness adapter: which one?",
 				State: linear.IssueState{Name: "Needs Input", Type: "unstarted"}, Priority: 2,
 				Assignee: "Matt Walters", CreatedAt: at(1),
-				Description: "Scoped three candidates. The recommendation is in the comments; " +
+				Description: "Planned three candidates. The recommendation is in the comments; " +
 					"the estimate assumes the isolation suite passes unchanged.",
 			},
 		},
@@ -79,14 +79,14 @@ func Sample() Snapshot {
 	}
 }
 
-// samplePlanDescription builds a description shaped exactly like one scope
-// leaves behind: a human's own text, then the marker-fenced plan region. The
+// samplePlanDescription builds a description shaped exactly like one plan
+// run leaves behind: a human's own text, then the marker-fenced plan region. The
 // markers come from [linear.WithSection] rather than typed by hand, so the
 // sample can never drift from what the real fence looks like.
 func samplePlanDescription() string {
 	human := "The cockpit only has four sections. A blessed plan has nowhere to be judged " +
 		"from but Linear itself, which is the review surface this tool exists to replace."
-	plan := "## Implementation plan\n\n" +
+	planText := "## Implementation plan\n\n" +
 		"**Add a Scoped section.** Triage and Scoped are both authorization judgments; " +
 		"putting them next to each other reads as one job, not two.\n\n" +
 		"### Steps\n\n" +
@@ -98,9 +98,9 @@ func samplePlanDescription() string {
 		"### Where the code is\n\n" +
 		"- `internal/cockpit/cockpit.go` — the fifth section and its two judgments\n" +
 		"- `internal/tui/view.go` — the plan rendered in place\n\n" +
-		"The next scope of this ticket rewrites this region whole; notes of your own " +
+		"The next plan run of this ticket rewrites this region whole; notes of your own " +
 		"live outside it, where nothing machine-written touches them.\n"
-	desc, err := linear.WithSection(human, scope.PlanSectionID, plan)
+	desc, err := linear.WithSection(human, plan.PlanSectionID, planText)
 	if err != nil {
 		// The body above is a static literal with no markers of its own; an
 		// error here would mean this function itself is broken, not the data

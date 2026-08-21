@@ -1,4 +1,4 @@
-package scope
+package plan
 
 import (
 	"encoding/json"
@@ -14,7 +14,7 @@ import (
 // written at all.
 //
 // Everything the scout produces is judged here, before the first Linear
-// call, because a scope is read as a decision: a human blesses the plan in
+// call, because a plan is read as a decision: a human blesses the plan in
 // the ticket body on the strength of the argument in the comment, and by
 // then nobody re-derives whether the argument held together. A draft
 // missing its trade-offs, recommending an approach it never described, or
@@ -27,11 +27,11 @@ import (
 
 // Draft is the scout's report, and the same shape a reviser returns: a
 // revision replaces the draft whole and is validated identically, so a
-// second pass cannot smuggle in a weaker scope than the first.
+// second pass cannot smuggle in a weaker plan than the first.
 type Draft struct {
 	// Premise is "sound" or "wrong". A scout that finds the ticket asks
 	// for something already done, impossible, or built on a mistake says
-	// so instead of scoping around it — the alternative is a beautifully
+	// so instead of planning around it — the alternative is a beautifully
 	// argued plan for the wrong work.
 	Premise string `json:"premise"`
 	// Reason is the scout's own account of why the premise is wrong,
@@ -46,7 +46,7 @@ type Draft struct {
 
 	// Approaches are the ways the work could be done — one to three, each
 	// with what it costs. More than three is a scout that has not chosen;
-	// none is not a scope.
+	// none is not a plan.
 	Approaches []Approach `json:"approaches,omitempty"`
 
 	// Recommendation names one of the approaches and argues for it.
@@ -163,7 +163,7 @@ const (
 )
 
 // maxApproaches is the ceiling the ticket sets. Above it, the scout has
-// surveyed rather than scoped, and a human is handed the choosing it was
+// surveyed rather than planned, and a human is handed the choosing it was
 // sent to do.
 const maxApproaches = 3
 
@@ -177,14 +177,14 @@ var fileLine = regexp.MustCompile(`^[^\s:]+:\d+(-\d+)?(,\d+(-\d+)?)*$`)
 
 // ParseDraft validates a scout's or reviser's handoff against the covenant
 // it must satisfy. An error means nothing is written: the caller has no
-// scope, and half a scope on a ticket is worse than none, because it reads
+// plan, and half a plan on a ticket is worse than none, because it reads
 // like a whole one.
 //
 // Cosmetic defects are fixed up rather than treated as fatal — currently,
 // file citations dropped for lacking a line number. Those land in
 // [Draft.Dropped] rather than in an error, and travel with the draft so
 // that both the journal and the plan a human reads can say what was
-// trimmed. A drop nobody is told about is how a scope quietly becomes less
+// trimmed. A drop nobody is told about is how a plan quietly becomes less
 // than the scout actually found.
 func ParseDraft(raw json.RawMessage, cov covenant.Covenant) (Draft, error) {
 	if len(raw) == 0 {
@@ -233,9 +233,9 @@ func (d *Draft) validate(cov covenant.Covenant) error {
 func (d Draft) validateApproaches() error {
 	switch {
 	case len(d.Approaches) == 0:
-		return errors.New("the handoff offers no approaches; a scope that names no way to do the work is not a scope")
+		return errors.New("the handoff offers no approaches; a plan that names no way to do the work is not a plan")
 	case len(d.Approaches) > maxApproaches:
-		return fmt.Errorf("the handoff offers %d approaches, more than the %d a scope may carry — narrowing the field is the work, and handing a human every option is handing the work back",
+		return fmt.Errorf("the handoff offers %d approaches, more than the %d a plan may carry — narrowing the field is the work, and handing a human every option is handing the work back",
 			len(d.Approaches), maxApproaches)
 	}
 	seen := map[string]bool{}
@@ -288,11 +288,11 @@ func isRecommended(d Draft, a Approach) bool {
 // that citation is dropped into [Draft.Dropped] — where the journal and
 // the rendered plan both pick it up — instead of the whole handoff being
 // discarded over it. Only if every citation turns out to be cosmetically
-// unusable does the draft fall back to "cites no files": a scope with zero
-// citations left is still not a scope, however it got to zero.
+// unusable does the draft fall back to "cites no files": a plan with zero
+// citations left is still not a plan, however it got to zero.
 func (d *Draft) validateFiles() error {
 	if len(d.Files) == 0 {
-		return errors.New("the handoff cites no files; a scope whose reader has to find the code again did half the job")
+		return errors.New("the handoff cites no files; a plan whose reader has to find the code again did half the job")
 	}
 	var kept []FileRef
 	var dropped []string
@@ -308,7 +308,7 @@ func (d *Draft) validateFiles() error {
 		kept = append(kept, f)
 	}
 	if len(kept) == 0 {
-		return errors.New("the handoff cites no files; a scope whose reader has to find the code again did half the job")
+		return errors.New("the handoff cites no files; a plan whose reader has to find the code again did half the job")
 	}
 	d.Files, d.Dropped = kept, dropped
 	return nil
@@ -431,7 +431,7 @@ func ParseCritique(raw json.RawMessage) (Critique, error) {
 
 // strictUnmarshal decodes one JSON object, refusing unknown fields. A
 // worker that misspells a field name should fail loudly here rather than
-// have that half of its work silently read as absent — a scope missing its
+// have that half of its work silently read as absent — a plan missing its
 // trade-offs because of a typo is refused, which costs a model call, and
 // one written without them costs the decision it informs.
 func strictUnmarshal(raw json.RawMessage, v any) error {

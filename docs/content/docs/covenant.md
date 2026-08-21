@@ -110,16 +110,16 @@ back to Backlog with a comment, never quietly closed.
 **Scoping** blesses research. A ticket sitting in Scoping is one a
 dispatcher may spend a scout on unattended — real tokens, real time. That
 is an authorization, the same shape as Todo one rung lower, which is why
-agents may not put work there either. A scope ends one of two ways, and
+agents may not put work there either. A plan run ends one of two ways, and
 both move the ticket *out* of Scoping: a scout with a blocking question
 moves it to Needs Input, posting the question; a scout with a finished
 plan moves it to Scoped, posting approaches, a recommendation and an
-estimate. Moving out is what every scope ends with, either way, and it
+estimate. Moving out is what every plan run ends with, either way, and it
 hands the decision back to a person.
 
 **Scoped** is the research side of In Review: the plan is written, the
 approaches are argued, and all that remains is a human's judgment. It exists
-because Needs Input was carrying two different jobs after a scope run — "the
+because Needs Input was carrying two different jobs after a plan run — "the
 scout has a question" and "the plan is ready to bless" — and those want
 different things from the person reading the board, on different clocks. A
 cockpit whose whole purpose is to sort work by the job it needs from you
@@ -128,13 +128,13 @@ Progress and In Review; research now has it too. Like Needs Input it is
 `unstarted`: blessing a plan promotes it to Todo, which re-authorizes the
 work rather than resuming it.
 
-Scoped is the agent's terminal write for a scope the same way In Review is
+Scoped is the agent's terminal write for a plan run the same way In Review is
 for a build — an agent may set it unattended, and the guard treats the two
 identically. Neither may an agent move a ticket *out* of Scoped: that
 destination is Todo (blessing) or one of the three close statuses, all
 five already forbidden regardless of where the ticket is moving from.
 
-`wand scope`'s happy path ends there: the plan, the argued options and the
+`wand plan`'s happy path ends there: the plan, the argued options and the
 estimate land on the ticket, then the move to Scoped is the last write,
 advertising that all three are there to read. Needs Input is the scout's
 other ending, and only that one now — a blocking question, nothing else,
@@ -192,7 +192,7 @@ agent may never set them: **Todo**, **Scoping**, **Done**, **Canceled**,
 In Progress, In Review, Needs Input, **Scoped**, Backlog, Triage.
 
 Note which *direction* is blocked. Moving a ticket into Scoping is a
-promotion and is refused; moving one out of Scoping is how every scope
+promotion and is refused; moving one out of Scoping is how every plan run
 ends, and is allowed either way it ends — to Needs Input (a blocking
 question) or to Scoped (a finished plan). The guard sees only the
 destination.
@@ -259,21 +259,21 @@ interrupt all park on the first attempt. See
 
 ## Toggles
 
-Two optional stages of the scope orchestrator are the covenant's to switch,
+Two optional stages of the plan orchestrator are the covenant's to switch,
 because whether they run is a property of a team's process rather than of
 one operator's afternoon:
 
-- `toggles.scope_interview` (on by default) allows `wand scope
+- `toggles.plan_interview` (on by default) allows `wand plan
   --interactive` to grill a human over its draft before writing anything.
   The toggle and the flag answer different questions — the toggle says
   whether this repo's lifecycle has an interview at all, the flag says
   whether this invocation has a human to hold one with — so passing the flag
   against a covenant that turned the stage off is refused rather than
   quietly resolved.
-- `toggles.scope_critic` (off by default) inserts a cold critic between the
+- `toggles.plan_critic` (off by default) inserts a cold critic between the
   draft and the interview: a fresh session prompted to attack the draft,
   whose objections are validated like any other handoff. It is off by
-  default because it spends a whole extra model call per scope and, unlike
+  default because it spends a whole extra model call per plan run and, unlike
   the rest of this covenant, is not yet a rule the reference system has
   finished paying for.
 

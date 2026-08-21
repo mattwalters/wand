@@ -1,4 +1,4 @@
-package scope_test
+package plan_test
 
 import (
 	"encoding/json"
@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/mattwalters/wand/internal/covenant"
-	"github.com/mattwalters/wand/internal/scope"
+	"github.com/mattwalters/wand/internal/plan"
 )
 
 // goodDraft is a handoff that satisfies every rule. Each test below breaks
@@ -44,8 +44,8 @@ func raw(t *testing.T, d map[string]any) json.RawMessage {
 	return b
 }
 
-func TestParseDraftAcceptsAWholeScope(t *testing.T) {
-	d, err := scope.ParseDraft(raw(t, goodDraft()), covenant.Default())
+func TestParseDraftAcceptsAWholePlan(t *testing.T) {
+	d, err := plan.ParseDraft(raw(t, goodDraft()), covenant.Default())
 	if err != nil {
 		t.Fatalf("ParseDraft: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestParseDraftAcceptsAWholeScope(t *testing.T) {
 // point of refusing is that nothing reaches the ticket: a human blesses the
 // plan on the strength of the argument, and nobody re-derives afterwards
 // whether the argument held.
-func TestParseDraftRefusesWhatIsNotAScope(t *testing.T) {
+func TestParseDraftRefusesWhatIsNotAPlan(t *testing.T) {
 	tests := []struct {
 		name   string
 		break_ func(map[string]any)
@@ -96,7 +96,7 @@ func TestParseDraftRefusesWhatIsNotAScope(t *testing.T) {
 		{"no files", func(d map[string]any) { d["files"] = []any{} }, "cites no files"},
 		// The draft's only citation loses its line number, which is a
 		// cosmetic defect and dropped rather than failing the draft — but
-		// dropping the only citation leaves none, and a scope with zero
+		// dropping the only citation leaves none, and a plan with zero
 		// citations is still refused, just for that reason instead.
 		{"a file with no line, and it was the only one", func(d map[string]any) {
 			d["files"].([]any)[0].(map[string]any)["location"] = "internal/queue/queue.go"
@@ -125,7 +125,7 @@ func TestParseDraftRefusesWhatIsNotAScope(t *testing.T) {
 			d["reason"] = ""
 		}, "gives no reason"},
 		// A misspelled field silently read as absent is the failure this
-		// costs one model call to catch and a whole scope to miss.
+		// costs one model call to catch and a whole plan to miss.
 		{"a misspelled field", func(d map[string]any) {
 			d["open_question"] = []any{"typo"}
 		}, "does not match the schema"},
@@ -135,7 +135,7 @@ func TestParseDraftRefusesWhatIsNotAScope(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			d := goodDraft()
 			tc.break_(d)
-			_, err := scope.ParseDraft(raw(t, d), covenant.Default())
+			_, err := plan.ParseDraft(raw(t, d), covenant.Default())
 			if err == nil {
 				t.Fatal("the draft was accepted")
 			}
@@ -148,16 +148,16 @@ func TestParseDraftRefusesWhatIsNotAScope(t *testing.T) {
 
 // A wrong premise is a complete handoff on its own: the scout that found
 // the ticket untrue owes nothing else, and demanding a plan for work that
-// should not happen is how a scope talks itself into one.
+// should not happen is how a plan talks itself into one.
 func TestParseDraftAcceptsAWrongPremiseAlone(t *testing.T) {
-	d, err := scope.ParseDraft(raw(t, map[string]any{
+	d, err := plan.ParseDraft(raw(t, map[string]any{
 		"premise": "wrong",
 		"reason":  "The section writer this asks for already exists in internal/linear/section.go.",
 	}), covenant.Default())
 	if err != nil {
 		t.Fatalf("ParseDraft: %v", err)
 	}
-	if d.Premise != scope.PremiseWrong {
+	if d.Premise != plan.PremiseWrong {
 		t.Errorf("premise = %q", d.Premise)
 	}
 }
@@ -177,7 +177,7 @@ func TestParseDraftAcceptsMultiLocationCitations(t *testing.T) {
 		t.Run(loc, func(t *testing.T) {
 			d := goodDraft()
 			d["files"] = []any{map[string]any{"location": loc, "note": "n"}}
-			if _, err := scope.ParseDraft(raw(t, d), covenant.Default()); err != nil {
+			if _, err := plan.ParseDraft(raw(t, d), covenant.Default()); err != nil {
 				t.Errorf("ParseDraft rejected %q: %v", loc, err)
 			}
 		})
@@ -198,17 +198,17 @@ func TestParseDraftDropsABareFilenameRatherThanDyingOnIt(t *testing.T) {
 	d := goodDraft()
 	d["files"] = []any{
 		map[string]any{"location": "internal/queue/queue.go", "note": "the whole file is the thing"},
-		map[string]any{"location": "internal/scope/handoff.go:271", "note": "the gate itself"},
+		map[string]any{"location": "internal/plan/handoff.go:271", "note": "the gate itself"},
 	}
 
-	got, err := scope.ParseDraft(raw(t, d), covenant.Default())
+	got, err := plan.ParseDraft(raw(t, d), covenant.Default())
 	if err != nil {
 		t.Fatalf("a draft whose only defect was one bare citation was refused: %v", err)
 	}
-	if len(got.Files) != 1 || got.Files[0].Location != "internal/scope/handoff.go:271" {
+	if len(got.Files) != 1 || got.Files[0].Location != "internal/plan/handoff.go:271" {
 		t.Fatalf("files = %+v, want only the citation that carried a line", got.Files)
 	}
-	// Dropped silently is how a scope quietly becomes less than the scout
+	// Dropped silently is how a plan quietly becomes less than the scout
 	// found. Recording it is the whole difference between trimming and
 	// losing.
 	if len(got.Dropped) != 1 || got.Dropped[0] != "internal/queue/queue.go" {
@@ -217,12 +217,12 @@ func TestParseDraftDropsABareFilenameRatherThanDyingOnIt(t *testing.T) {
 }
 
 // Dropping is not a licence to accept a draft that cites nothing usable: a
-// scope with zero citations left is still not a scope, however it got to
+// plan with zero citations left is still not a plan, however it got to
 // zero. The refusal just changes its reason.
 func TestParseDraftStillRefusesADraftWhoseOnlyCitationIsBare(t *testing.T) {
 	d := goodDraft()
 	d["files"] = []any{map[string]any{"location": "internal/queue/queue.go", "note": "n"}}
-	_, err := scope.ParseDraft(raw(t, d), covenant.Default())
+	_, err := plan.ParseDraft(raw(t, d), covenant.Default())
 	if err == nil {
 		t.Fatal("a draft with no usable citation was accepted")
 	}
@@ -237,10 +237,10 @@ func TestParseDraftStillRefusesADraftWhoseOnlyCitationIsBare(t *testing.T) {
 func TestParseDraftKeepsStructuralDefectsFatal(t *testing.T) {
 	d := goodDraft()
 	d["files"] = []any{
-		map[string]any{"location": "internal/scope/handoff.go:271", "note": ""},
-		map[string]any{"location": "internal/scope/scope.go:324", "note": "still fine"},
+		map[string]any{"location": "internal/plan/handoff.go:271", "note": ""},
+		map[string]any{"location": "internal/plan/plan.go:324", "note": "still fine"},
 	}
-	if _, err := scope.ParseDraft(raw(t, d), covenant.Default()); err == nil {
+	if _, err := plan.ParseDraft(raw(t, d), covenant.Default()); err == nil {
 		t.Fatal("a citation with an empty note was accepted")
 	}
 }
@@ -250,30 +250,30 @@ func TestParseDraftFollowsTheCovenantsScale(t *testing.T) {
 	cov.IssueEstimationType = "exponential"
 	d := goodDraft()
 	d["estimate"] = 4 // off fibonacci, on exponential
-	if _, err := scope.ParseDraft(raw(t, d), cov); err != nil {
+	if _, err := plan.ParseDraft(raw(t, d), cov); err != nil {
 		t.Errorf("an estimate on the team's own scale was refused: %v", err)
 	}
 
 	// A team that does not estimate must not be handed a number: Linear
 	// stores it and nothing on the board can explain where it came from.
 	cov.IssueEstimationType = "notUsed"
-	if _, err := scope.ParseDraft(raw(t, d), cov); err == nil {
+	if _, err := plan.ParseDraft(raw(t, d), cov); err == nil {
 		t.Error("an estimate was accepted for a team that does not estimate")
 	}
 	delete(d, "estimate")
-	if _, err := scope.ParseDraft(raw(t, d), cov); err != nil {
-		t.Errorf("a scope with no estimate was refused on a team that does not estimate: %v", err)
+	if _, err := plan.ParseDraft(raw(t, d), cov); err != nil {
+		t.Errorf("a plan with no estimate was refused on a team that does not estimate: %v", err)
 	}
 }
 
 func TestParseDraftRefusesNothing(t *testing.T) {
-	if _, err := scope.ParseDraft(nil, covenant.Default()); err == nil {
+	if _, err := plan.ParseDraft(nil, covenant.Default()); err == nil {
 		t.Error("a missing handoff was accepted")
 	}
 }
 
 func TestParseCritique(t *testing.T) {
-	sound, err := scope.ParseCritique(json.RawMessage(`{"verdict":"sound"}`))
+	sound, err := plan.ParseCritique(json.RawMessage(`{"verdict":"sound"}`))
 	if err != nil {
 		t.Fatalf("ParseCritique: %v", err)
 	}
@@ -294,7 +294,7 @@ func TestParseCritique(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			_, err := scope.ParseCritique(json.RawMessage(tc.body))
+			_, err := plan.ParseCritique(json.RawMessage(tc.body))
 			if err == nil {
 				t.Fatal("the critique was accepted")
 			}

@@ -17,7 +17,7 @@ import (
 
 // writeBoard is a fake WriteBoard, recording every write in the order it
 // happened — the property this whole test file is for, the same way
-// scope's loop_test.go pins its own write order.
+// plan's loop_test.go pins its own write order.
 type writeBoard struct {
 	*readOnlyBoard
 

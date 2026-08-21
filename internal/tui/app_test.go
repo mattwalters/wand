@@ -610,7 +610,7 @@ func TestRunningStripScreen(t *testing.T) {
 			Live: journal.Alive,
 		},
 		{
-			RunID: "run-2", Ticket: "WND-7", Verb: "scope", Harness: "",
+			RunID: "run-2", Ticket: "WND-7", Verb: "plan", Harness: "",
 			Phase: "scout", Round: 0,
 			Started: now.Add(-42 * time.Minute), Heartbeat: now.Add(-6 * time.Minute),
 			Live: journal.Dead,

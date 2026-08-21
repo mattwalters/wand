@@ -1,4 +1,4 @@
-package scope
+package plan
 
 import (
 	"context"
@@ -21,7 +21,7 @@ type Board interface {
 	verbs.Linear
 	IssueComments(ctx context.Context, issueID string) ([]linear.Comment, error)
 	// AddLabel marks the ticket. The scout's own writes never need it —
-	// it is here so a parked scope can be reported with verbs.ReportPark,
+	// it is here so a parked plan run can be reported with verbs.ReportPark,
 	// which labels rather than moving a status the scout does not own.
 	AddLabel(ctx context.Context, issueID, labelID string) error
 	// UpsertSection writes one marker-fenced region of the description,
@@ -46,7 +46,7 @@ type Tree interface {
 	Status(ctx context.Context, dir string) (string, error)
 }
 
-// Deps is everything the scope acts through.
+// Deps is everything the plan run acts through.
 type Deps struct {
 	Board   Board
 	Cov     covenant.Covenant
@@ -54,7 +54,7 @@ type Deps struct {
 	Tree    Tree
 
 	// Repo is the absolute path of the repository the scout reads. There
-	// is no worktree in a scope run: the scout reads the checkout the
+	// is no worktree in a plan run: the scout reads the checkout the
 	// command was run from, which is why it may not write to it.
 	Repo string
 	// Harness names the worker adapter, for the journal and the
@@ -80,15 +80,15 @@ type Deps struct {
 func (d Deps) validate() error {
 	switch {
 	case d.Board == nil, d.Workers == nil, d.Tree == nil:
-		return errors.New("scope: Deps is missing an interface; this is a wand bug")
+		return errors.New("plan: Deps is missing an interface; this is a wand bug")
 	case d.Repo == "":
-		return errors.New("scope: Deps.Repo is required")
+		return errors.New("plan: Deps.Repo is required")
 	case !filepath.IsAbs(d.Repo):
-		return fmt.Errorf("scope: Deps.Repo must be absolute, got %q", d.Repo)
+		return fmt.Errorf("plan: Deps.Repo must be absolute, got %q", d.Repo)
 	case d.Cov.Caps.WorkerTimeout <= 0:
-		return errors.New("scope: the covenant's worker timeout is unset; this is a wand bug — covenant.Default and the file loader both guarantee it")
+		return errors.New("plan: the covenant's worker timeout is unset; this is a wand bug — covenant.Default and the file loader both guarantee it")
 	case d.Cov.StatusName("scoping") == "":
-		return errors.New("scope: the covenant has no scoping status; this is a wand bug")
+		return errors.New("plan: the covenant has no scoping status; this is a wand bug")
 	}
 	if d.Interactive {
 		// The toggle and the flag answer different questions: the covenant
@@ -96,11 +96,11 @@ func (d Deps) validate() error {
 		// the flag says whether this invocation has a human to hold one
 		// with. Passing the flag against a covenant that turned the stage
 		// off is a contradiction worth refusing rather than resolving.
-		if !d.Cov.Toggles.ScopeInterview {
-			return errors.New("scope: this repo's covenant turns the scope interview off (toggles.scope_interview); drop --interactive, or turn the stage back on in wand.toml")
+		if !d.Cov.Toggles.PlanInterview {
+			return errors.New("plan: this repo's covenant turns the plan interview off (toggles.plan_interview); drop --interactive, or turn the stage back on in wand.toml")
 		}
 		if d.In == nil {
-			return errors.New("scope: an interactive scope needs somewhere to read answers from; this is a wand bug")
+			return errors.New("plan: an interactive plan run needs somewhere to read answers from; this is a wand bug")
 		}
 	}
 	return nil

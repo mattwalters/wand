@@ -16,20 +16,20 @@ import (
 // does anything, so the board itself is the mutex — the second process
 // finds the ticket already In Progress and refuses.
 //
-// `wand scope` has no such move. Its ticket sits in Scoping from the first
+// `wand plan` has no such move. Its ticket sits in Scoping from the first
 // read to the last write, because Scoping is the blessing it works under
 // and an agent may not revoke a blessing to take a lock. Nothing on the
-// board changes until the scope is finished, so nothing on the board can
-// keep a second scope out — and two scopes on one ticket produce two plans
-// written into the same fenced region, the second silently replacing the
-// first, plus two options comments arguing different recommendations at a
-// human who cannot tell which one the estimate belongs to.
+// board changes until the plan run is finished, so nothing on the board can
+// keep a second plan run out — and two plan runs over one ticket produce two
+// plans written into the same fenced region, the second silently replacing
+// the first, plus two options comments arguing different recommendations at
+// a human who cannot tell which one the estimate belongs to.
 //
 // So an orchestrator that cannot use the board as its mutex takes this
 // lock explicitly. It is the same mechanism as the run lock, for the same
 // reason: the kernel drops a flock when its holder dies, however it died,
-// so a crashed scope does not wedge its ticket until someone deletes a
-// file. The scope, not the ticket, is the unit — the lock lives only as
+// so a crashed plan run does not wedge its ticket until someone deletes a
+// file. The plan run, not the ticket, is the unit — the lock lives only as
 // long as the process holding it.
 //
 // The lock is machine-local: it is a file in this machine's state
@@ -50,7 +50,7 @@ type TicketLock struct {
 
 // LockTicket takes the exclusive lock on one ticket, without blocking.
 //
-// It refuses rather than waits: a second scope of the same ticket is a
+// It refuses rather than waits: a second plan run over the same ticket is a
 // mistake to report, not a job to queue behind a run that may take half an
 // hour. The refusal names the holder, because "somebody else has it" is
 // only actionable if you can go and look at them.

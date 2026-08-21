@@ -50,7 +50,7 @@ func TestEstimateValuesFollowTheScale(t *testing.T) {
 	}
 
 	// Zero is Linear's "no estimate" rather than a size, so it is on no
-	// scale here — a scope whose estimate is "none" has not estimated.
+	// scale here — a plan whose estimate is "none" has not estimated.
 	for _, v := range Default().EstimateValues() {
 		if v == 0 {
 			t.Error("the fibonacci scale offers 0, which is the absence of an estimate")

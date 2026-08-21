@@ -202,7 +202,7 @@ type phaseDetail struct {
 	WallClock string `json:"wall_clock,omitempty"`
 	// DiffStat is git's own --shortstat of the worktree against the run's
 	// base, taken at the end of every phase — the run verb only, since
-	// scope has no worktree.
+	// a plan run has no worktree.
 	DiffStat string `json:"diff_stat,omitempty"`
 	// Attempt is which spawn of this phase-and-round this record ends,
 	// counting from 1. It is above 1 only when an earlier attempt failed

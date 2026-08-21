@@ -40,8 +40,8 @@ import (
 	"strings"
 
 	"github.com/mattwalters/wand/internal/linear"
+	"github.com/mattwalters/wand/internal/plan"
 	"github.com/mattwalters/wand/internal/queue"
-	"github.com/mattwalters/wand/internal/scope"
 )
 
 // ReadyForHumanLabel marks work a person has to look at — a PR to review, a
@@ -201,14 +201,14 @@ func openIssues(issues []linear.Issue) []linear.Issue {
 	return open
 }
 
-// PlanSection returns the plan region scope wrote onto issue's description —
-// the marker-fenced text [scope.PlanMarkdown] rendered and nothing else —
-// and whether the issue carries one. A Scoped ticket always should; a
-// malformed pair of markers is reported as an error rather than guessed at,
-// the same refusal [linear.ReadSection] makes for every other reader of a
-// fenced section.
+// PlanSection returns the plan region `wand plan` wrote onto issue's
+// description — the marker-fenced text [plan.PlanMarkdown] rendered and
+// nothing else — and whether the issue carries one. A Scoped ticket always
+// should; a malformed pair of markers is reported as an error rather than
+// guessed at, the same refusal [linear.ReadSection] makes for every other
+// reader of a fenced section.
 func PlanSection(issue linear.Issue) (string, bool, error) {
-	return linear.ReadSection(issue.Description, scope.PlanSectionID)
+	return linear.ReadSection(issue.Description, plan.PlanSectionID)
 }
 
 // issueRows orders a queue and wraps it as rows.
@@ -316,13 +316,13 @@ var (
 	}
 	// RejectPlan sends a Scoped ticket back to the pool. Demoting a plan is
 	// as much a judgment as blessing one, and the reason exists for the same
-	// reason Cancel's does: the next scope of this ticket reads it instead of
-	// guessing why the last one did not land.
+	// reason Cancel's does: the next plan run over this ticket reads it
+	// instead of guessing why the last one did not land.
 	RejectPlan = Disposition{
 		Key: "b", Name: "Backlog, with reason", Status: "backlog", Field: FieldReason,
 		Gravity: "Backlog is the pool. The reason is posted as a comment before the status " +
-			"moves, because a rejected plan with no reason on it leaves the next scope of " +
-			"this ticket guessing at what was wrong.",
+			"moves, because a rejected plan with no reason on it leaves the next plan run " +
+			"over this ticket guessing at what was wrong.",
 	}
 	// ClearParked removes the parked label from the ticket a parked lane
 	// names — the act ReportPark's own comment instructs and, until this,

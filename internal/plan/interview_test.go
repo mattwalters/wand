@@ -1,4 +1,4 @@
-package scope_test
+package plan_test
 
 import (
 	"bytes"
@@ -6,13 +6,13 @@ import (
 	"testing"
 
 	"github.com/mattwalters/wand/internal/covenant"
-	"github.com/mattwalters/wand/internal/scope"
+	"github.com/mattwalters/wand/internal/plan"
 )
 
 // draftWithAssumptions is the fixture the interview tests grill: three
 // assumptions, deliberately listed cheapest-first so the ordering under
 // test cannot pass by accident.
-func draftWithAssumptions(t *testing.T) scope.Draft {
+func draftWithAssumptions(t *testing.T) plan.Draft {
 	t.Helper()
 	d := goodDraft()
 	d["assumptions"] = []any{
@@ -20,7 +20,7 @@ func draftWithAssumptions(t *testing.T) scope.Draft {
 		map[string]any{"statement": "middling thing", "if_wrong": "an extra test", "cost": "medium"},
 		map[string]any{"statement": "expensive thing", "if_wrong": "the whole approach changes", "cost": "high"},
 	}
-	parsed, err := scope.ParseDraft(raw(t, d), covenant.Default())
+	parsed, err := plan.ParseDraft(raw(t, d), covenant.Default())
 	if err != nil {
 		t.Fatalf("ParseDraft: %v", err)
 	}
@@ -32,17 +32,17 @@ func draftWithAssumptions(t *testing.T) scope.Draft {
 // mattered. The problem first, then the recommendation, then what the plan
 // rests on costliest-first, then the leftovers.
 func TestQuestionsAreOrderedByBlastRadius(t *testing.T) {
-	qs := scope.Questions(draftWithAssumptions(t))
+	qs := plan.Questions(draftWithAssumptions(t))
 
 	var topics []string
 	for _, q := range qs {
 		topics = append(topics, q.Topic)
 	}
 	want := []string{
-		scope.TopicTicket,
-		scope.TopicRecommendation,
-		scope.TopicAssumption, scope.TopicAssumption, scope.TopicAssumption,
-		scope.TopicOpenQuestion,
+		plan.TopicTicket,
+		plan.TopicRecommendation,
+		plan.TopicAssumption, plan.TopicAssumption, plan.TopicAssumption,
+		plan.TopicOpenQuestion,
 	}
 	if strings.Join(topics, "|") != strings.Join(want, "|") {
 		t.Fatalf("topics = %v\nwant %v", topics, want)
@@ -61,7 +61,7 @@ func TestQuestionsAreOrderedByBlastRadius(t *testing.T) {
 // every question carries the draft's own words rather than a paraphrase.
 func TestEveryQuestionQuotesTheDraft(t *testing.T) {
 	d := draftWithAssumptions(t)
-	for i, q := range scope.Questions(d) {
+	for i, q := range plan.Questions(d) {
 		if strings.TrimSpace(q.Quote) == "" {
 			t.Errorf("question %d quotes nothing", i+1)
 		}
@@ -69,7 +69,7 @@ func TestEveryQuestionQuotesTheDraft(t *testing.T) {
 			t.Errorf("question %d asks nothing", i+1)
 		}
 	}
-	qs := scope.Questions(d)
+	qs := plan.Questions(d)
 	if qs[0].Quote != d.Understanding {
 		t.Errorf("the first question quotes %q, not the draft's reading of the ticket", qs[0].Quote)
 	}
@@ -85,14 +85,14 @@ func TestEveryQuestionQuotesTheDraft(t *testing.T) {
 
 func TestInterviewCollectsAnswers(t *testing.T) {
 	d := draftWithAssumptions(t)
-	qs := scope.Questions(d)
+	qs := plan.Questions(d)
 
 	// Answer the first over two lines, skip the second, answer the third,
 	// then stop reading. A blank line ends an answer; an empty answer means
 	// "as drafted" and is not recorded.
 	in := strings.NewReader("no, it is about the queue\nnot the vet pass\n\n\nyes, that holds\n\n")
 	var out bytes.Buffer
-	answers, err := scope.Interview(in, &out, qs)
+	answers, err := plan.Interview(in, &out, qs)
 	if err != nil {
 		t.Fatalf("Interview: %v", err)
 	}
@@ -102,7 +102,7 @@ func TestInterviewCollectsAnswers(t *testing.T) {
 	if answers[0].Text != "no, it is about the queue\nnot the vet pass" {
 		t.Errorf("first answer = %q; a multi-line answer must survive whole", answers[0].Text)
 	}
-	if answers[0].Question.Topic != scope.TopicTicket || answers[1].Question.Topic != scope.TopicAssumption {
+	if answers[0].Question.Topic != plan.TopicTicket || answers[1].Question.Topic != plan.TopicAssumption {
 		t.Errorf("answers landed on the wrong questions: %q, %q", answers[0].Question.Topic, answers[1].Question.Topic)
 	}
 	// Every question the human could still answer is put to them, quoting
@@ -116,8 +116,8 @@ func TestInterviewCollectsAnswers(t *testing.T) {
 // run keeps what they said and stops asking rather than reading a closed
 // pipe as a wall of empty answers.
 func TestInterviewStopsAtTheEndOfInput(t *testing.T) {
-	qs := scope.Questions(draftWithAssumptions(t))
-	answers, err := scope.Interview(strings.NewReader("the premise is wrong"), &bytes.Buffer{}, qs)
+	qs := plan.Questions(draftWithAssumptions(t))
+	answers, err := plan.Interview(strings.NewReader("the premise is wrong"), &bytes.Buffer{}, qs)
 	if err != nil {
 		t.Fatalf("Interview: %v", err)
 	}
@@ -127,16 +127,16 @@ func TestInterviewStopsAtTheEndOfInput(t *testing.T) {
 }
 
 func TestTranscriptKeepsTheHumansWordsApartFromTheDrafts(t *testing.T) {
-	qs := scope.Questions(draftWithAssumptions(t))
-	answers, err := scope.Interview(strings.NewReader("solve the other problem\n\n"), &bytes.Buffer{}, qs)
+	qs := plan.Questions(draftWithAssumptions(t))
+	answers, err := plan.Interview(strings.NewReader("solve the other problem\n\n"), &bytes.Buffer{}, qs)
 	if err != nil {
 		t.Fatalf("Interview: %v", err)
 	}
-	got := scope.Transcript(answers)
+	got := plan.Transcript(answers)
 	if !strings.Contains(got, "> solve the other problem") {
 		t.Errorf("the transcript does not quote the human: %q", got)
 	}
-	if !strings.Contains(got, scope.TopicTicket) {
+	if !strings.Contains(got, plan.TopicTicket) {
 		t.Errorf("the transcript does not say what the answer was about: %q", got)
 	}
 }

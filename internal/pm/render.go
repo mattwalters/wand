@@ -8,7 +8,7 @@ import (
 )
 
 // BriefSectionID is the marker-fenced region of a filed ticket's description
-// that pm owns — the same convention as scope.PlanSectionID, applied to a
+// that pm owns — the same convention as plan.PlanSectionID, applied to a
 // ticket pm itself is creating rather than one it is annotating. Fencing it
 // even on a brand-new issue means a later pm proposal that touches the same
 // ticket (a correction, a re-file) replaces only what pm wrote, leaving

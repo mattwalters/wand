@@ -16,7 +16,7 @@ func newSweepCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "sweep",
 		Short: "Act on one thing left over after a run ended",
-		Long: "sweep is everything that happens after wand run or wand scope exits.\n" +
+		Long: "sweep is everything that happens after wand run or wand plan exits.\n" +
 			"It ranks and vets three conditions the same way dispatch picks a\n" +
 			"winner, and acts on at most one, first-refused-skipped: a lease whose\n" +
 			"owner is provably dead (the run's journal is parked and the ticket\n" +

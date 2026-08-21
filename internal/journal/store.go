@@ -38,7 +38,7 @@ import (
 // explicitly with [Store.LockTicket] (ticket.go) — machine-local, held for
 // the life of the process, released by the kernel when it dies:
 //
-//	<root>/tickets/<ticket>.lock    one scope at a time, per ticket
+//	<root>/tickets/<ticket>.lock    one plan run at a time, per ticket
 type Store struct {
 	// Root is the directory runs live under. Absolute, and outside every
 	// repository the store records runs for.

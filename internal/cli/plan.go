@@ -7,25 +7,25 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/mattwalters/wand/internal/journal"
-	"github.com/mattwalters/wand/internal/scope"
+	"github.com/mattwalters/wand/internal/plan"
 	"github.com/mattwalters/wand/internal/worker"
 )
 
-func newScopeCmd() *cobra.Command {
+func newPlanCmd() *cobra.Command {
 	var harness, model, effort string
 	var interactive bool
 
 	cmd := &cobra.Command{
-		Use:   "scope <identifier>",
+		Use:   "plan <identifier>",
 		Short: "Research one Scoping ticket into a plan a human can bless",
-		Long: "scope sends a cold, read-only scout over this repository to research one\n" +
+		Long: "plan sends a cold, read-only scout over this repository to research one\n" +
 			"ticket, validates what it hands back, and writes the result: the plan into\n" +
 			"the ticket's description, the approaches and their trade-offs as a comment,\n" +
 			"the estimate, and Scoped last — so every deliverable has landed before\n" +
 			"the status that advertises it. Nothing is written unless the whole handoff\n" +
 			"passes validation.\n\n" +
 			"The ticket must be in Scoping. Blessing research is a human act, the same\n" +
-			"way blessing building is, and scope will not take a ticket nobody blessed.\n" +
+			"way blessing building is, and plan will not take a ticket nobody blessed.\n" +
 			"It ends in Scoped: promoting the plan to Todo is yours.\n\n" +
 			"There is no worktree, no branch and no CI: the scout reads the checkout you\n" +
 			"run this from and may not change it. If it does, the run parks and leaves\n" +
@@ -35,7 +35,7 @@ func newScopeCmd() *cobra.Command {
 			"answers to a second, fresh session to revise, because a session that has\n" +
 			"just argued for an approach defends it. It needs a terminal; an unattended\n" +
 			"caller must not pass it.\n\n" +
-			"Exit codes are a contract a scheduler can read: 0 scoped, 2 handed back\n" +
+			"Exit codes are a contract a scheduler can read: 0 planned, 2 handed back\n" +
 			"(the scout judged the ticket's premise wrong), 3 parked, 1 the run never\n" +
 			"started.\n\n" +
 			"Requires LINEAR_API_KEY, and the harness on PATH. Run it inside the repo.",
@@ -44,7 +44,7 @@ func newScopeCmd() *cobra.Command {
 		// any RunE error, which would collapse handed-back and parked into
 		// generic failure. The command exits itself instead.
 		Run: func(cmd *cobra.Command, args []string) {
-			if code := runScope(cmd, args[0], harness, model, effort, interactive); code != scope.ExitScoped {
+			if code := runPlan(cmd, args[0], harness, model, effort, interactive); code != plan.ExitScoped {
 				os.Exit(code)
 			}
 		},
@@ -57,7 +57,7 @@ func newScopeCmd() *cobra.Command {
 	return cmd
 }
 
-func runScope(cmd *cobra.Command, identifier, harness, model, effort string, interactive bool) int {
+func runPlan(cmd *cobra.Command, identifier, harness, model, effort string, interactive bool) int {
 	out, errOut := cmd.OutOrStdout(), cmd.ErrOrStderr()
 	fail := func(err error) int {
 		fmt.Fprintln(errOut, err)
@@ -68,7 +68,7 @@ func runScope(cmd *cobra.Command, identifier, harness, model, effort string, int
 		// Refuse before anything happens rather than block forever on a
 		// read nobody is there to answer. An unattended caller that passes
 		// the flag gets a refusal it can see in its logs, which is the
-		// failure it can act on; a scope hung on a pipe is not.
+		// failure it can act on; a plan run hung on a pipe is not.
 		if err := requireTTY(cmd); err != nil {
 			return fail(err)
 		}
@@ -86,7 +86,7 @@ func runScope(cmd *cobra.Command, identifier, harness, model, effort string, int
 	if err != nil {
 		return fail(err)
 	}
-	repo, err := repoRoot("scope")
+	repo, err := repoRoot("plan")
 	if err != nil {
 		return fail(err)
 	}
@@ -100,11 +100,11 @@ func runScope(cmd *cobra.Command, identifier, harness, model, effort string, int
 	ctx, stop := journal.Interruptible(cmd.Context())
 	defer stop()
 
-	outcome, err := scope.Execute(ctx, scope.Deps{
+	outcome, err := plan.Execute(ctx, plan.Deps{
 		Board:       cl,
 		Cov:         cov,
-		Workers:     scope.AdapterWorkers{Adapter: adapter},
-		Tree:        scope.ExecTree{},
+		Workers:     plan.AdapterWorkers{Adapter: adapter},
+		Tree:        plan.ExecTree{},
 		Repo:        repo,
 		Harness:     adapter.Name(),
 		Model:       model,
@@ -132,7 +132,7 @@ func requireTTY(cmd *cobra.Command) error {
 		return fmt.Errorf("--interactive needs a terminal to read your answers from: %w", err)
 	}
 	if fi.Mode()&os.ModeCharDevice == 0 {
-		return fmt.Errorf("--interactive needs a terminal: stdin is a pipe or a file here, and an interview nobody can answer would hang the run. Drop the flag for an unattended scope")
+		return fmt.Errorf("--interactive needs a terminal: stdin is a pipe or a file here, and an interview nobody can answer would hang the run. Drop the flag for an unattended plan run")
 	}
 	return nil
 }

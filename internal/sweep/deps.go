@@ -52,7 +52,7 @@ type Deps struct {
 
 	TeamKey string
 	// Repo is the absolute path of the repository sweep reads PRs for —
-	// the checkout it is run from, the same as `wand scope`. There is no
+	// the checkout it is run from, the same as `wand plan`. There is no
 	// worktree at this point in the lifecycle: a converged run already
 	// removed its own.
 	Repo string

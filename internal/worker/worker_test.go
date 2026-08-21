@@ -83,7 +83,7 @@ func TestSpecValidation(t *testing.T) {
 
 func TestComposeStatesTheContract(t *testing.T) {
 	spec := specFor(t)
-	spec.Mode = "scope (read-only research)"
+	spec.Mode = "scout (read-only research)"
 	spec.Rules = []string{"do not modify the working tree"}
 	got := worker.Compose(spec)
 

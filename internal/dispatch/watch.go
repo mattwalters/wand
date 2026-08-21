@@ -20,7 +20,7 @@ type WatchDeps struct {
 	Deps
 
 	// Bin is the wand binary a winner is spawned through — normally
-	// os.Args[0]. A winner runs as `<Bin> run <id>` or `<Bin> scope <id>`,
+	// os.Args[0]. A winner runs as `<Bin> run <id>` or `<Bin> plan <id>`,
 	// never in-process: a detached child is what survives the watcher, and
 	// a goroutine cannot.
 	Bin string
@@ -128,8 +128,8 @@ func NewPending() *Pending {
 }
 
 // count returns the number of lanes this session's spawned-but-unregistered
-// children occupy. A scope child never counts here — a scope needs no lane,
-// same as [LanesUsed] excludes a registered scope run — otherwise a
+// children occupy. A plan child never counts here — a plan run needs no
+// lane, same as [LanesUsed] excludes a registered plan run — otherwise a
 // dispatched Scoping ticket would starve Todo for the length of its own
 // pass, the exact starvation the lane split exists to prevent.
 func (p *Pending) count() int {

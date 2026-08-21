@@ -1,4 +1,4 @@
-package scope
+package plan
 
 import (
 	"bufio"
@@ -9,7 +9,7 @@ import (
 
 // The draft-then-grill interview.
 //
-// A scope is a decision made once and paid for over the whole life of the
+// A plan is a decision made once and paid for over the whole life of the
 // work, so the cheapest moment to correct it is before it is written down.
 // The interview is that moment, and its shape is deliberate:
 //

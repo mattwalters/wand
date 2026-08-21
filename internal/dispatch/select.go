@@ -5,16 +5,16 @@ import (
 
 	"github.com/mattwalters/wand/internal/journal"
 	"github.com/mattwalters/wand/internal/linear"
+	"github.com/mattwalters/wand/internal/plan"
 	"github.com/mattwalters/wand/internal/queue"
-	"github.com/mattwalters/wand/internal/scope"
 )
 
 // Verb names which orchestrator a winner runs through.
 type Verb string
 
 const (
-	VerbRun   Verb = "run"
-	VerbScope Verb = "scope"
+	VerbRun  Verb = "run"
+	VerbPlan Verb = "plan"
 )
 
 // Winner is the one ticket a pass runs, and how.
@@ -29,7 +29,7 @@ type Winner struct {
 //
 // A Scoping winner is the fallback in two cases that read identically from
 // here — no lane is free, or Todo simply has nothing startable — and that
-// is deliberate: a scope needs no lane (see [LanesUsed]), so an eligible
+// is deliberate: a plan run needs no lane (see [LanesUsed]), so an eligible
 // Scoping ticket dispatches even at full lane occupancy, and research is
 // never left idle just because Todo is momentarily empty either.
 //
@@ -45,20 +45,20 @@ func Select(todo, scoping []linear.Issue, laneFree bool) (winner Winner, ok bool
 		return Winner{Issue: todoReady[0], Verb: VerbRun}, true, todoSkips, scopingSkips
 	}
 	if len(scopingReady) > 0 {
-		return Winner{Issue: scopingReady[0], Verb: VerbScope}, true, todoSkips, scopingSkips
+		return Winner{Issue: scopingReady[0], Verb: VerbPlan}, true, todoSkips, scopingSkips
 	}
 	return Winner{}, false, todoSkips, scopingSkips
 }
 
 // rankScoping ranks and vets Scoping issues the way queue.Build does for
-// Todo, with scope's own vet: a ticket blocked by another is exactly the
-// ticket worth scoping early, so only the human-only label refuses here.
+// Todo, with plan's own vet: a ticket blocked by another is exactly the
+// ticket worth planning early, so only the human-only label refuses here.
 func rankScoping(issues []linear.Issue) (ready []linear.Issue, skips []queue.Skip) {
 	ranked := make([]linear.Issue, len(issues))
 	copy(ranked, issues)
 	sort.SliceStable(ranked, func(i, j int) bool { return queue.Less(ranked[i], ranked[j]) })
 	for _, issue := range ranked {
-		if reason := scope.Vet(issue); reason != "" {
+		if reason := plan.Vet(issue); reason != "" {
 			skips = append(skips, queue.Skip{Issue: issue, Reason: reason})
 			continue
 		}
@@ -68,8 +68,8 @@ func rankScoping(issues []linear.Issue) (ready []linear.Issue, skips []queue.Ski
 }
 
 // LanesUsed counts the reports that occupy a lane of repo: a live "run"
-// verb that has not ended. A "scope" run never occupies one — a scope needs
-// no lane — and neither does a dead one: a report whose lease liveness is
+// verb that has not ended. A "plan" run never occupies one — a plan run
+// needs no lane — and neither does a dead one: a report whose lease liveness is
 // [journal.Dead] is gc'd from the count right here, read-only, because a
 // zombie does not hold a lane, whatever phase its journal last opened.
 //

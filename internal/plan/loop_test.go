@@ -1,4 +1,4 @@
-package scope_test
+package plan_test
 
 import (
 	"context"
@@ -13,7 +13,7 @@ import (
 	"github.com/mattwalters/wand/internal/covenant"
 	"github.com/mattwalters/wand/internal/journal"
 	"github.com/mattwalters/wand/internal/linear"
-	"github.com/mattwalters/wand/internal/scope"
+	"github.com/mattwalters/wand/internal/plan"
 	"github.com/mattwalters/wand/internal/worker"
 )
 
@@ -64,9 +64,9 @@ func (b *board) CreateComment(ctx context.Context, issueID, body string) error {
 	if b.failComment {
 		return fmt.Errorf("linear is down")
 	}
-	// The park report is a write about the run, not about the scope. It is
+	// The park report is a write about the run, not about the plan. It is
 	// logged apart so the many "a park writes nothing to the ticket" tests
-	// can keep asserting what they have always meant — that no *scope*
+	// can keep asserting what they have always meant — that no *plan*
 	// reached the ticket — now that a park also explains itself there.
 	if strings.HasPrefix(body, parkedCommentPrefix) {
 		b.log("park:comment")
@@ -82,7 +82,7 @@ func (b *board) CreateComment(ctx context.Context, issueID, body string) error {
 // rather than quietly reclassifying every write in this file.
 const parkedCommentPrefix = "**This run parked.**"
 
-// deliverables is everything the scout wrote as scope — plan, options,
+// deliverables is everything the scout wrote as a plan — plan, options,
 // estimate, status — with the park report filtered out.
 func (b *board) deliverables() []string {
 	var out []string
@@ -126,7 +126,7 @@ func (b *board) UpsertSection(ctx context.Context, issueID, description, id, mar
 }
 
 // The rest of verbs.Linear, which the premise hand-back reaches through
-// verbs.Handback. A scope never files or assigns.
+// verbs.Handback. A plan run never files or assigns.
 func (b *board) Viewer(ctx context.Context) (linear.User, error) {
 	return linear.User{ID: "u", Name: "Key Holder"}, nil
 }
@@ -148,7 +148,7 @@ func (b *board) AddLabel(ctx context.Context, issueID, labelID string) error {
 	return nil
 }
 func (b *board) CreateIssue(ctx context.Context, in linear.IssueCreate) (linear.Issue, error) {
-	return linear.Issue{}, fmt.Errorf("a scope files nothing")
+	return linear.Issue{}, fmt.Errorf("a plan run files nothing")
 }
 func (b *board) SearchIssues(ctx context.Context, teamKey, term string) ([]linear.Issue, error) {
 	return nil, nil
@@ -218,7 +218,7 @@ func scopingIssue() linear.Issue {
 	return linear.Issue{
 		ID:          "issue-1",
 		Identifier:  "WND-9",
-		Title:       "wand scope",
+		Title:       "wand plan",
 		Description: "A human wrote this.\n",
 		TeamID:      "team",
 		State:       linear.IssueState{Name: "Scoping", Type: "unstarted"},
@@ -229,7 +229,7 @@ func scopingIssue() linear.Issue {
 // store is real because the ordering guarantees this package makes are
 // guarantees about what the journal ends up saying.
 type harness struct {
-	deps  scope.Deps
+	deps  plan.Deps
 	board *board
 	work  *workers
 	tree  *tree
@@ -247,7 +247,7 @@ func newHarness(t *testing.T, results ...workerResult) *harness {
 	cov := covenant.Default()
 	return &harness{
 		board: b, work: w, tree: tr, store: store, out: out,
-		deps: scope.Deps{
+		deps: plan.Deps{
 			Board:   b,
 			Cov:     cov,
 			Workers: w,
@@ -259,19 +259,19 @@ func newHarness(t *testing.T, results ...workerResult) *harness {
 	}
 }
 
-func (h *harness) run(t *testing.T) (scope.Outcome, error) {
+func (h *harness) run(t *testing.T) (plan.Outcome, error) {
 	t.Helper()
-	return scope.Execute(context.Background(), h.deps, h.store, "WND-9")
+	return plan.Execute(context.Background(), h.deps, h.store, "WND-9")
 }
 
 func draftHandoff() map[string]any { return goodDraft() }
 
 // The deliverables land in one order, and the status that advertises them
 // lands last. A ticket in Scoped promises a finished plan to judge; every
-// earlier write is part of that scope, and the comment precedes the
+// earlier write is part of that plan, and the comment precedes the
 // estimate because a number nothing explains is worse than an argument
 // with no number.
-func TestScopeWritesInTheFixedOrder(t *testing.T) {
+func TestPlanWritesInTheFixedOrder(t *testing.T) {
 	h := newHarness(t, workerResult{handoff: draftHandoff()})
 
 	out, err := h.run(t)
@@ -281,8 +281,8 @@ func TestScopeWritesInTheFixedOrder(t *testing.T) {
 	if out.Kind != journal.Converged {
 		t.Fatalf("outcome = %s (%s), want converged", out.Kind, out.Reason)
 	}
-	if out.ExitCode() != scope.ExitScoped {
-		t.Errorf("exit code = %d, want %d", out.ExitCode(), scope.ExitScoped)
+	if out.ExitCode() != plan.ExitScoped {
+		t.Errorf("exit code = %d, want %d", out.ExitCode(), plan.ExitScoped)
 	}
 
 	want := []string{"section=plan", "comment", "estimate", "state=state-scoped"}
@@ -310,16 +310,16 @@ func TestScopeWritesInTheFixedOrder(t *testing.T) {
 	if state.Outcome != journal.Converged {
 		t.Errorf("journal outcome = %s, want converged", state.Outcome)
 	}
-	if state.Meta.Verb != "scope" {
+	if state.Meta.Verb != "plan" {
 		t.Errorf("journal verb = %q", state.Meta.Verb)
 	}
 }
 
-// scopePhaseDetail is the subset of the scope package's own (unexported)
+// planPhaseDetail is the subset of the plan package's own (unexported)
 // phaseDetail this test needs — the journal's Detail field is opaque by
 // design (internal/journal), so an external test reads it back the same
 // way any other consumer (wand stats, the UI usage panel) would.
-type scopePhaseDetail struct {
+type planPhaseDetail struct {
 	Harness   string `json:"harness"`
 	Model     string `json:"model"`
 	WallClock string `json:"wall_clock"`
@@ -352,7 +352,7 @@ func TestPhaseDetailCarriesOperationalMetrics(t *testing.T) {
 		if r.Kind != journal.KindPhaseEnded {
 			continue
 		}
-		var d scopePhaseDetail
+		var d planPhaseDetail
 		if err := json.Unmarshal(r.Detail, &d); err != nil {
 			t.Fatalf("unmarshaling phase.ended detail: %v", err)
 		}
@@ -376,7 +376,7 @@ func TestPhaseDetailCarriesOperationalMetrics(t *testing.T) {
 }
 
 // The one rule the whole package is built around: a handoff that fails
-// validation writes nothing at all. Half a scope on a ticket is worse than
+// validation writes nothing at all. Half a plan on a ticket is worse than
 // none, because it reads like a whole one.
 func TestAnInvalidHandoffWritesNothing(t *testing.T) {
 	bad := draftHandoff()
@@ -408,14 +408,14 @@ func TestAWorkerFailureParks(t *testing.T) {
 		t.Fatalf("Execute: %v", err)
 	}
 	if out.Kind != journal.Parked || len(h.board.deliverables()) != 0 {
-		t.Fatalf("outcome = %s, writes = %v; want a park with no scope written", out.Kind, h.board.deliverables())
+		t.Fatalf("outcome = %s, writes = %v; want a park with no plan written", out.Kind, h.board.deliverables())
 	}
-	if out.ExitCode() != scope.ExitParked {
-		t.Errorf("exit code = %d, want %d", out.ExitCode(), scope.ExitParked)
+	if out.ExitCode() != plan.ExitParked {
+		t.Errorf("exit code = %d, want %d", out.ExitCode(), plan.ExitParked)
 	}
 }
 
-// A wrong premise is a hand-back, not a scope: the scout's own account
+// A wrong premise is a hand-back, not a plan: the scout's own account
 // reaches the ticket verbatim, the description is not touched, and the
 // comment precedes the status move (verbs.Handback's rule, reused).
 func TestAWrongPremiseHandsBackWithoutAPlan(t *testing.T) {
@@ -431,8 +431,8 @@ func TestAWrongPremiseHandsBackWithoutAPlan(t *testing.T) {
 	if out.Kind != journal.HandedBack {
 		t.Fatalf("outcome = %s (%s), want handed back", out.Kind, out.Reason)
 	}
-	if out.ExitCode() != scope.ExitHandedBack {
-		t.Errorf("exit code = %d, want %d", out.ExitCode(), scope.ExitHandedBack)
+	if out.ExitCode() != plan.ExitHandedBack {
+		t.Errorf("exit code = %d, want %d", out.ExitCode(), plan.ExitHandedBack)
 	}
 	want := []string{"comment", "state=state-needs-input"}
 	if strings.Join(h.board.calls, ",") != strings.Join(want, ",") {
@@ -449,7 +449,7 @@ func TestAWrongPremiseHandsBackWithoutAPlan(t *testing.T) {
 // The scout reads the checkout the command was run from, which is usually
 // a person's. A change it made is not a mess in a directory this run owns:
 // it is in somebody's working copy, and it goes in front of them rather
-// than into a scope nobody knows was written over it.
+// than into a plan nobody knows was written over it.
 func TestAWorkerThatTouchesTheCheckoutParks(t *testing.T) {
 	h := newHarness(t, workerResult{handoff: draftHandoff()})
 	h.tree.changeAfter = 1
@@ -486,41 +486,41 @@ func TestAWorkerThatTouchesTheCheckoutParks(t *testing.T) {
 }
 
 // Blessing research is a human act. A ticket nobody moved into Scoping is
-// not a ticket to scope, and refusing costs nothing: no run, no journal, no
+// not a ticket to plan, and refusing costs nothing: no run, no journal, no
 // lock.
-func TestScopeRefusesATicketNobodyBlessed(t *testing.T) {
+func TestPlanRefusesATicketNobodyBlessed(t *testing.T) {
 	h := newHarness(t)
 	h.board.issue.State = linear.IssueState{Name: "Backlog", Type: "backlog"}
 
 	_, err := h.run(t)
 	if err == nil {
-		t.Fatal("a Backlog ticket was scoped")
+		t.Fatal("a Backlog ticket was planned")
 	}
-	if !strings.Contains(err.Error(), "not yours to scope") {
+	if !strings.Contains(err.Error(), "not yours to plan") {
 		t.Errorf("error = %v", err)
 	}
 	if ids, _ := h.store.List(); len(ids) != 0 {
-		t.Errorf("a refused scope left a run behind: %v", ids)
+		t.Errorf("a refused plan left a run behind: %v", ids)
 	}
 }
 
-func TestScopeRefusesHumanOnlyWork(t *testing.T) {
+func TestPlanRefusesHumanOnlyWork(t *testing.T) {
 	h := newHarness(t)
 	h.board.issue.Labels = []string{"human-only"}
 
 	_, err := h.run(t)
 	if err == nil {
-		t.Fatal("a human-only ticket was scoped")
+		t.Fatal("a human-only ticket was planned")
 	}
 	if !strings.Contains(err.Error(), "human-only") {
 		t.Errorf("error = %v", err)
 	}
 }
 
-// A blocked ticket is exactly the one worth scoping early: the blocker
+// A blocked ticket is exactly the one worth planning early: the blocker
 // stops the building, not the reading. This is the deliberate divergence
 // from queue.Vet, and it is worth a test so nobody "fixes" it.
-func TestScopeTakesABlockedTicket(t *testing.T) {
+func TestPlanTakesABlockedTicket(t *testing.T) {
 	h := newHarness(t, workerResult{handoff: draftHandoff()})
 	h.board.issue.BlockedBy = []linear.Blocker{{Identifier: "WND-4", State: linear.IssueState{Name: "In Progress", Type: "started"}}}
 
@@ -533,11 +533,11 @@ func TestScopeTakesABlockedTicket(t *testing.T) {
 	}
 }
 
-// Two scopes of one ticket write two plans into one fenced region and
+// Two plan runs over one ticket write two plans into one fenced region and
 // argue two recommendations at a human who cannot tell which the estimate
-// belongs to. The ticket's status never moves while a scope works, so the
+// belongs to. The ticket's status never moves while a plan run works, so the
 // board cannot be the mutex and the lock is.
-func TestASecondScopeOfOneTicketRefuses(t *testing.T) {
+func TestASecondPlanOfOneTicketRefuses(t *testing.T) {
 	h := newHarness(t, workerResult{handoff: draftHandoff()})
 	held, err := h.store.LockTicket("WND-9")
 	if err != nil {
@@ -547,26 +547,26 @@ func TestASecondScopeOfOneTicketRefuses(t *testing.T) {
 
 	_, err = h.run(t)
 	if err == nil {
-		t.Fatal("a second scope of the same ticket started")
+		t.Fatal("a second plan run of the same ticket started")
 	}
 	if !strings.Contains(err.Error(), "already being worked") {
 		t.Errorf("error = %v", err)
 	}
 	if len(h.board.calls) != 0 {
-		t.Errorf("the refused scope wrote to the ticket: %v", h.board.deliverables())
+		t.Errorf("the refused plan run wrote to the ticket: %v", h.board.deliverables())
 	}
 }
 
-// A re-scope is a legitimate, deliberate human act — moving a Scoped ticket
+// A re-plan is a legitimate, deliberate human act — moving a Scoped ticket
 // back to Scoping asks for a fresh look, and that has to keep working. What
 // it must not do is destroy the plan already there: render.go says every
-// scope rewrites the plan region whole, so the previous plan is posted as a
+// plan run rewrites the plan region whole, so the previous plan is posted as a
 // comment — before the region that held it is overwritten — or it survives
 // nowhere but a closed PR.
-func TestARescopePreservesThePriorPlanAsACommentBeforeReplacingIt(t *testing.T) {
+func TestAReplanPreservesThePriorPlanAsACommentBeforeReplacingIt(t *testing.T) {
 	h := newHarness(t, workerResult{handoff: draftHandoff()})
-	priorPlan := "## Implementation plan\n\n**Exempt the scope verb.** This is the plan an earlier scope wrote and a human already read.\n"
-	desc, err := linear.WithSection(h.board.issue.Description, scope.PlanSectionID, priorPlan)
+	priorPlan := "## Implementation plan\n\n**Exempt the plan verb.** This is the plan an earlier plan run wrote and a human already read.\n"
+	desc, err := linear.WithSection(h.board.issue.Description, plan.PlanSectionID, priorPlan)
 	if err != nil {
 		t.Fatalf("WithSection: %v", err)
 	}
@@ -591,7 +591,7 @@ func TestARescopePreservesThePriorPlanAsACommentBeforeReplacingIt(t *testing.T) 
 		t.Fatalf("comments = %v, want the supersede comment and the options comment", h.board.comments)
 	}
 	supersede := h.board.comments[0]
-	for _, want := range []string{"superseded", "Exempt the scope verb", "already read"} {
+	for _, want := range []string{"superseded", "Exempt the plan verb", "already read"} {
 		if !strings.Contains(supersede, want) {
 			t.Errorf("the supersede comment does not carry %q:\n%s", want, supersede)
 		}
@@ -603,16 +603,16 @@ func TestARescopePreservesThePriorPlanAsACommentBeforeReplacingIt(t *testing.T) 
 	if !strings.Contains(h.board.description, "Add the blocker check to Vet.") {
 		t.Error("the new plan is not in the description")
 	}
-	if strings.Contains(h.board.description, "Exempt the scope verb") {
+	if strings.Contains(h.board.description, "Exempt the plan verb") {
 		t.Error("the old plan was left in the description instead of being replaced")
 	}
 }
 
-// A ticket scoped for the first time has no prior plan to lose, so nothing
+// A ticket planned for the first time has no prior plan to lose, so nothing
 // is posted about one — the comment that follows the plan is the options
-// comment alone, the same shape [TestScopeWritesInTheFixedOrder] already
+// comment alone, the same shape [TestPlanWritesInTheFixedOrder] already
 // asserts.
-func TestAFirstScopePostsNoSupersedeComment(t *testing.T) {
+func TestAFirstPlanPostsNoSupersedeComment(t *testing.T) {
 	h := newHarness(t, workerResult{handoff: draftHandoff()})
 
 	if _, err := h.run(t); err != nil {
@@ -633,7 +633,7 @@ func TestAFirstScopePostsNoSupersedeComment(t *testing.T) {
 // the overwrite, not after it.
 func TestAFailedPriorPlanCommentParksBeforeTheDescriptionIsTouched(t *testing.T) {
 	h := newHarness(t, workerResult{handoff: draftHandoff()})
-	desc, err := linear.WithSection(h.board.issue.Description, scope.PlanSectionID, "## Implementation plan\n\nAn earlier plan.\n")
+	desc, err := linear.WithSection(h.board.issue.Description, plan.PlanSectionID, "## Implementation plan\n\nAn earlier plan.\n")
 	if err != nil {
 		t.Fatalf("WithSection: %v", err)
 	}
@@ -656,7 +656,7 @@ func TestAFailedPriorPlanCommentParksBeforeTheDescriptionIsTouched(t *testing.T)
 }
 
 // The plan landed and the argument for it did not. The ticket stays in
-// Scoping — nothing advertises a scope that is not there — and the park
+// Scoping — nothing advertises a plan that is not there — and the park
 // says exactly what a human will find.
 func TestAFailedCommentParksAfterThePlanLanded(t *testing.T) {
 	h := newHarness(t, workerResult{handoff: draftHandoff()})
@@ -702,11 +702,11 @@ func TestTheCriticRunsWhenTheCovenantAsksAndItsFindingsAreRevised(t *testing.T) 
 	h := newHarness(t,
 		workerResult{handoff: draftHandoff()},
 		workerResult{handoff: map[string]any{"verdict": "flawed", "objections": []any{
-			map[string]any{"target": "the recommendation", "summary": "Vet cannot see blockers", "consequence": "every scope of a blocked ticket is wrong"},
+			map[string]any{"target": "the recommendation", "summary": "Vet cannot see blockers", "consequence": "every plan over a blocked ticket is wrong"},
 		}}},
 		workerResult{handoff: revised},
 	)
-	h.deps.Cov.Toggles.ScopeCritic = true
+	h.deps.Cov.Toggles.PlanCritic = true
 
 	out, err := h.run(t)
 	if err != nil {
@@ -742,7 +742,7 @@ func TestACriticThatFindsNothingSkipsTheRevision(t *testing.T) {
 		workerResult{handoff: draftHandoff()},
 		workerResult{handoff: map[string]any{"verdict": "sound"}},
 	)
-	h.deps.Cov.Toggles.ScopeCritic = true
+	h.deps.Cov.Toggles.PlanCritic = true
 
 	out, err := h.run(t)
 	if err != nil {
@@ -823,16 +823,16 @@ func TestInteractiveAgainstACovenantThatTurnedItOffRefuses(t *testing.T) {
 	h := newHarness(t)
 	h.deps.Interactive = true
 	h.deps.In = strings.NewReader("")
-	h.deps.Cov.Toggles.ScopeInterview = false
+	h.deps.Cov.Toggles.PlanInterview = false
 
-	if _, err := h.run(t); err == nil || !strings.Contains(err.Error(), "scope_interview") {
+	if _, err := h.run(t); err == nil || !strings.Contains(err.Error(), "plan_interview") {
 		t.Fatalf("error = %v, want a refusal naming the toggle", err)
 	}
 }
 
 // A revision that fails validation must not fall back to the draft: the
 // draft is the thing a human or a critic just argued with, and writing it
-// anyway would write a scope over their objection.
+// anyway would write a plan over their objection.
 func TestAnUnusableRevisionParksRatherThanKeepingTheDraft(t *testing.T) {
 	h := newHarness(t,
 		workerResult{handoff: draftHandoff()},
@@ -855,7 +855,7 @@ func TestAnUnusableRevisionParksRatherThanKeepingTheDraft(t *testing.T) {
 
 // The scout thought the ticket sound and the human knew better. The
 // reviser's verdict is as terminal as the scout's would have been: writing
-// a plan over it would write the scope the interview just argued out of
+// a plan over it would write the plan the interview just argued out of
 // existence.
 func TestARevisionCanFindThePremiseWrong(t *testing.T) {
 	h := newHarness(t,
@@ -888,7 +888,7 @@ func TestARevisionCanFindThePremiseWrong(t *testing.T) {
 // interview must not follow it: a wrong-premise draft has no
 // understanding, no approaches and no recommendation left in it, so the
 // questions would quote blanks at a human and their answers would buy a
-// revision round over a scope that has already been argued out of
+// revision round over a plan that has already been argued out of
 // existence.
 func TestACriticsRevisionThatFindsThePremiseWrongSkipsTheInterview(t *testing.T) {
 	h := newHarness(t,
@@ -901,7 +901,7 @@ func TestACriticsRevisionThatFindsThePremiseWrongSkipsTheInterview(t *testing.T)
 			"reason":  "The critic is right: WND-4 shipped this, and the ticket predates it.",
 		}},
 	)
-	h.deps.Cov.Toggles.ScopeCritic = true
+	h.deps.Cov.Toggles.PlanCritic = true
 	h.deps.Interactive = true
 	h.deps.In = strings.NewReader("")
 
@@ -929,7 +929,7 @@ func TestACriticsRevisionThatFindsThePremiseWrongSkipsTheInterview(t *testing.T)
 }
 
 // Every worker is told what run it is in rather than left to work it out,
-// and a scope tells them there is no workspace — the thing a harness's own
+// and a plan run tells them there is no workspace — the thing a harness's own
 // defaults would otherwise let it assume.
 func TestWorkersAreToldTheRunIsReadOnly(t *testing.T) {
 	h := newHarness(t, workerResult{handoff: draftHandoff()})
@@ -963,7 +963,7 @@ func TestAnInterruptParksWithItsOwnReason(t *testing.T) {
 	ctx, cancel := context.WithCancelCause(context.Background())
 	cancel(fmt.Errorf("interrupted by terminated"))
 
-	out, err := scope.Execute(ctx, h.deps, h.store, "WND-9")
+	out, err := plan.Execute(ctx, h.deps, h.store, "WND-9")
 	if err != nil {
 		// The read of the ticket itself may fail first with a real client;
 		// the fake board does not check the context, so the run gets far
@@ -974,7 +974,7 @@ func TestAnInterruptParksWithItsOwnReason(t *testing.T) {
 		t.Fatalf("outcome = %s (%s), want a park quoting the signal", out.Kind, out.Reason)
 	}
 	if len(h.board.deliverables()) != 0 {
-		t.Errorf("an interrupted run still wrote a scope to the ticket: %v", h.board.deliverables())
+		t.Errorf("an interrupted run still wrote a plan to the ticket: %v", h.board.deliverables())
 	}
 }
 
@@ -999,10 +999,10 @@ func TestAParkIsReportedOnTheTicket(t *testing.T) {
 	if c := h.board.comments[0]; !strings.Contains(c, "without a usable handoff") {
 		t.Errorf("the report does not quote the reason:\n%s", c)
 	}
-	// A scope never owns its ticket's status, so the mark has to be a
+	// A plan run never owns its ticket's status, so the mark has to be a
 	// label — the ticket stays in Scoping, where a human put it.
 	if h.board.stateID != "" {
-		t.Errorf("a parked scope moved the ticket's status to %q", h.board.stateID)
+		t.Errorf("a parked plan run moved the ticket's status to %q", h.board.stateID)
 	}
 }
 
@@ -1015,7 +1015,7 @@ func TestAnInterruptStillReportsThePark(t *testing.T) {
 	ctx, cancel := context.WithCancelCause(context.Background())
 	cancel(fmt.Errorf("interrupted by terminated"))
 
-	out, err := scope.Execute(ctx, h.deps, h.store, "WND-9")
+	out, err := plan.Execute(ctx, h.deps, h.store, "WND-9")
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
@@ -1129,7 +1129,7 @@ func (h *harness) phaseStarts(t *testing.T, id string) int {
 	return n
 }
 
-func TestScoutRetriesATransientFailureAndScopes(t *testing.T) {
+func TestScoutRetriesATransientFailureAndPlans(t *testing.T) {
 	h := newHarness(t,
 		workerResult{err: transientErr, transient: true},
 		workerResult{handoff: draftHandoff()},

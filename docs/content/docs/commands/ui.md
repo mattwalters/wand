@@ -55,10 +55,10 @@ invisible until something puts it on one screen:
   is the one an agent starts first.
 * **Scoped** — tickets carrying a finished plan, waiting on the judgment
   that either blesses it into Todo or sends it back. Opening a row shows
-  the plan itself — the marker-fenced region [`wand scope`](../scope/)
+  the plan itself — the marker-fenced region [`wand plan`](../plan/)
   wrote into the description — not the ticket's original body. See
   [Blessing a plan](#blessing-a-plan) below.
-* **Needs Input** — runs parked on a question: a scope that judged the
+* **Needs Input** — runs parked on a question: a plan run that judged the
   ticket's premise wrong, or a run that hands back. It means one thing —
   answer me — never "a plan is ready to bless," which is Scoped's job.
 * **Ready for human** — every open issue carrying the `ready-for-human`
@@ -108,11 +108,11 @@ current phase (`implement`, `review`, `revise`, `scout`, …), its harness, how
 long it has been going (`up`), and how long since its lease last renewed
 (`hb`, for heartbeat — the periodic tick a long single phase writes so it
 does not read as stale the moment it passes a minute). A harness shown as
-`—` is a scope-style run, which picks its harness per phase rather than
+`—` is a plan-style run, which picks its harness per phase rather than
 fixing one for the whole run.
 
 **Nothing here is waiting on you**, so nothing here counts toward the
-header's count or takes a cursor: hand-launched `wand run` and `wand scope`
+header's count or takes a cursor: hand-launched `wand run` and `wand plan`
 invocations journal identically to an engaged cockpit's own, and appear here
 identically, whether or not engage mode is on. The strip is read-only and
 disappears entirely when nothing is running — a cockpit nobody has pointed
@@ -157,7 +157,7 @@ starts.
 
 ## Blessing a plan
 
-Opening a Scoped row shows the plan [`wand scope`](../scope/) wrote — the
+Opening a Scoped row shows the plan [`wand plan`](../plan/) wrote — the
 marker-fenced region of the description, and nothing else. Not the ticket's
 original body, and not the scout's argued-options comment (the approaches it
 weighed, the trade-offs, the estimate): that stays in Linear, one click away
@@ -201,8 +201,8 @@ ticket. `t` blesses it into Todo, exactly like Triage's. `b` sends it back to
 Backlog with your reasoning posted as a comment first, the same ordering
 Cancel and Duplicate use below, so a crash between the two leaves an open
 ticket carrying its own argument rather than a status move nobody can
-explain — and so the next scope of this ticket starts from why the last one
-did not land instead of guessing:
+explain — and so the next plan run over this ticket starts from why the last
+one did not land instead of guessing:
 
 ```
   Backlog, with reason
@@ -211,8 +211,8 @@ did not land instead of guessing:
     Scoped → Backlog
 
     Backlog is the pool. The reason is posted as a comment before the status
-    moves, because a rejected plan with no reason on it leaves the next scope of
-    this ticket guessing at what was wrong.
+    moves, because a rejected plan with no reason on it leaves the next plan run
+    over this ticket guessing at what was wrong.
 
     reason       wrong
 
