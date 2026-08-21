@@ -96,12 +96,33 @@ func (s FileStatuses) overrides() map[string]string {
 // phase gets, so zero is not "loop forever" but "never retry" — a coherent
 // answer, and the behavior wand had before retries existed. A pointer is
 // what keeps that answer distinguishable from not mentioning the key.
+//
+// PhaseTimeoutMinutes is a map rather than a struct because unlike every
+// other cap it is keyed by a name, not a fixed field — and because a map
+// absorbs any key at decode time, Parse's strict-unknown-key check
+// (Undecoded) cannot see a misspelled phase inside it; validateCaps checks
+// its keys against knownPhases explicitly for that reason.
 type FileCaps struct {
-	ReviewRounds         int  `toml:"review_rounds"`
-	CIAttempts           int  `toml:"ci_attempts"`
-	WorkerTimeoutMinutes int  `toml:"worker_timeout_minutes"`
-	Lanes                int  `toml:"lanes"`
-	WorkerRetries        *int `toml:"worker_retries"`
+	ReviewRounds         int            `toml:"review_rounds"`
+	CIAttempts           int            `toml:"ci_attempts"`
+	WorkerTimeoutMinutes int            `toml:"worker_timeout_minutes"`
+	PhaseTimeoutMinutes  map[string]int `toml:"phase_timeout_minutes"`
+	Lanes                int            `toml:"lanes"`
+	WorkerRetries        *int           `toml:"worker_retries"`
+}
+
+// knownPhases are the phase names caps.phase_timeout_minutes may key: the
+// union of internal/run's phases (implement, fix-ci, review, revise) and
+// internal/scope's (scout, critic, revise). One set rather than two, since
+// scope's own reuse of a "revise" override costs nothing and a wrong phase
+// name is refused the same way regardless of which package would read it.
+var knownPhases = map[string]bool{
+	"implement": true,
+	"fix-ci":    true,
+	"review":    true,
+	"revise":    true,
+	"scout":     true,
+	"critic":    true,
 }
 
 // FileEstimates carries the estimate scale, in Linear's own vocabulary.
@@ -235,6 +256,17 @@ func validateCaps(md toml.MetaData, c FileCaps) error {
 	if c.WorkerRetries != nil && *c.WorkerRetries < 0 {
 		return fmt.Errorf("caps.worker_retries must be at least 0, got %d — 0 means never retry", *c.WorkerRetries)
 	}
+	// A map absorbs any key at decode time, so the misspelled-key check
+	// above never sees these; each one gets checked against knownPhases
+	// here instead, same rule as every other unknown key in the file.
+	for phase, minutes := range c.PhaseTimeoutMinutes {
+		if !knownPhases[phase] {
+			return fmt.Errorf("caps.phase_timeout_minutes has an unknown phase %q — known phases are critic, fix-ci, implement, review, revise, scout", phase)
+		}
+		if minutes < 1 {
+			return fmt.Errorf("caps.phase_timeout_minutes.%s must be at least 1, got %d — a cap of nothing is a request to loop forever", phase, minutes)
+		}
+	}
 	return nil
 }
 
@@ -288,6 +320,12 @@ func (f File) Covenant() Covenant {
 	}
 	if f.Caps.WorkerTimeoutMinutes > 0 {
 		cov.Caps.WorkerTimeout = time.Duration(f.Caps.WorkerTimeoutMinutes) * time.Minute
+	}
+	for phase, minutes := range f.Caps.PhaseTimeoutMinutes {
+		if cov.Caps.PhaseTimeouts == nil {
+			cov.Caps.PhaseTimeouts = make(map[string]time.Duration, len(f.Caps.PhaseTimeoutMinutes))
+		}
+		cov.Caps.PhaseTimeouts[phase] = time.Duration(minutes) * time.Minute
 	}
 	if f.Caps.Lanes > 0 {
 		cov.Caps.Lanes = f.Caps.Lanes

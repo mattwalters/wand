@@ -416,7 +416,7 @@ func (l *loop) work(ctx context.Context, phase string, round int, rules []string
 			Dir:         l.tree,
 			ScratchDir:  l.r.ScratchDir(),
 			HandoffPath: l.r.HandoffPath(),
-			Timeout:     l.d.Cov.Caps.WorkerTimeout,
+			Timeout:     l.d.Cov.Caps.Timeout(phase),
 			Model:       l.d.Model,
 			Effort:      l.d.Effort,
 			Out:         l.d.Out,

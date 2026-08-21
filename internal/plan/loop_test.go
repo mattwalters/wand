@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/mattwalters/wand/internal/covenant"
 	"github.com/mattwalters/wand/internal/journal"
@@ -157,9 +158,10 @@ func (b *board) SearchIssues(ctx context.Context, teamKey, term string) ([]linea
 // workers hands out canned results in order and records what it was asked
 // to run.
 type workers struct {
-	results []workerResult
-	modes   []string
-	prompts []string
+	results  []workerResult
+	modes    []string
+	prompts  []string
+	timeouts []time.Duration
 }
 
 type workerResult struct {
@@ -176,6 +178,7 @@ type workerResult struct {
 func (w *workers) Run(ctx context.Context, spec worker.Spec) (worker.Result, error) {
 	w.modes = append(w.modes, spec.Mode)
 	w.prompts = append(w.prompts, spec.Prompt)
+	w.timeouts = append(w.timeouts, spec.Timeout)
 	if len(w.results) == 0 {
 		return worker.Result{}, fmt.Errorf("the loop spawned more workers than the test scripted")
 	}
@@ -756,6 +759,36 @@ func TestACriticThatFindsNothingSkipsTheRevision(t *testing.T) {
 	}
 	if !strings.Contains(h.board.comments[0], "nothing stuck") {
 		t.Errorf("the provenance does not report the critic:\n%s", h.board.comments[0])
+	}
+}
+
+// A configured per-phase override reaches the worker spec for that phase
+// alone; scout keeps the global WorkerTimeout when only critic is
+// configured. This is the regression the phase-timeout table exists to
+// catch: an override configured but never read, or read by the wrong phase.
+func TestPhaseTimeoutOverrideReachesWorkerSpec(t *testing.T) {
+	h := newHarness(t,
+		workerResult{handoff: draftHandoff()},
+		workerResult{handoff: map[string]any{"verdict": "sound"}},
+	)
+	h.deps.Cov.Toggles.PlanCritic = true
+	h.deps.Cov.Caps.PhaseTimeouts = map[string]time.Duration{"critic": 5 * time.Minute}
+
+	out, err := h.run(t)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if out.Kind != journal.Converged {
+		t.Fatalf("outcome = %s (%s), want converged", out.Kind, out.Reason)
+	}
+	if len(h.work.timeouts) != 2 {
+		t.Fatalf("spawned %d workers, want scout and critic only", len(h.work.timeouts))
+	}
+	if h.work.timeouts[0] != h.deps.Cov.Caps.WorkerTimeout {
+		t.Errorf("scout timeout %v, want the unconfigured global %v", h.work.timeouts[0], h.deps.Cov.Caps.WorkerTimeout)
+	}
+	if h.work.timeouts[1] != 5*time.Minute {
+		t.Errorf("critic timeout %v, want the configured override %v", h.work.timeouts[1], 5*time.Minute)
 	}
 }
 

@@ -3,6 +3,7 @@ package covenant
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -66,8 +67,15 @@ func TestParseFullFile(t *testing.T) {
 		t.Errorf("in_progress = %q, want the stock name kept", byKey["in_progress"])
 	}
 
-	want := Caps{ReviewRounds: 5, CIAttempts: 2, WorkerTimeout: 45 * time.Minute, Lanes: 1, WorkerRetries: 2}
-	if cov.Caps != want {
+	want := Caps{
+		ReviewRounds:  5,
+		CIAttempts:    2,
+		WorkerTimeout: 45 * time.Minute,
+		PhaseTimeouts: map[string]time.Duration{"review": 20 * time.Minute, "fix-ci": 20 * time.Minute},
+		Lanes:         1,
+		WorkerRetries: 2,
+	}
+	if !reflect.DeepEqual(cov.Caps, want) {
 		t.Errorf("Caps = %+v, want %+v", cov.Caps, want)
 	}
 	if cov.IssueEstimationType != "linear" {
@@ -110,6 +118,27 @@ func TestRenameFollowsAutomations(t *testing.T) {
 	}
 }
 
+// A phase override applies to its own phase and leaves every other phase on
+// the global default — the regression this ticket is about is a phase
+// silently getting the wrong deadline.
+func TestPhaseTimeoutOverride(t *testing.T) {
+	f, err := Parse([]byte("schema = 1\n[caps.phase_timeout_minutes]\nreview = 5\n"))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	cov := f.Covenant()
+	if got, want := cov.Caps.Timeout("review"), 5*time.Minute; got != want {
+		t.Errorf("Timeout(review) = %v, want %v", got, want)
+	}
+	if got, want := cov.Caps.Timeout("implement"), cov.Caps.WorkerTimeout; got != want {
+		t.Errorf("Timeout(implement) = %v, want the global default %v", got, want)
+	}
+	// fix-ci keeps its own stock override, undisturbed by review's.
+	if got, want := cov.Caps.Timeout("fix-ci"), 20*time.Minute; got != want {
+		t.Errorf("Timeout(fix-ci) = %v, want the stock default %v", got, want)
+	}
+}
+
 // A file that sets nothing but the schema is the stock covenant exactly.
 func TestMinimalFileIsDefault(t *testing.T) {
 	f, err := Parse([]byte("schema = 1\n"))
@@ -118,7 +147,7 @@ func TestMinimalFileIsDefault(t *testing.T) {
 	}
 	cov := f.Covenant()
 	def := Default()
-	if cov.Caps != def.Caps || cov.Toggles != def.Toggles || cov.Commands != def.Commands {
+	if !reflect.DeepEqual(cov.Caps, def.Caps) || cov.Toggles != def.Toggles || cov.Commands != def.Commands {
 		t.Errorf("minimal file diverged from Default: %+v vs %+v", cov, def)
 	}
 	for i, s := range cov.Statuses {
@@ -148,6 +177,9 @@ func TestParseRefuses(t *testing.T) {
 		{"cap of zero", "schema = 1\n[caps]\nreview_rounds = 0\n", "caps.review_rounds"},
 		{"negative cap", "schema = 1\n[caps]\nworker_timeout_minutes = -5\n", "caps.worker_timeout_minutes"},
 		{"negative retries", "schema = 1\n[caps]\nworker_retries = -1\n", "caps.worker_retries"},
+		{"unknown phase", "schema = 1\n[caps.phase_timeout_minutes]\nreveiw = 10\n", "caps.phase_timeout_minutes"},
+		{"phase cap of zero", "schema = 1\n[caps.phase_timeout_minutes]\nreview = 0\n", "caps.phase_timeout_minutes.review"},
+		{"negative phase cap", "schema = 1\n[caps.phase_timeout_minutes]\nreview = -5\n", "caps.phase_timeout_minutes.review"},
 		{"empty status name", "schema = 1\n[statuses]\ntodo = \"\"\n", "statuses.todo"},
 		{"colliding status names", "schema = 1\n[statuses]\ntodo = \"Backlog\"\n", `share the name "Backlog"`},
 		{"empty command", "schema = 1\n[commands]\nverify = \"\"\n", "commands.verify"},
@@ -181,7 +213,7 @@ func TestLoadMissingFileIsStock(t *testing.T) {
 	if teamKey != "" {
 		t.Errorf("teamKey = %q for a missing file, want empty", teamKey)
 	}
-	if cov.Caps != Default().Caps || len(cov.Statuses) != len(Default().Statuses) {
+	if !reflect.DeepEqual(cov.Caps, Default().Caps) || len(cov.Statuses) != len(Default().Statuses) {
 		t.Error("missing file did not yield the stock covenant")
 	}
 }
