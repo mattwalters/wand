@@ -59,6 +59,13 @@ weight = 30
 [menus.main.params]
 section = "Doctrine"
 
+[[menus.main]]
+name = "The single writer"
+pageRef = "/docs/topology"
+weight = 40
+[menus.main.params]
+section = "Doctrine"
+
 # The command reference. Names are the command as typed, and each entry
 # carries mono = true so the rail sets them in the face you type them in.
 # Order is curated: setup, then the read layer, then the lifecycle verbs,
