@@ -2,6 +2,7 @@ package journal_test
 
 import (
 	"context"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -104,6 +105,57 @@ func TestHandoffPathIsPerPhase(t *testing.T) {
 		if pair[0] == pair[1] {
 			t.Errorf("two phases share the handoff path %s", pair[0])
 		}
+	}
+}
+
+// The transcript path is per phase and round for the same reason the
+// handoff path is, and lives in its own directory rather than inside
+// scratch — the worker is never told about it or granted write access to
+// it, so it must not sit inside the one directory that is that grant.
+func TestTranscriptPathIsPerPhase(t *testing.T) {
+	s, meta := fixture(t)
+	r, err := s.Create(meta)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	defer r.Close()
+
+	before := r.TranscriptPath()
+	if filepath.Dir(before) != r.TranscriptsDir() {
+		t.Errorf("transcript %s is outside the transcripts directory %s", before, r.TranscriptsDir())
+	}
+	if r.TranscriptsDir() == r.ScratchDir() {
+		t.Errorf("transcripts directory must not be the scratch directory")
+	}
+	if err := r.StartPhase("review", 1); err != nil {
+		t.Fatalf("StartPhase: %v", err)
+	}
+	first := r.TranscriptPath()
+	if err := r.StartPhase("review", 2); err != nil {
+		t.Fatalf("StartPhase: %v", err)
+	}
+	second := r.TranscriptPath()
+
+	for _, pair := range [][2]string{{before, first}, {first, second}} {
+		if pair[0] == pair[1] {
+			t.Errorf("two phases share the transcript path %s", pair[0])
+		}
+	}
+}
+
+// Create makes the transcripts directory the same way it makes scratch, so
+// a caller can hand TranscriptPath to worker.Run without a MkdirAll of its
+// own — the same guarantee ScratchDir already carries for HandoffPath.
+func TestCreateMakesTheTranscriptsDirectory(t *testing.T) {
+	s, meta := fixture(t)
+	r, err := s.Create(meta)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	defer r.Close()
+
+	if fi, err := os.Stat(r.TranscriptsDir()); err != nil || !fi.IsDir() {
+		t.Errorf("transcripts directory not created at %s: %v", r.TranscriptsDir(), err)
 	}
 }
 

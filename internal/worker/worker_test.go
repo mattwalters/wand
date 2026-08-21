@@ -22,12 +22,13 @@ func specFor(t *testing.T) worker.Spec {
 	t.Helper()
 	scratch := t.TempDir()
 	return worker.Spec{
-		Mode:        "test",
-		Prompt:      "do the thing",
-		Dir:         t.TempDir(),
-		ScratchDir:  scratch,
-		HandoffPath: filepath.Join(scratch, "handoff.json"),
-		Timeout:     time.Minute,
+		Mode:           "test",
+		Prompt:         "do the thing",
+		Dir:            t.TempDir(),
+		ScratchDir:     scratch,
+		HandoffPath:    filepath.Join(scratch, "handoff.json"),
+		TranscriptPath: filepath.Join(t.TempDir(), "transcript.jsonl"),
+		Timeout:        time.Minute,
 	}
 }
 
@@ -55,17 +56,19 @@ func (a *shAdapter) Invocation(spec worker.Spec, prompt string, environ []string
 
 func TestSpecValidation(t *testing.T) {
 	breakField := map[string]func(*worker.Spec){
-		"Mode":        func(s *worker.Spec) { s.Mode = " " },
-		"Prompt":      func(s *worker.Spec) { s.Prompt = "" },
-		"Dir":         func(s *worker.Spec) { s.Dir = "" },
-		"ScratchDir":  func(s *worker.Spec) { s.ScratchDir = "" },
-		"HandoffPath": func(s *worker.Spec) { s.HandoffPath = "" },
-		"Timeout":     func(s *worker.Spec) { s.Timeout = 0 },
+		"Mode":           func(s *worker.Spec) { s.Mode = " " },
+		"Prompt":         func(s *worker.Spec) { s.Prompt = "" },
+		"Dir":            func(s *worker.Spec) { s.Dir = "" },
+		"ScratchDir":     func(s *worker.Spec) { s.ScratchDir = "" },
+		"HandoffPath":    func(s *worker.Spec) { s.HandoffPath = "" },
+		"TranscriptPath": func(s *worker.Spec) { s.TranscriptPath = "" },
+		"Timeout":        func(s *worker.Spec) { s.Timeout = 0 },
 		// Relative paths resolve against the worker's cwd on one side of
 		// the seam and the orchestrator's on the other.
 		"RelativeDir":        func(s *worker.Spec) { s.Dir = "some/worktree" },
 		"RelativeScratchDir": func(s *worker.Spec) { s.ScratchDir = "scratch" },
 		"RelativeHandoff":    func(s *worker.Spec) { s.HandoffPath = "handoff.json" },
+		"RelativeTranscript": func(s *worker.Spec) { s.TranscriptPath = "transcript.jsonl" },
 		// The scratch directory is the only write grant an adapter is
 		// required to give, so the handoff must live inside it.
 		"HandoffOutsideScratch": func(s *worker.Spec) { s.HandoffPath = filepath.Join(s.Dir, "handoff.json") },
@@ -284,6 +287,74 @@ func TestRunCapturesOutput(t *testing.T) {
 		if !strings.Contains(res.Output, want) {
 			t.Errorf("Output missing %q:\n%s", want, res.Output)
 		}
+	}
+}
+
+func TestRunWritesTranscriptToDisk(t *testing.T) {
+	spec := specFor(t)
+	res, err := worker.Run(context.Background(),
+		&shAdapter{script: `echo to-stdout; echo to-stderr >&2; printf '{}' > "$HANDOFF"`},
+		spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, rerr := os.ReadFile(spec.TranscriptPath)
+	if rerr != nil {
+		t.Fatalf("transcript file was not written: %v", rerr)
+	}
+	for _, want := range []string{"to-stdout", "to-stderr"} {
+		if !strings.Contains(string(got), want) {
+			t.Errorf("transcript missing %q:\n%s", want, got)
+		}
+	}
+	if res.Handoff == nil {
+		t.Fatal("Handoff = nil")
+	}
+}
+
+func TestRunWritesTranscriptOnTimeout(t *testing.T) {
+	spec := specFor(t)
+	spec.Timeout = 100 * time.Millisecond
+	res, err := worker.Run(context.Background(),
+		&shAdapter{script: `echo before-the-deadline; sleep 10`}, spec)
+	if err == nil {
+		t.Fatal("Run reported success for a timed-out worker")
+	}
+	if !res.TimedOut {
+		t.Errorf("TimedOut = false, want true")
+	}
+	got, rerr := os.ReadFile(spec.TranscriptPath)
+	if rerr != nil {
+		t.Fatalf("transcript file was not written after a timeout: %v", rerr)
+	}
+	if !strings.Contains(string(got), "before-the-deadline") {
+		t.Errorf("transcript missing output written before the timeout:\n%s", got)
+	}
+}
+
+func TestRunTranscriptIsBoundedBySafetyValve(t *testing.T) {
+	spec := specFor(t)
+	// A worker that writes well past any reasonable single-file cap must not
+	// grow the transcript file without bound — the byte limit is a safety
+	// valve against a wedged or chatty worker filling the disk, not a
+	// retention policy.
+	res, err := worker.Run(context.Background(), &shAdapter{
+		script: `yes "0123456789" | head -c 20000000 >&2; printf '{}' > "$HANDOFF"`,
+	}, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Handoff == nil {
+		t.Fatal("Handoff = nil")
+	}
+	fi, statErr := os.Stat(spec.TranscriptPath)
+	if statErr != nil {
+		t.Fatalf("transcript file was not written: %v", statErr)
+	}
+	// A little headroom over the limit for the clip marker itself, but
+	// nowhere close to the 20MB the worker actually wrote.
+	if fi.Size() > 8<<20+1024 {
+		t.Errorf("transcript file is %d bytes, want bounded near the safety-valve cap", fi.Size())
 	}
 }
 

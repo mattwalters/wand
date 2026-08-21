@@ -15,10 +15,11 @@ import (
 
 // Store is a directory of runs. One directory per run:
 //
-//	<root>/runs/<id>/journal.jsonl   the append-only record stream
-//	<root>/runs/<id>/lease.json      who holds it, replaced atomically
-//	<root>/runs/<id>/lock            the liveness proof, never deleted
-//	<root>/runs/<id>/scratch/        the worker's write grant
+//	<root>/runs/<id>/journal.jsonl    the append-only record stream
+//	<root>/runs/<id>/lease.json       who holds it, replaced atomically
+//	<root>/runs/<id>/lock             the liveness proof, never deleted
+//	<root>/runs/<id>/scratch/         the worker's write grant
+//	<root>/runs/<id>/transcripts/     each phase's full worker output, kept for analysis
 //
 // The store lives outside every repository it records runs for, and Create
 // refuses if it does not. That is the PW-175 lesson made structural: a

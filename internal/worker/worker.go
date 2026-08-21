@@ -81,6 +81,15 @@ type Spec struct {
 	// is required to give the worker.
 	HandoffPath string
 
+	// TranscriptPath is where Run captures the harness's full combined
+	// stdout/stderr for this invocation, capped at a safety-valve byte
+	// limit rather than kept whole. Unlike HandoffPath this is never told
+	// to the worker and need not live inside ScratchDir: the worker never
+	// writes here, Run does — it is the same output Tail already samples
+	// for diagnostics, kept whole (up to the cap) on disk instead of
+	// discarded.
+	TranscriptPath string
+
 	// Timeout bounds the whole run. A worker with no deadline is a zombie
 	// factory, so zero is invalid rather than "no timeout".
 	Timeout time.Duration
@@ -145,6 +154,10 @@ func (s Spec) validate() error {
 		return errors.New("worker: Spec.HandoffPath must be absolute — the worker and the orchestrator resolve relative paths against different directories")
 	case !within(s.ScratchDir, s.HandoffPath):
 		return errors.New("worker: Spec.HandoffPath must be inside Spec.ScratchDir — the scratch directory is the only write grant an adapter is required to give the worker")
+	case s.TranscriptPath == "":
+		return errors.New("worker: Spec.TranscriptPath is required")
+	case !filepath.IsAbs(s.TranscriptPath):
+		return errors.New("worker: Spec.TranscriptPath must be absolute — the worker and the orchestrator resolve relative paths against different directories")
 	case s.Timeout <= 0:
 		return errors.New("worker: Spec.Timeout is required — a worker with no deadline is a zombie factory")
 	}
@@ -342,6 +355,52 @@ func Clip(s string, limit int) string {
 	return t.String()
 }
 
+// transcriptLimit bounds how many bytes of a worker's full output Run
+// writes to Spec.TranscriptPath. It is a safety valve, not a retention
+// policy — retention (by age, by outcome, who prunes) is deliberately left
+// for a follow-up; this exists only so one wedged or chatty worker cannot
+// fill the disk in the meantime. A few megabytes is generous next to
+// tailLimit's 64KB because the transcript, unlike Output, is meant to carry
+// a harness's full reasoning and tool calls, not just a diagnostics sample.
+const transcriptLimit = 8 << 20
+
+// boundedFile writes up to Limit bytes to the underlying writer and then
+// drops the rest, once, with a marker — a forward-capped counterpart to
+// Tail, which keeps the *last* Limit bytes in memory. Kept last-N is wrong
+// for a file too large to buffer in memory at all; this instead streams
+// straight through until the cap, then stops, which needs no buffer of its
+// own.
+type boundedFile struct {
+	w       io.Writer
+	Limit   int
+	written int
+	clipped bool
+}
+
+func (b *boundedFile) Write(p []byte) (int, error) {
+	if b.written >= b.Limit {
+		if !b.clipped {
+			b.clipped = true
+			io.WriteString(b.w, "\n[… later output dropped, transcript capped at a safety-valve byte limit …]\n")
+		}
+		return len(p), nil
+	}
+	remain := b.Limit - b.written
+	if len(p) <= remain {
+		n, err := b.w.Write(p)
+		b.written += n
+		return len(p), err
+	}
+	n, err := b.w.Write(p[:remain])
+	b.written += n
+	if err != nil {
+		return len(p), err
+	}
+	b.clipped = true
+	io.WriteString(b.w, "\n[… later output dropped, transcript capped at a safety-valve byte limit …]\n")
+	return len(p), nil
+}
+
 // Run spawns one worker through the adapter and collects its handoff.
 //
 // The error reports whether the run produced a usable handoff; the Result
@@ -376,6 +435,14 @@ func Run(ctx context.Context, a Adapter, spec Spec) (Result, error) {
 	if err := os.Remove(spec.HandoffPath); err != nil && !errors.Is(err, fs.ErrNotExist) {
 		return Result{ExitCode: -1}, fmt.Errorf("worker: clearing stale handoff: %w", err)
 	}
+	if err := os.MkdirAll(filepath.Dir(spec.TranscriptPath), 0o755); err != nil {
+		return Result{ExitCode: -1}, fmt.Errorf("worker: creating transcript dir: %w", err)
+	}
+	transcript, err := os.OpenFile(spec.TranscriptPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o644)
+	if err != nil {
+		return Result{ExitCode: -1}, fmt.Errorf("worker: opening transcript file: %w", err)
+	}
+	defer transcript.Close()
 
 	runCtx, cancel := context.WithTimeout(ctx, spec.Timeout)
 	defer cancel()
@@ -385,7 +452,13 @@ func Run(ctx context.Context, a Adapter, spec Spec) (Result, error) {
 	cmd.Env = inv.Env
 	cmd.Stdin = strings.NewReader(inv.Stdin)
 	out := &Tail{}
-	cmd.Stdout, cmd.Stderr = out, out
+	// Stdout and Stderr must be the exact same Writer value: os/exec only
+	// serializes writes between them when they compare equal, and Tail's
+	// own doc comment relies on that serialization to stay lock-free.
+	// io.MultiWriter, called once and assigned to both, keeps that
+	// invariant while adding the bounded on-disk capture alongside it.
+	mw := io.MultiWriter(out, &boundedFile{w: transcript, Limit: transcriptLimit})
+	cmd.Stdout, cmd.Stderr = mw, mw
 	// The deadline must actually end the run. Killing only the direct
 	// child is not enough: a harness spawns helpers of its own, and any
 	// survivor both keeps running in the worktree and holds the inherited

@@ -62,10 +62,11 @@ const (
 )
 
 const (
-	journalFile = "journal.jsonl"
-	leaseFile   = "lease.json"
-	lockFile    = "lock"
-	scratchName = "scratch"
+	journalFile     = "journal.jsonl"
+	leaseFile       = "lease.json"
+	lockFile        = "lock"
+	scratchName     = "scratch"
+	transcriptsName = "transcripts"
 )
 
 // writeLease replaces the lease atomically: a reader either sees the whole

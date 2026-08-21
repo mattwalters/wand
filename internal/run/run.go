@@ -417,18 +417,19 @@ func (l *loop) work(ctx context.Context, phase string, round int, rules []string
 		// handoff file — or, on the first phase, at the run's bare
 		// handoff.json.
 		spec := worker.Spec{
-			Mode:        phase,
-			Rules:       rules,
-			Prompt:      prompt,
-			Dir:         l.tree,
-			ScratchDir:  l.r.ScratchDir(),
-			HandoffPath: l.r.HandoffPath(),
-			Timeout:     l.d.Cov.Caps.Timeout(phase),
-			Model:       l.d.Model,
-			Effort:      l.d.Effort,
-			Out:         l.d.Out,
-			Label:       fmt.Sprintf("%s round %d", phase, round),
-			OnHeartbeat: l.heartbeat(phase, round),
+			Mode:           phase,
+			Rules:          rules,
+			Prompt:         prompt,
+			Dir:            l.tree,
+			ScratchDir:     l.r.ScratchDir(),
+			HandoffPath:    l.r.HandoffPath(),
+			TranscriptPath: l.r.TranscriptPath(),
+			Timeout:        l.d.Cov.Caps.Timeout(phase),
+			Model:          l.d.Model,
+			Effort:         l.d.Effort,
+			Out:            l.d.Out,
+			Label:          fmt.Sprintf("%s round %d", phase, round),
+			OnHeartbeat:    l.heartbeat(phase, round),
 		}
 		start := time.Now()
 		res, err := l.d.Workers.Run(ctx, spec)

@@ -159,6 +159,24 @@ worker arrives after the PR body was written, so the hand-back and the
 journal are what carry it; nothing about a run's ending is allowed to be
 the place its account gets dropped.
 
+## Transcripts
+
+Each phase's full worker output — the harness's own event stream, not just
+the 64KB diagnostic tail the journal keeps — is captured to disk under the
+run's directory, at `transcripts/<phase>-<round>.transcript.jsonl`, beside
+`scratch/`. It carries the worker's reasoning and tool calls, not only its
+final answer, because that is what a human (or a later `wand analyze`)
+needs to reconstruct why a run went sideways — the handoff is the worker's
+conclusion, the transcript is how it got there.
+
+Each file is capped at a safety-valve byte limit so one wedged or chatty
+worker cannot fill the disk; there is no cross-run retention policy yet, so
+transcripts accumulate under `$XDG_STATE_HOME/wand/runs` until a human (or
+a later pruning verb) clears them. A transcript can carry repository code
+and a worker's own reasoning about it — fine on the operator's own disk,
+but nothing quotes one into Linear or GitHub automatically, and `wand
+analyze` inherits that constraint too.
+
 ## Flags
 
 | Flag | Meaning |

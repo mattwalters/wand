@@ -166,6 +166,10 @@ recovery still runs against it uneventfully; the hand-back it attempts on a
 synthetic identifier simply fails and is logged, the same best-effort
 handling any hand-back failure gets there.
 
+The scout's full output is captured the same way `wand run` and `wand plan`
+capture theirs — see [`wand run`](../run/#transcripts) — under the run's
+`transcripts/` directory.
+
 ## Requirements
 
 `LINEAR_API_KEY` in the environment, and — for `wand pm` — the harness on

@@ -72,6 +72,11 @@ func (s *Store) open(dir string, m Meta, now time.Time) (*Run, error) {
 		lock.Close()
 		return nil, fmt.Errorf("journal: creating the scratch directory: %w", err)
 	}
+	if err := os.MkdirAll(filepath.Join(dir, transcriptsName), 0o755); err != nil {
+		unlock(lock)
+		lock.Close()
+		return nil, fmt.Errorf("journal: creating the transcripts directory: %w", err)
+	}
 	jf, err := os.OpenFile(filepath.Join(dir, journalFile), os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o644)
 	if err != nil {
 		unlock(lock)
@@ -105,6 +110,26 @@ func (r *Run) Dir() string { return r.dir }
 // does not write its CI log into the worktree, and the run does not park on
 // a tree it dirtied itself.
 func (r *Run) ScratchDir() string { return filepath.Join(r.dir, scratchName) }
+
+// TranscriptsDir is where each phase's full worker output is captured to
+// disk — the harness's own transcript, kept beside the handoff so a human
+// (or a later `wand analyze`) can reconstruct why a run went sideways, not
+// just what it concluded. Unlike ScratchDir this is never handed to the
+// worker as a write grant: Run captures the harness's own stdout here, the
+// worker itself neither knows about nor writes to this directory.
+func (r *Run) TranscriptsDir() string { return filepath.Join(r.dir, transcriptsName) }
+
+// TranscriptPath is where the current phase's full worker output is
+// captured — named for the phase and round, mirroring HandoffPath, so an
+// earlier phase's transcript is never mistaken for this one's.
+func (r *Run) TranscriptPath() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.phase == "" {
+		return filepath.Join(r.TranscriptsDir(), "transcript.jsonl")
+	}
+	return filepath.Join(r.TranscriptsDir(), fmt.Sprintf("%s-%d.transcript.jsonl", slug(r.phase), r.round))
+}
 
 // HandoffPath is where the current phase's worker writes its handoff —
 // named for the phase and round, so an earlier phase's file cannot be

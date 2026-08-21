@@ -49,7 +49,15 @@ func (c ClaudeCode) Invocation(spec Spec, prompt string, environ []string) (Invo
 	}
 	argv := []string{
 		bin, "-p",
-		"--output-format", "json",
+		// stream-json (with --verbose, which it requires) is every event of
+		// the turn — assistant text, tool_use, tool_result — not just the
+		// final answer, so what Run captures to Spec.TranscriptPath carries
+		// the worker's reasoning, not only its conclusion. The final line is
+		// still a "result" event carrying the same usage/terminal_reason
+		// shape --output-format json's single object did, which is what
+		// keeps ParseUsage and Transient below working unchanged.
+		"--output-format", "stream-json",
+		"--verbose",
 		"--setting-sources", "",
 		"--strict-mcp-config", "--mcp-config", `{"mcpServers":{}}`,
 		"--no-session-persistence",
@@ -68,10 +76,13 @@ func (c ClaudeCode) Invocation(spec Spec, prompt string, environ []string) (Invo
 	return Invocation{Argv: argv, Env: environ, Dir: spec.Dir, Stdin: prompt}, nil
 }
 
-// claudeUsage is the shape of the "usage" object in claude -p's
-// --output-format json result. Field names and presence are the CLI's own,
+// claudeUsage is the shape of the "usage" object on the final "result"
+// event of claude -p's --output-format stream-json event stream — the same
+// shape --output-format json's single result object carried, which is why
+// this parser did not need to change when the invocation moved to
+// stream-json for WND-45. Field names and presence are the CLI's own,
 // recorded from a live probe rather than guessed: run `claude -p
-// --output-format json` against a trivial prompt to see it.
+// --output-format stream-json --verbose` against a trivial prompt to see it.
 type claudeUsage struct {
 	InputTokens              int64 `json:"input_tokens"`
 	OutputTokens             int64 `json:"output_tokens"`
@@ -79,18 +90,21 @@ type claudeUsage struct {
 	CacheReadInputTokens     int64 `json:"cache_read_input_tokens"`
 }
 
-// ParseUsage reads the CLI's own usage object out of the JSON result
-// --output-format json prints to stdout. Anthropic's accounting counts
-// freshly-processed, cache-written and cache-read input tokens separately;
-// InputTokens is their sum, so it reads as "total input tokens processed"
-// the same way Codex's already-total input_tokens does.
+// ParseUsage reads the CLI's own usage object out of the final "result"
+// line of the stream-json event stream printed to stdout. Anthropic's
+// accounting counts freshly-processed, cache-written and cache-read input
+// tokens separately; InputTokens is their sum, so it reads as "total input
+// tokens processed" the same way Codex's already-total input_tokens does.
 //
-// The result is one compact JSON object, but stderr shares the captured
-// Tail and could in principle land on the same or an adjacent line, so
-// this scans line by line for one that parses and carries a usage object,
-// rather than parsing the whole tail as one document. A tail with no such
-// line — a parse miss, a harness upgrade that changed the shape, a run
-// that never got that far — yields nil: absent, never estimated.
+// stderr shares the captured Tail and could in principle land on the same
+// or an adjacent line, and stream-json itself is many JSON lines rather
+// than one, so this scans line by line for one that parses and carries a
+// top-level usage object — only the result line does; the per-turn
+// "assistant" events carry their own usage nested under "message", which
+// this intentionally does not match — rather than parsing the whole tail as
+// one document. A tail with no such line — a parse miss, a harness upgrade
+// that changed the shape, a run that never got that far — yields nil:
+// absent, never estimated.
 func (c ClaudeCode) ParseUsage(output string) *Usage {
 	for _, line := range strings.Split(output, "\n") {
 		line = strings.TrimSpace(line)

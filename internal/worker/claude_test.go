@@ -41,8 +41,13 @@ func TestClaudeCodeInvocation(t *testing.T) {
 	if !slices.Contains(inv.Argv, "-p") {
 		t.Errorf("not a headless run: no -p in %v", inv.Argv)
 	}
-	if !hasFlag(inv.Argv, "--output-format", "json") {
-		t.Errorf("not structured output: %v", inv.Argv)
+	if !hasFlag(inv.Argv, "--output-format", "stream-json") {
+		t.Errorf("not the full event stream: %v", inv.Argv)
+	}
+	// --output-format stream-json requires --verbose on --print, per the
+	// CLI's own error when it is missing.
+	if !slices.Contains(inv.Argv, "--verbose") {
+		t.Errorf("stream-json without --verbose, which claude -p refuses: %v", inv.Argv)
 	}
 	// The isolation flags: no settings files, no MCP servers from anywhere.
 	if !hasFlag(inv.Argv, "--setting-sources", "") {

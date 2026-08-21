@@ -56,13 +56,14 @@ func Structural(t *testing.T, a worker.Adapter) {
 
 	scratch := t.TempDir()
 	spec := worker.Spec{
-		Mode:        "conformance probe",
-		Rules:       []string{"a mode-dependent rule for the contract to carry"},
-		Prompt:      "no task; this invocation is inspected, not run",
-		Dir:         t.TempDir(),
-		ScratchDir:  scratch,
-		HandoffPath: filepath.Join(scratch, "handoff.json"),
-		Timeout:     time.Minute,
+		Mode:           "conformance probe",
+		Rules:          []string{"a mode-dependent rule for the contract to carry"},
+		Prompt:         "no task; this invocation is inspected, not run",
+		Dir:            t.TempDir(),
+		ScratchDir:     scratch,
+		HandoffPath:    filepath.Join(scratch, "handoff.json"),
+		TranscriptPath: filepath.Join(t.TempDir(), "transcript.jsonl"),
+		Timeout:        time.Minute,
 	}
 
 	// The same environment construction Run uses, seeded with credentials
@@ -185,12 +186,13 @@ Then write this JSON object to the handoff path:
 A *_succeeded field is true only if the service actually returned data or
 acknowledged the write. An authentication error, a missing tool, or a refused
 request means false.`,
-		Dir:         t.TempDir(),
-		ScratchDir:  scratch,
-		HandoffPath: handoff,
-		Timeout:     5 * time.Minute,
-		Model:       "haiku",
-		Effort:      "low",
+		Dir:            t.TempDir(),
+		ScratchDir:     scratch,
+		HandoffPath:    handoff,
+		TranscriptPath: filepath.Join(t.TempDir(), "transcript.jsonl"),
+		Timeout:        5 * time.Minute,
+		Model:          "haiku",
+		Effort:         "low",
 	}
 	if configured, ok := a.(worker.ConformanceAdapter); ok {
 		spec = configured.ConformanceSpec(spec)
