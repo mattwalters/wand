@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/mattwalters/wand/internal/queue"
 	"strings"
 	"testing"
 
@@ -404,6 +405,12 @@ func TestApplyStillPreWritesWhenNothingHasLanded(t *testing.T) {
 // — a lane carries no UUID — resolves the label, then removes it.
 func TestApplyClearsTheParkedLabel(t *testing.T) {
 	cl := newFake()
+	// The ticket has to actually carry the label, or this passes for the
+	// wrong reason: clearing is a no-op on an issue that does not.
+	issue := cl.byID["WND-3"]
+	issue.Labels = append(issue.Labels, queue.ParkedLabel)
+	cl.byID["WND-3"] = issue
+
 	_, err := Apply(context.Background(), cl, covenant.Default(),
 		Intent{Lane: Lane{Ticket: "WND-3"}, Disp: ClearParked})
 	if err != nil {
@@ -412,6 +419,26 @@ func TestApplyClearsTheParkedLabel(t *testing.T) {
 	want := "RemoveLabel uuid-WND-3 label-parked"
 	if last := cl.calls[len(cl.calls)-1]; last != want {
 		t.Errorf("last call = %q, want %q", last, want)
+	}
+}
+
+// WND-85. Clearing a park that is already cleared is success, not failure.
+// Linear refuses to remove a label an issue does not carry, and until the
+// lane derived from the label a person who cleared a park saw it come
+// straight back — so the second click landed on a hard error for having
+// done the right thing the first time.
+func TestApplyClearingAnAlreadyClearedParkIsANoOp(t *testing.T) {
+	cl := newFake() // WND-3 carries no parked label
+
+	_, err := Apply(context.Background(), cl, covenant.Default(),
+		Intent{Lane: Lane{Ticket: "WND-3"}, Disp: ClearParked})
+	if err != nil {
+		t.Fatalf("Apply: %v, want silence on an already-cleared park", err)
+	}
+	for _, c := range cl.calls {
+		if strings.HasPrefix(c, "RemoveLabel") {
+			t.Errorf("calls = %v, want no write when there is nothing to remove", cl.calls)
+		}
 	}
 }
 

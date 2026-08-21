@@ -69,8 +69,14 @@ invisible until something puts it on one screen:
   and its holder is provably dead), `orphaned` (a live run whose ticket is
   not in a started status — nothing on the board claims the lane),
   `unclear` (a holder on a machine this one cannot see, which is never swept
-  automatically), and `parked` (the run stopped and recorded why). Read-only:
-  a lane is not a ticket, and resolving one means going to the machine.
+  automatically), and `parked` (the run stopped and recorded why).
+
+  A parked lane is the one a person can act on: `clear parked` removes the
+  `parked` label from its ticket, and the lane goes with it. That is not a
+  cosmetic dismissal — the label is what makes a park a live obligation, so
+  clearing it is the act, and the lane is a picture of it. The other three
+  kinds are read-only: they describe a process misbehaving right now, and
+  resolving one means going to the machine.
 
 The sections are always all five, even when empty. A queue that vanished
 when it drained would teach you to stop looking for it, and the day it

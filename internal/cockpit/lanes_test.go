@@ -199,7 +199,7 @@ func TestReconcileDropsAParkResolvedByALaterRun(t *testing.T) {
 		reportFor("WND-37", journal.HandedBack, late),
 	}
 
-	got := Reconcile([]Lane{parked}, reports)
+	got := Reconcile([]Lane{parked}, reports, labelled("WND-37"))
 	if len(got) != 0 {
 		t.Errorf("lanes = %+v, want the park dropped: a later run for the same ticket handed back cleanly", got)
 	}
@@ -210,7 +210,7 @@ func TestReconcileKeepsAParkNothingLaterResolved(t *testing.T) {
 	parked := Lane{Kind: LaneParked, Ticket: "WND-59", RunID: "still-parked", Since: at}
 	reports := []journal.Report{reportFor("WND-59", journal.Parked, at)}
 
-	got := Reconcile([]Lane{parked}, reports)
+	got := Reconcile([]Lane{parked}, reports, labelled("WND-59"))
 	if len(got) != 1 {
 		t.Errorf("lanes = %+v, want the park kept: nothing later resolved this ticket", got)
 	}
@@ -228,7 +228,7 @@ func TestReconcileIgnoresAnEarlierResolution(t *testing.T) {
 		reportFor("WND-11", journal.Parked, late),
 	}
 
-	got := Reconcile([]Lane{parked}, reports)
+	got := Reconcile([]Lane{parked}, reports, labelled("WND-11"))
 	if len(got) != 1 {
 		t.Errorf("lanes = %+v, want the park kept: it postdates the only resolution on record", got)
 	}
@@ -244,7 +244,7 @@ func TestReconcileCollapsesRepeatedParksToTheNewestReason(t *testing.T) {
 	stale := Lane{Kind: LaneParked, Ticket: "WND-66", RunID: "old-park", Since: early, Reason: "citation gate"}
 	current := Lane{Kind: LaneParked, Ticket: "WND-66", RunID: "new-park", Since: late, Reason: "timeout"}
 
-	got := Reconcile([]Lane{stale, current}, nil)
+	got := Reconcile([]Lane{stale, current}, nil, labelled("WND-66"))
 	if len(got) != 1 {
 		t.Fatalf("lanes = %+v, want one: repeated parks on the same ticket collapse", got)
 	}
@@ -262,7 +262,7 @@ func TestReconcileKeepsParksForDifferentTickets(t *testing.T) {
 	older := Lane{Kind: LaneParked, Ticket: "WND-1", RunID: "a", Since: early}
 	newer := Lane{Kind: LaneParked, Ticket: "WND-2", RunID: "b", Since: late}
 
-	got := Reconcile([]Lane{newer, older}, nil)
+	got := Reconcile([]Lane{newer, older}, nil, labelled("WND-1", "WND-2"))
 	if len(got) != 2 {
 		t.Fatalf("lanes = %+v, want both: different tickets, not a blanket dedup", got)
 	}
@@ -280,7 +280,7 @@ func TestReconcileLeavesOtherKindsAlone(t *testing.T) {
 	stuck := Lane{Kind: LaneStuck, Ticket: "WND-11", RunID: "stuck", Since: early}
 	reports := []journal.Report{reportFor("WND-11", journal.Converged, late)}
 
-	got := Reconcile([]Lane{stuck}, reports)
+	got := Reconcile([]Lane{stuck}, reports, nil)
 	if len(got) != 1 || got[0].Kind != LaneStuck {
 		t.Errorf("lanes = %+v, want the stuck lane kept: a later run finishing does not explain away a live process misbehaving now", got)
 	}
@@ -307,7 +307,7 @@ func (f *fakeRuns) Inspect(id string) (journal.Report, error) {
 // refused to draw for want of one would be useless until the first
 // orchestrator shipped.
 func TestReadLanesToleratesNoStore(t *testing.T) {
-	lanes, err := ReadLanes(nil, nil)
+	lanes, err := ReadLanes(nil, nil, nil)
 	if err != nil || lanes != nil {
 		t.Errorf("ReadLanes(nil) = %v, %v; want no lanes and no error", lanes, err)
 	}
@@ -324,7 +324,7 @@ func TestReadLanesSurfacesAnUnreadableRun(t *testing.T) {
 			"fine": report(journal.Converged, "green", journal.Dead),
 		},
 	}
-	lanes, err := ReadLanes(runs, []linear.Issue{{Identifier: "WND-9"}})
+	lanes, err := ReadLanes(runs, []linear.Issue{{Identifier: "WND-9"}}, nil)
 	if err != nil {
 		t.Fatalf("ReadLanes: %v", err)
 	}
@@ -356,11 +356,51 @@ func TestReadLanesSuppressesParksALaterRunResolved(t *testing.T) {
 		},
 	}
 
-	lanes, err := ReadLanes(runs, nil)
+	lanes, err := ReadLanes(runs, nil, []linear.Issue{{Identifier: "WND-37"}})
 	if err != nil {
 		t.Fatalf("ReadLanes: %v", err)
 	}
 	if len(lanes) != 0 {
 		t.Errorf("lanes = %+v, want none: both parks predate the run that handed back", lanes)
+	}
+}
+
+// labelled is the set of tickets presently carrying the parked label.
+func labelled(tickets ...string) map[string]bool {
+	m := make(map[string]bool, len(tickets))
+	for _, t := range tickets {
+		m[t] = true
+	}
+	return m
+}
+
+// WND-85. A park is resolved by a person clearing the label, and the lane
+// has to go when they do. The journal is append-only, so the run that
+// parked says so forever; deriving the lane from it alone meant clearing
+// the label changed nothing anyone could see — the lane returned on the
+// next read, and a ticket that reached Done kept a lane no action could
+// ever shift.
+func TestReconcileDropsAParkWhoseLabelAPersonCleared(t *testing.T) {
+	at := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	parked := Lane{Kind: LaneParked, Ticket: "WND-78", RunID: "cleared", Since: at}
+	reports := []journal.Report{reportFor("WND-78", journal.Parked, at)}
+
+	// Nothing later resolved it and it is still parked in the journal —
+	// the only thing that changed is that a person cleared the label.
+	got := Reconcile([]Lane{parked}, reports, labelled())
+	if len(got) != 0 {
+		t.Errorf("lanes = %+v, want the park dropped: a person cleared the label", got)
+	}
+}
+
+// A run that works no ticket — pm — can carry no label, so the label can
+// never be the thing that retires its lane.
+func TestReconcileKeepsAParkedRunWithNoTicket(t *testing.T) {
+	at := time.Date(2026, 3, 1, 0, 0, 0, 0, time.UTC)
+	parked := Lane{Kind: LaneParked, Ticket: "", RunID: "pm-abc", Since: at}
+
+	got := Reconcile([]Lane{parked}, nil, labelled())
+	if len(got) != 1 {
+		t.Errorf("lanes = %+v, want the park kept: no ticket means no label to clear", got)
 	}
 }

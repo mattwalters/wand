@@ -7,6 +7,7 @@ import (
 	"github.com/mattwalters/wand/internal/covenant"
 	"github.com/mattwalters/wand/internal/journal"
 	"github.com/mattwalters/wand/internal/linear"
+	"github.com/mattwalters/wand/internal/queue"
 )
 
 // Linear is the slice of the Linear client this package uses. An interface
@@ -75,7 +76,12 @@ func Read(ctx context.Context, cl Linear, runs Runs, cov covenant.Covenant, team
 		return Snapshot{}, fmt.Errorf("reading started work: %w", err)
 	}
 
-	lanes, err := ReadLanes(runs, started)
+	parked, err := cl.TeamIssuesByLabel(ctx, teamKey, queue.ParkedLabel)
+	if err != nil {
+		return Snapshot{}, fmt.Errorf("reading %s: %w", queue.ParkedLabel, err)
+	}
+
+	lanes, err := ReadLanes(runs, started, parked)
 	if err != nil {
 		return Snapshot{}, err
 	}
@@ -98,7 +104,7 @@ func Read(ctx context.Context, cl Linear, runs Runs, cov covenant.Covenant, team
 //
 // A parked lane whose ticket a later run resolved is dropped by
 // [Reconcile] before this returns — see there for why.
-func ReadLanes(runs Runs, started []linear.Issue) ([]Lane, error) {
+func ReadLanes(runs Runs, started, parked []linear.Issue) ([]Lane, error) {
 	if runs == nil {
 		return nil, nil
 	}
@@ -110,6 +116,10 @@ func ReadLanes(runs Runs, started []linear.Issue) ([]Lane, error) {
 	inStarted := make(map[string]bool, len(started))
 	for _, issue := range started {
 		inStarted[issue.Identifier] = true
+	}
+	stillParked := make(map[string]bool, len(parked))
+	for _, issue := range parked {
+		stillParked[issue.Identifier] = true
 	}
 
 	var lanes []Lane
@@ -129,5 +139,5 @@ func ReadLanes(runs Runs, started []linear.Issue) ([]Lane, error) {
 			lanes = append(lanes, lane)
 		}
 	}
-	return Reconcile(lanes, reports), nil
+	return Reconcile(lanes, reports, stillParked), nil
 }

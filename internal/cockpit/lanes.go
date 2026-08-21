@@ -146,7 +146,19 @@ func phaseLabel(phase string, round int) string {
 // reports is every run this walk read, not just the ones that became
 // lanes, because the run that resolves a park is exactly the one Classify
 // drops as needing nobody.
-func Reconcile(lanes []Lane, reports []journal.Report) []Lane {
+//
+// parked is the set of ticket identifiers presently carrying the parked
+// label, and it is what makes a park *resolvable*. The journal records
+// what happened and is append-only, so a run that parked says so forever;
+// the board records what is still outstanding, and a person clearing the
+// label is how they say it no longer is. Deriving the lane from the
+// journal alone meant clearing the label changed nothing a person could
+// see — the lane came straight back on the next read, and a ticket that
+// reached Done kept a lane no action could ever shift.
+//
+// A lane with no ticket at all — a pm run, which works no ticket — can
+// carry no label, so it is never dropped this way.
+func Reconcile(lanes []Lane, reports []journal.Report, parked map[string]bool) []Lane {
 	resolved := make(map[string]time.Time)
 	for _, r := range reports {
 		if !r.State.Ended() || r.State.Outcome == journal.Parked {
@@ -162,6 +174,12 @@ func Reconcile(lanes []Lane, reports []journal.Report) []Lane {
 	for _, lane := range lanes {
 		if lane.Kind == LaneParked {
 			if t, ok := resolved[lane.Ticket]; ok && t.After(lane.Since) {
+				continue
+			}
+			// The label is the live obligation. Both rules stay: a later
+			// run that converged does not remove the label, so neither
+			// suppression subsumes the other.
+			if lane.Ticket != "" && !parked[lane.Ticket] {
 				continue
 			}
 		}
