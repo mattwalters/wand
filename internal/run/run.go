@@ -42,6 +42,13 @@
 //     plan deviations, applied to the ticket by the orchestrator (the
 //     PW-191 lesson).
 //
+//   - The ticket's description is the specification; its comments are the
+//     record of how it got there, never themselves authoritative. The
+//     implement prompt says so explicitly, because the failure it guards
+//     against is silent otherwise: a worker handed a ticket whose comments
+//     hold a rejected approach alongside the accepted one has no way to
+//     tell them apart except by being told which one governs.
+//
 // Parking writes only the journal, deliberately: a park must be reachable
 // when Linear itself is what failed.
 package run

@@ -309,6 +309,56 @@ func TestUpsertSectionWritesWhenChanged(t *testing.T) {
 	}
 }
 
+// The fence is absolute: pinning it at the network write, not just the
+// pure WithSection call, so a later change to UpsertSection cannot quietly
+// widen what a section write is allowed to touch. A human's goals sit
+// before the region, a human's own notes sit after it, and both must
+// reach the actual UpdateIssue call unchanged, in the same act that
+// replaces the superseded plan.
+func TestUpsertSectionLeavesTextOutsideTheFenceUntouched(t *testing.T) {
+	var sent string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req struct {
+			Variables struct {
+				Input struct {
+					Description string `json:"description"`
+				} `json:"input"`
+			} `json:"variables"`
+		}
+		json.NewDecoder(r.Body).Decode(&req)
+		sent = req.Variables.Input.Description
+		w.Write([]byte(`{"data":{"issueUpdate":{"success":true}}}`))
+	}))
+	defer srv.Close()
+
+	description := "## Goals\n\nWhat a human wants.\n\n" +
+		"<!-- wand:plan -->\nold plan\n<!-- /wand:plan -->\n\n" +
+		"## Notes\n\nA human's own notes, added after the plan was written."
+
+	c := &Client{APIKey: "k", Endpoint: srv.URL}
+	next, changed, err := c.UpsertSection(context.Background(), "issue-1", description, "plan", "new plan")
+	if err != nil {
+		t.Fatalf("upsertSection: %v", err)
+	}
+	if !changed {
+		t.Error("a real write should report changed")
+	}
+	for _, want := range []string{
+		"## Goals", "What a human wants.",
+		"## Notes", "A human's own notes, added after the plan was written.",
+	} {
+		if !strings.Contains(sent, want) {
+			t.Errorf("the network write dropped text outside the fence (%q): %q", want, sent)
+		}
+		if !strings.Contains(next, want) {
+			t.Errorf("the returned description dropped text outside the fence (%q): %q", want, next)
+		}
+	}
+	if strings.Contains(sent, "old plan") {
+		t.Error("the write kept the superseded plan instead of replacing it")
+	}
+}
+
 func TestUpdateDescriptionSurfacesRefusal(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"data":{"issueUpdate":{"success":false}}}`))

@@ -44,7 +44,14 @@ Four writes, and the order is the contract:
 1. **The plan**, into a marker-fenced region of the description
    (`<!-- wand:plan -->`). Every byte outside that region belongs to
    whoever wrote it; the region is replaced whole on every plan run, never
-   merged and never appended to.
+   merged and never appended to. This is absolute, not a default: the
+   ticket's goals, problem statement and title are the human's and are
+   never rewritten by a plan run, first or re-plan alike, because the body
+   has to stay the thing the plan is checked *against* — a scout that
+   misunderstood the ticket and could also rewrite it would be erasing the
+   evidence of its own misunderstanding. A scout that finds the ticket
+   itself wrong reports that instead (see below); it does not correct the
+   body in the same act as planning it.
 2. **The options comment**: what the scout took the ticket to be asking,
    every approach with its trade-off, which one is recommended and why,
    what the plan rests on, what is still open, and the ask.

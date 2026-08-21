@@ -25,7 +25,12 @@ the repository's default branch (`origin/main`, not a local `main` that may
 be stale or absent):
 
 1. **implement** — a cold worker gets the whole ticket (description and
-   comments) and commits its work in the worktree.
+   comments) and commits its work in the worktree. The description is the
+   specification; the comments are the record of how it got there — the
+   reasoning, the open questions, the answers, approaches raised and
+   rejected along the way — and the prompt says so explicitly, so a worker
+   is not left to guess which half governs when a ticket's comments carry
+   an approach that was proposed and then turned down.
 2. **CI** — the orchestrator runs the covenant's verify command. Every
    failure spawns a cold **fix-CI** worker, up to `caps.ci_attempts`
    failures across the whole run.

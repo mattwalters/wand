@@ -35,6 +35,12 @@ func scoutRules() []string {
 			"say will be implemented by you. Your entire output is the handoff.",
 		"Prefer the code to the documentation where they disagree, and say so in your " +
 			"handoff when they do.",
+		"Your plan becomes the marker-fenced plan region of the ticket's description, " +
+			"and nothing else. The ticket's goals, problem statement and title are the " +
+			"human's and are never rewritten by a plan — if your plan deliberately narrows " +
+			"or excludes something the ticket asked for, say so inside the plan itself " +
+			"rather than proposing a change to the ticket above it. If you believe the " +
+			"ticket is asking for the wrong thing, that is a wrong premise, not a plan.",
 	}
 }
 
@@ -88,6 +94,10 @@ func scoutPrompt(ticketText string, cov covenant.Covenant) string {
 		"implementer could follow without repeating your reading.\n\n")
 	b.WriteString("Read the code before you decide anything. The ticket is a request, not a survey " +
 		"of the codebase, and the whole value of this pass is that somebody looked.\n\n")
+	b.WriteString("The ticket below may already carry comments. If it does, that is the record of " +
+		"how it got here — a prior plan's argument, what a human said against it, questions and " +
+		"answers — and if this is a re-plan, it is the whole reason you are running again. Read it " +
+		"for that; it does not change where your plan is written.\n\n")
 	b.WriteString(draftSchema(cov))
 	b.WriteString("\n\n--- ticket ---\n\n")
 	b.WriteString(ticketText)

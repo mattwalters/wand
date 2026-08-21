@@ -38,10 +38,20 @@ No other fields. Omit optional fields you have nothing for. "blocked" means you 
 something a human must decide; a hard task you are still equipped to do is not blocked.`
 
 // implementPrompt is the first phase's task: the ticket, whole.
+//
+// The description-is-spec, comments-are-trail line is not throat-clearing:
+// a ticket's comments routinely carry approaches that were proposed and
+// then rejected, and a cold worker that treats the whole ticket as equally
+// authoritative can build the rejected one. Only the description is
+// checked against; the comments are read for how it got there.
 func implementPrompt(ticketText string) string {
 	var b strings.Builder
-	b.WriteString("Implement the following ticket in this worktree. The ticket is the whole ")
-	b.WriteString("specification — its description, and any answers in its comments.\n\n")
+	b.WriteString("Implement the following ticket in this worktree. The ticket's description is ")
+	b.WriteString("the specification: build what it says. Its comments are the record of how it ")
+	b.WriteString("got there — the reasoning, the open questions, the answers, approaches raised ")
+	b.WriteString("and rejected along the way. Read them for context, not instructions: never ")
+	b.WriteString("implement an approach the comments show was rejected in favor of what the ")
+	b.WriteString("description states.\n\n")
 	b.WriteString(workHandoffSchema)
 	b.WriteString("\n\n--- ticket ---\n\n")
 	b.WriteString(ticketText)
