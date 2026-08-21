@@ -211,6 +211,14 @@ of converging over them. On convergence the orchestrator posts the summary
 to the ticket, adds the <code>ready-for-human</code> label, moves the ticket to
 In Review, and removes the now-clean worktree. The PR is a human&rsquo;s to
 merge.</p>
+<p>If a human merges it first — between the reviewer&rsquo;s approval and the
+orchestrator&rsquo;s last look, a race the loop cannot prevent — that is still
+convergence, not a failure: the work landed, which is what the loop was
+for. The run posts its summary and stops there. It does <strong>not</strong> move the
+ticket to In Review, because the merge automation owns the status now and
+In Review over a ticket the merge already closed would reopen a close,
+which is a human&rsquo;s call. A PR that is genuinely absent, or closed without
+merging, still parks.</p>
 <p><strong>Handed back</strong> — a human owns the next move. The reason is posted as a
 comment <strong>first</strong>, then the ticket moves to Needs Input — in that order,
 always, so a failure between the two never leaves a Needs Input ticket
@@ -294,7 +302,7 @@ the place its account gets dropped.</p>
 	<tbody>
 			<tr>
 					<td><code>0</code></td>
-					<td>Converged: In Review, <code>ready-for-human</code>, PR open.</td>
+					<td>Converged: In Review, <code>ready-for-human</code>, PR open — or the PR already merged, in which case the summary is posted and the status left to the merge automation.</td>
 			</tr>
 			<tr>
 					<td><code>1</code></td>
