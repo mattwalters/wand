@@ -596,7 +596,9 @@ func (l *loop) ensurePR(ctx context.Context, title, body string) *Outcome {
 	if err != nil {
 		return l.park(ctx, fmt.Sprintf("could not look up the branch's PR: %v", err))
 	}
-	if !found {
+	// Only an open PR is one to repair. A merged or closed PR on this
+	// branch belongs to a cycle that already ended; this one needs its own.
+	if !found || pr.State != PRStateOpen {
 		// GitHub is asked to merge into the branch, not into the
 		// remote-tracking ref that names it locally.
 		url, err := l.d.Hub.OpenPR(ctx, l.tree, l.base.Name, l.branch, title, body)
@@ -608,6 +610,47 @@ func (l *loop) ensurePR(ctx context.Context, title, body string) *Outcome {
 		return nil
 	}
 	return l.repairTitle(ctx, pr)
+}
+
+// convergeOnAMergedPR is convergence for a run whose PR landed while it was
+// still finishing — a human merged it between the reviewer's approval and
+// this lookup, which is a race the loop cannot prevent and should not lose.
+//
+// It is the ordinary converge minus everything that only makes sense while
+// a PR is open:
+//
+//   - No title repair. This repo squash-merges, so the subject is already
+//     on the default branch; retitling a merged PR changes nothing but the
+//     PR page.
+//   - No unresolved-thread check. Merging is a human's answer to their own
+//     threads, and handing the ticket back over them would ask a question
+//     that has been settled by the strongest means available.
+//   - No ready-for-human label. It means "In Review, with a PR a human
+//     should read", and a merged PR has been read.
+//   - **No status move.** The merge automation owns this ticket's status
+//     now, and In Review over a ticket the merge already closed reopens a
+//     close — which is a human's call, the same reasoning verbs.refuseIfClosed
+//     is built on.
+//
+// What is left is the part that was always the point: say on the ticket
+// what the run did, and journal one terminal record saying it converged.
+func (l *loop) convergeOnAMergedPR(ctx context.Context, round int, reviewSummary string, pr PR) Outcome {
+	l.prURL = pr.URL
+
+	comment := mergedComment(round, reviewSummary, pr.URL, l.deviations)
+	if err := l.d.Board.CreateComment(ctx, l.issue.ID, comment); err != nil {
+		return *l.park(ctx, fmt.Sprintf("the PR merged and the run converged, but the summary comment failed: %v", err))
+	}
+
+	if err := l.d.Git.RemoveWorktree(ctx, l.d.Repo, l.tree); err != nil {
+		fmt.Fprintf(l.d.Out, "note: could not remove the worktree: %v\n", err)
+	}
+
+	reason := fmt.Sprintf("reviewer approved on round %d; PR %s had already merged", round, pr.URL)
+	if err := l.r.Converged(reason); err != nil {
+		fmt.Fprintf(l.d.Out, "journal: %v\n", err)
+	}
+	return Outcome{Kind: journal.Converged, Reason: reason, PRURL: pr.URL}
 }
 
 // repairTitle is the convention pass: the title checked and repaired in
@@ -631,7 +674,13 @@ func (l *loop) converge(ctx context.Context, round int, reviewSummary string) Ou
 	if err != nil {
 		return *l.park(ctx, fmt.Sprintf("could not look up the branch's PR: %v", err))
 	}
-	if !found {
+	// Merged while the run was still finishing: the work landed, which is
+	// the outcome this whole loop exists to reach. Treating it as absence
+	// is what parked three runs that had in fact succeeded.
+	if found && pr.State == PRStateMerged {
+		return l.convergeOnAMergedPR(ctx, round, reviewSummary, pr)
+	}
+	if !found || pr.State == PRStateClosed {
 		return *l.park(ctx, fmt.Sprintf("the PR for branch %s is gone; it was open earlier in this run", l.branch))
 	}
 	if out := l.repairTitle(ctx, pr); out != nil {

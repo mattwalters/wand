@@ -235,7 +235,9 @@ func (d Deps) actUnresolvedThreads(ctx context.Context, c Candidate) (bool, erro
 	if err != nil {
 		return false, fmt.Errorf("could not look up the PR: %w", err)
 	}
-	if !found {
+	// Open only. A thread left unresolved on a PR that has since merged is
+	// not a person still waiting: merging is the answer.
+	if !found || pr.State != run.PRStateOpen {
 		return false, nil
 	}
 	n, err := d.Hub.UnresolvedThreads(ctx, d.Repo, pr.Number)
@@ -267,7 +269,7 @@ func (d Deps) unresolvedThreadCandidates(ctx context.Context, issues []linear.Is
 			continue
 		}
 		pr, found, err := d.Hub.PRForBranch(ctx, d.Repo, issue.BranchName)
-		if err != nil || !found {
+		if err != nil || !found || pr.State != run.PRStateOpen {
 			continue
 		}
 		n, err := d.Hub.UnresolvedThreads(ctx, d.Repo, pr.Number)

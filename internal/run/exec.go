@@ -225,8 +225,13 @@ func gh(ctx context.Context, dir string, args ...string) (string, error) {
 func (ExecHub) PRForBranch(ctx context.Context, dir, branch string) (PR, bool, error) {
 	// pr list returns an empty array for "none", where pr view returns an
 	// error a caller would have to parse apart from real failures.
-	out, err := gh(ctx, dir, "pr", "list", "--head", branch, "--state", "open",
-		"--json", "number,title,url", "--limit", "1")
+	//
+	// --state all, deliberately: a merged PR is not an absent one, and
+	// filtering it out here is what made a converged run look like a run
+	// whose PR vanished. Newest first is gh's default ordering, so --limit 1
+	// is the branch's most recent PR.
+	out, err := gh(ctx, dir, "pr", "list", "--head", branch, "--state", "all",
+		"--json", "number,title,url,state", "--limit", "1")
 	if err != nil {
 		return PR{}, false, err
 	}

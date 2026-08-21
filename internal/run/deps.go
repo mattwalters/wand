@@ -69,11 +69,30 @@ type PR struct {
 	Number int
 	Title  string
 	URL    string
+	// State is GitHub's own: [PRStateOpen], [PRStateMerged] or
+	// [PRStateClosed]. Carried rather than filtered out at the query,
+	// because "open" is a requirement two of this type's three readers
+	// have and the third does not — see [Hub.PRForBranch].
+	State string
 }
+
+// The states a [PR] can be in, as GitHub reports them.
+const (
+	PRStateOpen   = "OPEN"
+	PRStateMerged = "MERGED"
+	PRStateClosed = "CLOSED"
+)
 
 // Hub is the loop's GitHub surface — the single writer's, workers have none.
 type Hub interface {
-	// PRForBranch finds the open PR whose head is branch, if any.
+	// PRForBranch finds the most recent PR whose head is branch, if any,
+	// whatever state it is in — the caller decides what states it accepts.
+	//
+	// It used to filter to open PRs in the query, which made a merged PR
+	// indistinguishable from no PR at all, and convergence read that as
+	// "the PR is gone" and parked runs that had in fact succeeded. The
+	// filter is a caller's requirement, so it belongs at the call site
+	// where it can be seen, not buried in a flag where it cannot.
 	PRForBranch(ctx context.Context, dir, branch string) (PR, bool, error)
 	// OpenPR opens a PR and returns its URL.
 	OpenPR(ctx context.Context, dir, base, branch, title, body string) (string, error)

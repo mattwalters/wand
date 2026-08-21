@@ -346,7 +346,9 @@ is a contract a scheduler can read:
 - **converged** (exit 0) — the reviewer approved on positive evidence and
   no human PR thread stands unresolved (outdated included: outdated is not
   answered); the ticket is In Review with `ready-for-human`, and the PR
-  awaits a human.
+  awaits a human. A PR a human merged before the run could finish converges
+  too — the work landed — with the status left to the merge automation
+  rather than moved back to In Review.
 - **handed back** (exit 2) — Needs Input, comment first: a worker's own
   verbatim account of what blocked it, or a cap that ran out saying so.
   Convergence never happens by exhaustion; a spent cap is a hand-back that
