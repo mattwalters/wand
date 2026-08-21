@@ -19,6 +19,14 @@ type Project struct {
 // proposes a new project only when nothing on the board already covers it.
 // An unknown team key returns an empty slice rather than an error, matching
 // TeamByKey's own "not found" shape.
+//
+// `teams` is bounded to one node because Linear costs a query before it runs
+// it, and a filter is not part of the estimate: an unbounded `teams` is
+// budgeted at its default page of 50, each carrying the nested
+// `projects(first: 250)`, which came to 16300 against a 10000 ceiling and
+// parked every `wand pm` run on a live workspace. The bound is also what the
+// code already assumed — only Nodes[0] is ever read. TestEveryConnectionIsBounded
+// is where that lesson is pinned for the whole package.
 func (c *Client) Projects(ctx context.Context, teamKey string) ([]Project, error) {
 	var out struct {
 		Teams struct {
@@ -31,7 +39,7 @@ func (c *Client) Projects(ctx context.Context, teamKey string) ([]Project, error
 	}
 	err := c.Do(ctx, `
 		query($team: String!) {
-		  teams(filter: {key: {eq: $team}}) {
+		  teams(filter: {key: {eq: $team}}, first: 1) {
 		    nodes { projects(first: 250) { nodes { id name description } } }
 		  }
 		}`,

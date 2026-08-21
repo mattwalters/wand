@@ -65,6 +65,9 @@ func (c *Client) CreateTeam(ctx context.Context, name, key string, s TeamSetting
 }
 
 // TeamByKey returns the team with the given key, or a zero Team if none exists.
+// The `teams` connection is bounded to one node for the reason Projects
+// documents: Linear budgets an unbounded connection at its default page of
+// 50 regardless of the filter, and only Nodes[0] is ever read here anyway.
 func (c *Client) TeamByKey(ctx context.Context, key string) (Team, error) {
 	var out struct {
 		Teams struct {
@@ -73,7 +76,7 @@ func (c *Client) TeamByKey(ctx context.Context, key string) (Team, error) {
 	}
 	err := c.Do(ctx, `
 		query($key: String!) {
-		  teams(filter: {key: {eq: $key}}) { nodes { id name key triageEnabled issueEstimationType } }
+		  teams(filter: {key: {eq: $key}}, first: 1) { nodes { id name key triageEnabled issueEstimationType } }
 		}`,
 		map[string]any{"key": key}, &out)
 	if err != nil || len(out.Teams.Nodes) == 0 {
@@ -101,7 +104,7 @@ func (c *Client) TeamStates(ctx context.Context, teamID string) ([]WorkflowState
 	}
 	err := c.Do(ctx, `
 		query($id: String!) {
-		  team(id: $id) { states { nodes { id name type position } } }
+		  team(id: $id) { states(first: 250) { nodes { id name type position } } }
 		}`,
 		map[string]any{"id": teamID}, &out)
 	return out.Team.States.Nodes, err
@@ -205,7 +208,7 @@ func (c *Client) GitAutomations(ctx context.Context, teamID string) ([]GitAutoma
 	}
 	err := c.Do(ctx, `
 		query($id: String!) {
-		  team(id: $id) { gitAutomationStates { nodes { id event state { name } } } }
+		  team(id: $id) { gitAutomationStates(first: 250) { nodes { id event state { name } } } }
 		}`,
 		map[string]any{"id": teamID}, &out)
 	return out.Team.GitAutomationStates.Nodes, err
