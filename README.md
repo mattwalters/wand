@@ -68,6 +68,83 @@ wand doctor --team-key WND  # report the team's drift from the covenant
 wand version                # build info, and the covenant schema this binary speaks
 ```
 
+## The lifecycle
+
+The board is a state machine, drawn here from the point of view of the
+person operating it — every arrow labelled with *who* moves it, and every
+state a human must act from marked **waiting on you**. Backlog is
+deliberately not marked: a Backlog ticket is not waiting on you, it is the
+pool ([more below](#home)).
+
+```mermaid
+stateDiagram-v2
+    state "To Plan" as ToPlan
+    state "In Planning" as InPlanning
+    state "Plan Review" as PlanReview
+    state "Needs Input" as NeedsInput
+    state "In Progress" as InProgress
+    state "In Review" as InReview
+
+    [*] --> Triage: filed
+
+    %% Two doors out of Backlog, both human — the cheap one straight to
+    %% Todo, the deliberate one through Scoping.
+    Triage --> Todo: human — bless, cheap door
+    Triage --> ToPlan: human — bless, deliberate door (scope it)
+    Triage --> Backlog: human
+    Triage --> Duplicate: human
+    Triage --> Canceled: human
+
+    Backlog --> Todo: human — bless, cheap door
+    Backlog --> ToPlan: human — bless, deliberate door (scope it)
+
+    %% Scoping: an agent researches, only a human judges the plan it wrote.
+    ToPlan --> InPlanning: agent — claims to research
+    InPlanning --> PlanReview: agent — plan finished, judge this
+    InPlanning --> NeedsInput: agent — blocking question, answer this
+
+    PlanReview --> Todo: human — bless the plan
+    PlanReview --> Backlog: human — reject the plan, with why
+
+    %% Building.
+    Todo --> InProgress: agent — claims to build
+    InProgress --> InReview: agent — converges
+    InProgress --> NeedsInput: agent — blocking question, answer this
+    InProgress --> Backlog: agent — abandons a wrong ticket
+
+    %% Needs Input is answered, then reblessed back into motion — the same
+    %% six-way judgment Triage offers, because the answer may send the
+    %% ticket to build, back to scoping, or out of the queue entirely.
+    NeedsInput --> Todo: human — answered, rebless to build
+    NeedsInput --> ToPlan: human — answered, rebless to scope
+    NeedsInput --> Backlog: human
+    NeedsInput --> Duplicate: human
+    NeedsInput --> Canceled: human
+
+    InReview --> Done: human — review, then merge
+
+    note right of Triage: waiting on you — judge
+    note right of PlanReview: waiting on you — judge the plan
+    note right of NeedsInput: waiting on you — answer
+    note right of InReview: waiting on you — review & merge
+```
+
+Four short touches are all a human ever makes — bless a ticket out of
+Backlog or Triage, answer a blocking question in Needs Input, judge a plan
+in Plan Review, review and merge the pull request — and an agent does
+everything between them. The five arrows a human alone may draw, into
+Todo, To Plan, Done, Canceled and Duplicate, are exactly [the
+guard](#the-guard)'s forbidden set; Plan Review's reject-to-Backlog and the
+merge-driven move to Done are the same kind of human judgment in different
+clothes, so they are drawn as human arrows too even though the guard has no
+rule about them by name. A Go test pins this diagram's states and its five
+guarded arrows against the covenant and the guard package, so a topology
+change that isn't reflected here fails `make check`.
+
+Not drawn here: the docs site at [docs/](docs/) has no Mermaid renderer
+vendored in its hand-rolled theme, so this diagram is README-only for now
+rather than shipping a picture nobody's browser could draw.
+
 ## Home
 
 `wand ui` is one screen answering one question: **what is waiting on me?**
@@ -157,9 +234,9 @@ comparing the two is how you learn whether a given binary can read it.
 
 ## The covenant file
 
-The state graph — Triage → Backlog → To Plan → In Planning → Plan Review →
-Todo → Needs Input → In Progress → In Review → Done — is wand's opinion, gofmt-style. What a repo
-customizes are the parameters of the machine, never its shape: a checked-in
+The state graph — drawn in full under [The lifecycle](#the-lifecycle) — is
+wand's opinion, gofmt-style. What a repo customizes are the parameters of
+the machine, never its shape: a checked-in
 `wand.toml` at the repo root carries status *names* over the fixed semantics,
 caps (review rounds, CI attempts, worker timeouts), the estimate scale,
 toggles, the three pluggable commands (verify, provision, run agent), ticket
