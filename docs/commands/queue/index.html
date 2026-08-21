@@ -182,6 +182,9 @@ readers looking at the same board at the same moment agree on what is next.</p>
 <p>An issue is printed under <code>skipped:</code> when an agent may not start it:</p>
 <ul>
 <li><strong>labeled <code>human-only</code></strong> — reserved for a person, whatever its rank;</li>
+<li><strong>labeled <code>parked</code></strong> — a run already stopped on it without deciding, and
+its reason is on the ticket. Clearing the label is how you say it is
+worth another run; until then wand will not re-buy the same failure.</li>
 <li><strong>blocked by an issue that is not completed or canceled.</strong> A <em>started</em>
 blocker still blocks. &ldquo;It&rsquo;s already In Progress&rdquo; is precisely the race
 the blocked-by relation exists to prevent.</li>
