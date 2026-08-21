@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wand plan · wand</title>
+  <link rel="stylesheet" href="../../../style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="../../../">wand</a>
+    
+    <a class="nav here" href="../../../docs/">Docs</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/mattwalters/wand">GitHub</a>
+    <span class="version">
+      latest
+      <select id="version-picker" hidden aria-label="Documentation version"></select>
+    </span>
+  </header>
+  
+  <div class="wrap">
+    
+    <nav class="sidenav">
+      
+      
+      <h5>Start</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/">Overview</a>
+      
+      <h5>Doctrine</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/covenant/">The covenant</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/architecture/">No daemon</a>
+      
+      <h5>Commands</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/">All commands</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/init/" class="mono">wand init</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/doctor/" class="mono">wand doctor</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/guard/" class="mono">wand guard</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/queue/" class="mono">wand queue</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/ticket/" class="mono">wand ticket</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/claim/" class="mono">wand claim</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/handback/" class="mono">wand handback</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/abandon/" class="mono">wand abandon</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/file/" class="mono">wand file</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/plan/" class="mono active" aria-current="page">wand plan</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/run/" class="mono">wand run</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/ui/" class="mono">wand ui</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/version/" class="mono">wand version</a>
+      
+    </nav>
+    
+    <main>
+      
+
+<h1 class="cmd">wand plan</h1>
+<p><code>plan</code> is the research orchestrator. It sends a cold, read-only scout over
+your repository to research one ticket, validates what the scout hands back,
+and writes the result onto the ticket: the plan into the description, the
+approaches and their trade-offs as a comment, the estimate, and Scoped
+last.</p>
+<p>It is the smallest orchestrator wand has — no worktree, no branch, no PR, no
+CI — and the one to run first if you want to see the machinery work before
+you let it write code.</p>
+<h2 id="synopsis">Synopsis</h2>
+<pre tabindex="0"><code>wand plan &lt;identifier&gt; [--interactive] [--harness NAME] [--model M] [--effort E]
+</code></pre><h2 id="the-ticket-must-be-in-scoping">The ticket must be in Scoping</h2>
+<p>Blessing research is a human act, the same way blessing building is: a
+ticket in Scoping is one you have decided is worth spending a scout on.
+<code>plan</code> refuses anything else, and refuses a <code>human-only</code> or <code>parked</code>
+ticket outright — a plan run is a full cold research pass, and re-buying one
+that already stopped is the most expensive way to learn nothing.</p>
+<p>It does <strong>not</strong> refuse a blocked ticket. A ticket waiting on another is
+often exactly the one worth planning early — the blocker stops the building,
+not the reading. That is a deliberate difference from <code>wand claim</code>, which
+does refuse.</p>
+<h2 id="what-it-writes-and-in-what-order">What it writes, and in what order</h2>
+<p>Four writes, and the order is the contract:</p>
+<ol>
+<li><strong>The plan</strong>, into a marker-fenced region of the description
+(<code>&lt;!-- wand:plan --&gt;</code>). Every byte outside that region belongs to
+whoever wrote it; the region is replaced whole on every plan run, never
+merged and never appended to.</li>
+<li><strong>The options comment</strong>: what the scout took the ticket to be asking,
+every approach with its trade-off, which one is recommended and why,
+what the plan rests on, what is still open, and the ask.</li>
+<li><strong>The estimate</strong>, on the team&rsquo;s scale.</li>
+<li><strong>Scoped</strong>.</li>
+</ol>
+<p>Each deliverable lands before the transition that advertises it. A ticket in
+Scoped promises a finished plan to judge, so the status move is last, and if
+anything before it fails the ticket stays in Scoping — carrying whatever
+did land, and nothing claiming to be finished.</p>
+<p>The comment comes before the estimate for the same reason: a ticket carrying
+the argument for an estimate it does not have is recoverable, while a ticket
+carrying a number nothing explains is a number nobody can weigh.</p>
+<p>Promoting the result to Todo is yours. An agent does not bless its own plan.</p>
+<h2 id="nothing-is-written-unless-the-whole-handoff-is-valid">Nothing is written unless the whole handoff is valid</h2>
+<p>The scout&rsquo;s handoff is validated before the first Linear call, and a handoff
+that fails validation writes <strong>nothing at all</strong>. Half a plan on a ticket is
+worse than none, because it reads like a whole one — a human blesses the
+plan on the strength of the argument beside it, and nobody re-derives
+afterwards whether that argument held together.</p>
+<p>What is checked:</p>
+<ul>
+<li>one to three approaches, each with a real trade-off;</li>
+<li>a recommendation naming one of those approaches, with the argument for it;</li>
+<li>at least one usable file citation, cited <code>path:line</code> (a range or a
+comma-separated list of either also counts) — the line is what makes it a
+citation rather than a filename. A citation carrying no line is <strong>dropped,
+not fatal</strong>: it leaves the file map, the plan says which one went and why,
+and the run carries on. Only a draft with no usable citation left is
+refused, and then for citing nothing rather than for the formatting;</li>
+<li>an estimate on the covenant&rsquo;s scale (Linear silently adjusts an off-scale
+estimate to fit, which would land a number nobody chose; a team whose
+scale is <code>notUsed</code> gets no estimate and is not asked for one);</li>
+<li>a plan with ordered steps <strong>and</strong> a test story;</li>
+<li>for every assumption, what breaks if it is wrong and how expensive that is.</li>
+</ul>
+<p>A misspelled field is a loud failure rather than a silently absent one.</p>
+<h3 id="when-the-scout-says-the-ticket-is-wrong">When the scout says the ticket is wrong</h3>
+<p>A scout that finds the ticket built on something untrue — work already done,
+a mechanism that does not work the way the ticket says — reports that
+instead of planning around it. Then nothing is written to the description and
+no estimate is set: its account goes on the ticket verbatim, the ticket
+moves to Needs Input, and the command exits <code>2</code>.</p>
+<h2 id="the-read-only-promise">The read-only promise</h2>
+<p>There is no worktree. The scout reads the checkout you ran the command
+from — usually yours, with your uncommitted work in it — and is told not to
+change it. wand records <code>git status</code> before and after every worker and
+<strong>parks</strong> if anything moved, leaving the change in front of you rather than
+writing a plan over a checkout somebody quietly edited. The handoff is
+journaled before that check, so a park does not throw the research away.</p>
+<h2 id="--interactive-the-draft-then-grill-interview"><code>--interactive</code>: the draft-then-grill interview</h2>
+<p>With <code>--interactive</code>, wand puts the draft to you before anything is written.
+The questions are composed from the draft&rsquo;s own structure, worst consequence
+first:</p>
+<ol>
+<li><strong>the ticket itself</strong> — the scout&rsquo;s reading of what you asked for,
+because everything below is wasted if the problem is wrong;</li>
+<li><strong>the recommendation</strong>, next to the approaches it passed over;</li>
+<li><strong>the assumptions</strong>, costliest first;</li>
+<li><strong>the open questions</strong>.</li>
+</ol>
+<p>Every question quotes the draft verbatim: a paraphrase asks about a claim
+the draft does not make. Answer over as many lines as you like; a blank line
+ends an answer, and an empty answer means &ldquo;as drafted&rdquo;. If you answer
+nothing, nothing is revised and no extra model call is spent.</p>
+<p>Your answers go to a <strong>second, fresh session</strong>, never back to the one that
+wrote the draft — a session that has just argued for an approach defends it,
+and what comes back is the same plan with your objections explained away.
+The reviser produces a whole new plan, validated exactly as strictly.</p>
+<p>The flag needs a terminal. An unattended caller must not pass it: it is
+refused with exit <code>1</code> rather than left blocked on a read nobody will answer.
+A covenant that turns the stage off (<code>toggles.plan_interview = false</code>)
+refuses the flag too — the two settings answer different questions, and
+resolving the contradiction silently would mean one of them was never
+load-bearing.</p>
+<h2 id="the-critic">The critic</h2>
+<p><code>toggles.plan_critic = true</code> in <a href="../../covenant/"><code>wand.toml</code></a> inserts a
+cold critic between the draft and the interview: a fresh session prompted to
+attack the draft, whose objections are validated like any other handoff and
+handed to a reviser. An objection must state what it costs if the draft
+ships as written; an objection with no consequence is a preference, and a
+revision round is too expensive to spend on one. A critic that finds nothing
+costs one call and changes nothing.</p>
+<p>It is off by default. It spends a whole extra model call per plan run, and
+unlike the rest of the covenant it is not a rule the reference system has
+finished paying for.</p>
+<p>The footer of the options comment says which stages ran, so you can tell a
+first draft from a plan that survived a critic and an interview.</p>
+<h2 id="one-plan-run-per-ticket">One plan run per ticket</h2>
+<p><code>wand plan</code> takes a per-ticket lock for the life of the process. <code>wand run</code>
+does not need one — it claims its ticket out of Todo, so the board is its
+mutex — but a plan run&rsquo;s ticket sits in Scoping from the first read to the
+last write, so nothing on the board can keep a second plan run out. Two plan
+runs over one ticket would write two plans into one fenced region and argue
+two recommendations at a reader who cannot tell which the estimate belongs
+to.</p>
+<p>The lock is a file in wand&rsquo;s state directory, released by the operating
+system when the process dies, however it dies. It is machine-local: it
+serializes the processes on your machine and says nothing about anyone
+else&rsquo;s.</p>
+<h2 id="flags">Flags</h2>
+<table>
+	<thead>
+			<tr>
+					<th>Flag</th>
+					<th>Description</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>--interactive</code></td>
+					<td>Interview you over the draft before writing anything. Needs a terminal.</td>
+			</tr>
+			<tr>
+					<td><code>--harness NAME</code></td>
+					<td>Worker harness: <code>claude-code</code> (default) or <code>codex</code>.</td>
+			</tr>
+			<tr>
+					<td><code>--model M</code></td>
+					<td>Model for every worker. Default: the harness&rsquo;s own.</td>
+			</tr>
+			<tr>
+					<td><code>--effort E</code></td>
+					<td>Reasoning effort for every worker. Default: the harness&rsquo;s own.</td>
+			</tr>
+	</tbody>
+</table>
+<h2 id="exit-codes">Exit codes</h2>
+<p>A scheduler contract, and the one <code>wand run</code> publishes too.</p>
+<table>
+	<thead>
+			<tr>
+					<th>Code</th>
+					<th>Meaning</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>0</code></td>
+					<td>Planned. The plan, the options and the estimate are on the ticket, and it is in Scoped for a human to judge.</td>
+			</tr>
+			<tr>
+					<td><code>1</code></td>
+					<td>The run never started: no API key, the ticket is not in Scoping, <code>--interactive</code> with no terminal, another process holds the ticket. Nothing was written.</td>
+			</tr>
+			<tr>
+					<td><code>2</code></td>
+					<td>Handed back. The scout judged the ticket&rsquo;s premise wrong; its account is on the ticket, no plan was written, and it is in Needs Input for a human to answer.</td>
+			</tr>
+			<tr>
+					<td><code>3</code></td>
+					<td>Parked. The run stopped without deciding — an unusable handoff, a worker failure, a write that failed part-way. The journal says which, and how much reached the ticket; the ticket itself carries the reason as a comment and the <code>parked</code> label.</td>
+			</tr>
+	</tbody>
+</table>
+<h2 id="the-journal">The journal</h2>
+<p>Every plan run is a journaled run: each phase recorded before it happens, the
+scout&rsquo;s handoff kept as a note, and exactly one terminal record. A handoff
+that fails validation is kept too, written to the run&rsquo;s <code>scratch/</code> as
+<code>&lt;phase&gt;-&lt;round&gt;.rejected.json</code> before the park — the worker&rsquo;s own copy is
+already gone by then, and a refusal you cannot read afterwards makes the
+validator&rsquo;s one-line complaint the only surviving account of a research
+pass that may have cost minutes and millions of tokens. Runs live
+under <code>$XDG_STATE_HOME/wand/runs</code> (or <code>WAND_STATE_DIR</code>), outside every
+repository. The journal is written before the ticket is, deliberately — a
+park has to be reachable when Linear itself is what failed. Once it is
+journaled, the ticket gets the same sentence as a comment and the <code>parked</code>
+label, best-effort: a plan run never owns its ticket&rsquo;s status, so the mark is
+a label and the ticket stays in Scoping where a human put it.</p>
+<h3 id="the-failure-that-retries-instead">The failure that retries instead</h3>
+<p>A scout that died of infrastructure — a provider error, a host suspended
+mid-response — does not park on the first try. When the harness&rsquo;s own
+report says the failure was about the machine rather than the research, the
+phase respawns a fresh cold scout, up to <code>caps.worker_retries</code> times (one by
+default; <code>0</code> switches it off). A scout costs a whole model call and produces
+nothing at all until it hands off, so a provider error is the most
+expensive possible thing to mistake for a verdict.</p>
+<p>The rules are <a href="../run/"><code>wand run</code></a>&rsquo;s, with one that is plan&rsquo;s own: no
+retry ever happens into a checkout the scout changed. <code>plan</code> reads the
+repository you ran it in — usually your own working copy, not a worktree the
+run owns — so a stray edit is about to be handed back to you untouched.
+Respawning a second scout into it first would write more into a directory
+you are about to be asked to look at. Timeouts and interrupts are not
+retried either, and a harness that cannot report transience parks exactly as
+before.</p>
+<h2 id="requirements">Requirements</h2>
+<p><code>LINEAR_API_KEY</code> in the environment, the harness on <code>PATH</code>, and a git
+repository to run in. The workers get none of that: the credential strip
+runs before the harness starts, and the isolation is proven per adapter by
+wand&rsquo;s conformance suite.</p>
+<h2 id="examples">Examples</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand plan WND-42
+</span></span></code></pre></div><pre tabindex="0"><code>planning WND-42 (Scoping), journaling to ~/.local/state/wand/runs/WND-42-20260819T120000Z
+phase scout: spawning a cold worker (claude-code)
+wrote the plan into the ticket&#39;s description
+posted the options comment
+set the estimate to 3
+run WND-42-20260819T120000Z ended: converged — scoped: …
+</code></pre><p>Grilled first:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand plan WND-42 --interactive
+</span></span></code></pre></div><h2 id="see-also">See also</h2>
+<p><a href="../ticket/"><code>wand ticket</code></a> renders the plan for a cold reader — the
+description and every comment, in one piece.</p>
+
+
+    </main>
+    
+    
+    
+    <nav class="toc">
+      <h5>On this page</h5>
+      <nav id="TableOfContents">
+  <ul>
+    <li><a href="#synopsis">Synopsis</a></li>
+    <li><a href="#the-ticket-must-be-in-scoping">The ticket must be in Scoping</a></li>
+    <li><a href="#what-it-writes-and-in-what-order">What it writes, and in what order</a></li>
+    <li><a href="#nothing-is-written-unless-the-whole-handoff-is-valid">Nothing is written unless the whole handoff is valid</a>
+      <ul>
+        <li><a href="#when-the-scout-says-the-ticket-is-wrong">When the scout says the ticket is wrong</a></li>
+      </ul>
+    </li>
+    <li><a href="#the-read-only-promise">The read-only promise</a></li>
+    <li><a href="#--interactive-the-draft-then-grill-interview"><code>--interactive</code>: the draft-then-grill interview</a></li>
+    <li><a href="#the-critic">The critic</a></li>
+    <li><a href="#one-plan-run-per-ticket">One plan run per ticket</a></li>
+    <li><a href="#flags">Flags</a></li>
+    <li><a href="#exit-codes">Exit codes</a></li>
+    <li><a href="#the-journal">The journal</a>
+      <ul>
+        <li><a href="#the-failure-that-retries-instead">The failure that retries instead</a></li>
+      </ul>
+    </li>
+    <li><a href="#requirements">Requirements</a></li>
+    <li><a href="#examples">Examples</a></li>
+    <li><a href="#see-also">See also</a></li>
+  </ul>
+</nav>
+    </nav>
+    
+  </div>
+  <script>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    (function () {
+      var root = new URL("..", document.querySelector('link[rel="stylesheet"]').href);
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          var picker = document.getElementById("version-picker");
+          ["latest"].concat(versions).forEach(function (v) {
+            var option = document.createElement("option");
+            option.value = v;
+            option.textContent = v;
+            option.selected = v === "latest";
+            picker.appendChild(option);
+          });
+          picker.addEventListener("change", function () {
+            window.location.href = new URL(picker.value + "/", root);
+          });
+          picker.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>

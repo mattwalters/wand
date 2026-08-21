@@ -134,7 +134,7 @@
       
       
       
-      <a href="../../../docs/commands/scope/" class="mono">wand scope</a>
+      <a href="../../../docs/commands/plan/" class="mono">wand plan</a>
       
       
       
@@ -167,14 +167,14 @@
 
 <h1 class="cmd">wand dispatch</h1>
 <p><code>dispatch</code> is a thin selector over <a href="../run/"><code>wand run</code></a> and
-<a href="../scope/"><code>wand scope</code></a>: a read-mostly pass that picks the one ticket a
+<a href="../plan/"><code>wand plan</code></a>: a read-mostly pass that picks the one ticket a
 repository works next and runs it through whichever of those two
 orchestrators the ticket belongs to.</p>
 <h2 id="synopsis">Synopsis</h2>
 <pre tabindex="0"><code>wand dispatch [--team-key &lt;key&gt;] [--harness &lt;name&gt;] [--model &lt;m&gt;] [--effort &lt;e&gt;]
 wand dispatch [--team-key &lt;key&gt;] --watch [--interval &lt;duration&gt;] [...]
 </code></pre><h2 id="what-it-does">What it does</h2>
-<p>The Todo gate lives here, deliberately, and not in <code>run</code> or <code>scope</code>
+<p>The Todo gate lives here, deliberately, and not in <code>run</code> or <code>plan</code>
 themselves: a human typing <code>wand run WND-9</code> has already made the decision
 that WND-9 is the ticket to work. An unattended selector has not, so
 <code>dispatch</code> makes it the same way <a href="../queue/"><code>wand queue</code></a> prints it —
@@ -196,11 +196,11 @@ opened — the same [journal.Report.Zombie] proof <code>wand sweep</code> acts o
 <code>wand queue</code> ranks Todo.</li>
 <li><strong>Pick the winner.</strong> The highest-ranked, vetted Todo issue when a lane
 is free, through <code>wand run</code>; otherwise the highest-ranked, vetted
-Scoping issue, through <code>wand scope</code>. A scope needs no lane, so an
+Scoping issue, through <code>wand plan</code>. A plan run needs no lane, so an
 eligible Scoping ticket dispatches even at full lane occupancy —
 research is never starved by full lane occupancy — and it is also what
 a pass falls back to when Todo simply has nothing startable.</li>
-<li><strong>Run it.</strong> One ticket per pass, to one of <code>run</code>&rsquo;s or <code>scope</code>&rsquo;s own
+<li><strong>Run it.</strong> One ticket per pass, to one of <code>run</code>&rsquo;s or <code>plan</code>&rsquo;s own
 terminal states.</li>
 </ol>
 <h2 id="--watch"><code>--watch</code></h2>
@@ -219,7 +219,7 @@ Concurrency across lanes comes from the children it spawns, never from a
 second <code>wand dispatch</code> process racing the first&rsquo;s selection — that second
 process refuses, locked, exactly as a single-shot pass would.</p>
 <p>Each spawned child&rsquo;s own narration (the same lines <code>wand run</code> or
-<code>wand scope</code> prints when you run them yourself) goes to a log file under
+<code>wand plan</code> prints when you run them yourself) goes to a log file under
 the run journal&rsquo;s state directory, one file per child, since the journal
 itself only carries the structured half of that account.</p>
 <p><a href="../ui/"><code>wand ui</code></a>&rsquo;s engage mode (the <code>e</code> key) is this exact mechanism run
@@ -249,7 +249,7 @@ single-shot pass can reach gets its own code:</p>
 			</tr>
 			<tr>
 					<td><code>2</code></td>
-					<td>Handed back or parked — the run/scope journal has the detail.</td>
+					<td>Handed back or parked — the run/plan journal has the detail.</td>
 			</tr>
 			<tr>
 					<td><code>3</code></td>
@@ -303,14 +303,14 @@ each pass it dispatches is a detached child, not this process&rsquo;s own exit.<
 	</tbody>
 </table>
 <h2 id="requirements">Requirements</h2>
-<p>Same as <code>wand run</code> and <code>wand scope</code>: <code>LINEAR_API_KEY</code>, an authenticated
+<p>Same as <code>wand run</code> and <code>wand plan</code>: <code>LINEAR_API_KEY</code>, an authenticated
 <code>gh</code>, <code>commands.verify</code> in <a href="../../covenant/"><code>wand.toml</code></a>, run from inside
 the repository — which is also where the team key comes from, unless
 <code>--team-key</code> overrides it.</p>
 <p><code>caps.lanes</code> in the covenant sets how many <code>wand run</code> loops this repository
 runs at once (default <code>1</code>); a Scoping ticket never counts against it.</p>
 <h2 id="see-also">See also</h2>
-<p><a href="../run/"><code>wand run</code></a> and <a href="../scope/"><code>wand scope</code></a> are the two
+<p><a href="../run/"><code>wand run</code></a> and <a href="../plan/"><code>wand plan</code></a> are the two
 orchestrators a winner runs through; <a href="../sweep/"><code>wand sweep</code></a> is
 everything that happens after one of them exits; <a href="../queue/"><code>wand queue</code></a>
 is the same read layer this selector&rsquo;s ranking reuses.</p>

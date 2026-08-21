@@ -134,7 +134,7 @@
       
       
       
-      <a href="../../docs/commands/scope/" class="mono">wand scope</a>
+      <a href="../../docs/commands/plan/" class="mono">wand plan</a>
       
       
       
@@ -166,7 +166,7 @@
       
 
 <h1>The run journal</h1>
-<p>Every <code>wand run</code> and <code>wand scope</code> writes an append-only JSON Lines journal
+<p>Every <code>wand run</code> and <code>wand plan</code> writes an append-only JSON Lines journal
 under the run&rsquo;s directory — one record per line, synced as it is written.
 It exists first as the crash-only record of what a run did: an orchestrator
 that dies mid-phase leaves a journal a resume can read, never a ticket
@@ -192,8 +192,8 @@ ticket has yet.</p>
 <p>Every <code>journal.Record</code> carries <code>kind</code>, <code>seq</code>, <code>at</code>, <code>phase</code> and <code>round</code> (see
 <code>internal/journal</code>&rsquo;s package doc for the record stream&rsquo;s own guarantees).
 On a <code>phase.ended</code> record, <code>detail</code> is a JSON object shaped like this
-(<code>run</code>-verb fields on the left; <code>scope</code> carries every field except
-<code>diff_stat</code>, since a scope has no worktree):</p>
+(<code>run</code>-verb fields on the left; <code>plan</code> carries every field except
+<code>diff_stat</code>, since a plan run has no worktree):</p>
 <table>
 	<thead>
 			<tr>

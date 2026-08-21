@@ -91,7 +91,7 @@ written. <code>wand ui --team-key WND</code> shows your team&rsquo;s.</p>
 <p><strong>Status: early.</strong> <code>init</code> bootstraps a Linear team to the covenant and
 installs the guard hook, <code>guard</code> enforces the covenant&rsquo;s authorization
 rules, <code>queue</code> and <code>ticket</code> are the read layer, <code>doctor</code> reports drift,
-and <code>scope</code> and <code>run</code> are the first two orchestrators. <code>dispatch</code>, the
+and <code>plan</code> and <code>run</code> are the first two orchestrators. <code>dispatch</code>, the
 last one, is not built yet.</p>
 </blockquote>
 <p><strong>A covenant, not a config file.</strong> The state graph — Triage → Backlog →
@@ -110,7 +110,7 @@ tool call, before the write happens.</p>
 prose, where it was followed only sometimes: the question is posted before
 the ticket parks on it, the evidence before the demotion, the duplicate
 search before the filing.</p>
-<p><strong>Orchestrators that hand back.</strong> <a href="docs/commands/scope/"><code>wand scope</code></a> sends
+<p><strong>Orchestrators that hand back.</strong> <a href="docs/commands/plan/"><code>wand plan</code></a> sends
 a cold, read-only scout over one ticket and writes a plan plus the argued
 options a human blesses it on — ending at Scoped, never at Todo.
 <a href="docs/commands/run/"><code>wand run</code></a> takes a ticket a human <em>has</em> blessed and

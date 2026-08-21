@@ -134,7 +134,7 @@
       
       
       
-      <a href="../../../docs/commands/scope/" class="mono">wand scope</a>
+      <a href="../../../docs/commands/plan/" class="mono">wand plan</a>
       
       
       
@@ -168,8 +168,8 @@
 <h1 class="cmd">wand pm</h1>
 <p><code>pm</code> is the stage-zero orchestrator: a decided product brief in, a
 hard-validated set of proposed tickets out. It is the sibling of
-<a href="../scope/"><code>wand scope</code></a> one stage earlier in the lifecycle —
-idea → pm → (bless) → scope → (bless) → run — and it borrows scope&rsquo;s
+<a href="../plan/"><code>wand plan</code></a> one stage earlier in the lifecycle —
+idea → pm → (bless) → plan → (bless) → run — and it borrows plan&rsquo;s
 central discipline whole: an invalid proposal writes nothing.</p>
 <p>The brainstorm itself does not need wand; that happens in any chat. What pm
 owns is the last mile: a decided initiative becoming well-formed,
@@ -199,7 +199,7 @@ finding — in <code>blocked_by</code>-dependency order, then every <code>blocke
 relation last, once every ticket in the batch exists.</li>
 </ol>
 <p>Nothing here promotes anything. Every ticket lands in Triage; blessing it
-onward to Todo, the same as blessing a scope&rsquo;s Scoped plan, stays a human&rsquo;s
+onward to Todo, the same as blessing a Scoped plan, stays a human&rsquo;s
 act. That is also why <code>wand pm bless</code> is a CLI command at all, unlike the
 promotion a human makes in <a href="../ui/"><code>wand ui</code></a>: filing into Triage is a
 status an agent may already set on its own (<code>wand file</code> does exactly this
@@ -222,7 +222,7 @@ exist;</li>
 <li>titles are unique within the set — <code>blocked_by</code> resolves by title, and
 two tickets sharing one could not be told apart.</li>
 </ul>
-<p>A misspelled field is a loud failure, the same as in <code>wand scope</code>&rsquo;s
+<p>A misspelled field is a loud failure, the same as in <code>wand plan</code>&rsquo;s
 handoff.</p>
 <h3 id="when-the-scout-says-the-brief-is-wrong">When the scout says the brief is wrong</h3>
 <p>A scout that finds the brief already done, or already tracked by an
@@ -358,7 +358,7 @@ and nothing is silently missing.</p>
 	</tbody>
 </table>
 <h2 id="the-journal">The journal</h2>
-<p>Both commands are journaled runs, the same discipline <code>wand scope</code> and
+<p>Both commands are journaled runs, the same discipline <code>wand plan</code> and
 <code>wand run</code> follow: every phase recorded before it happens, exactly one
 terminal record. Because pm&rsquo;s input is a brief rather than an existing
 Linear ticket, the journal names a synthetic identifier derived from the
@@ -380,8 +380,8 @@ proposal: ~/.local/state/wand/runs/pm-4f2a9c1e0b7d-20260820T090000Z/proposal.jso
 </code></pre><p>Read <code>proposal.md</code>, edit <code>proposal.json</code> if you want changes, then:</p>
 <div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand pm bless ~/.local/state/wand/runs/pm-4f2a9c1e0b7d-20260820T090000Z/proposal.json
 </span></span></code></pre></div><h2 id="see-also">See also</h2>
-<p><a href="../scope/"><code>wand scope</code></a> is the next stage: once a human promotes one of
-pm&rsquo;s filed tickets into Scoping, scope researches it into a plan.</p>
+<p><a href="../plan/"><code>wand plan</code></a> is the next stage: once a human promotes one of
+pm&rsquo;s filed tickets into Scoping, plan researches it into a plan.</p>
 
 
     </main>

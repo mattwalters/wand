@@ -134,7 +134,7 @@
       
       
       
-      <a href="../../docs/commands/scope/" class="mono">wand scope</a>
+      <a href="../../docs/commands/plan/" class="mono">wand plan</a>
       
       
       
@@ -198,8 +198,8 @@ run at the root. Run the first three from the repo root.</p>
 success and <code>1</code> on any failure, with the reason on stderr. Several commands
 say otherwise, and each of their codes is a contract something else depends
 on: <code>guard</code> (the harness hook), <code>doctor</code> (CI), <code>file</code> (a refusal to file a
-duplicate is a failure, on purpose), the orchestrators <code>scope</code>, <code>pm</code> and
-<code>run</code>, whose <code>0</code>/<code>2</code>/<code>3</code> tell a scheduler how a run ended — scoped or
+duplicate is a failure, on purpose), the orchestrators <code>plan</code>, <code>pm</code> and
+<code>run</code>, whose <code>0</code>/<code>2</code>/<code>3</code> tell a scheduler how a run ended — planned or
 converged (or proposed), handed back, or parked — leaving <code>1</code> for a run
 that never started; <code>pm bless</code>, whose own <code>0</code>/<code>1</code>/<code>3</code> mark a batched write
 rather than a single one — filed, refused before any write, or a write
@@ -241,7 +241,7 @@ vocabulary — a scheduler&rsquo;s whole view of a pass is a status and a log.</
   <dt><a href="../../docs/commands/file/"><code>wand file</code></a></dt>
   <dd>File a finding into Triage, after searching for duplicates.</dd>
   
-  <dt><a href="../../docs/commands/scope/"><code>wand scope</code></a></dt>
+  <dt><a href="../../docs/commands/plan/"><code>wand plan</code></a></dt>
   <dd>Research one Scoping ticket into a plan a human can bless.</dd>
   
   <dt><a href="../../docs/commands/dispatch/"><code>wand dispatch</code></a></dt>

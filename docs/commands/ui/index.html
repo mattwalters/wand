@@ -134,7 +134,7 @@
       
       
       
-      <a href="../../../docs/commands/scope/" class="mono">wand scope</a>
+      <a href="../../../docs/commands/plan/" class="mono">wand plan</a>
       
       
       
@@ -207,10 +207,10 @@ order <a href="../queue/"><code>wand queue</code></a> ranks work, so the ticket 
 is the one an agent starts first.</li>
 <li><strong>Scoped</strong> — tickets carrying a finished plan, waiting on the judgment
 that either blesses it into Todo or sends it back. Opening a row shows
-the plan itself — the marker-fenced region <a href="../scope/"><code>wand scope</code></a>
+the plan itself — the marker-fenced region <a href="../plan/"><code>wand plan</code></a>
 wrote into the description — not the ticket&rsquo;s original body. See
 <a href="#blessing-a-plan">Blessing a plan</a> below.</li>
-<li><strong>Needs Input</strong> — runs parked on a question: a scope that judged the
+<li><strong>Needs Input</strong> — runs parked on a question: a plan run that judged the
 ticket&rsquo;s premise wrong, or a run that hands back. It means one thing —
 answer me — never &ldquo;a plan is ready to bless,&rdquo; which is Scoped&rsquo;s job.</li>
 <li><strong>Ready for human</strong> — every open issue carrying the <code>ready-for-human</code>
@@ -252,10 +252,10 @@ current phase (<code>implement</code>, <code>review</code>, <code>revise</code>,
 long it has been going (<code>up</code>), and how long since its lease last renewed
 (<code>hb</code>, for heartbeat — the periodic tick a long single phase writes so it
 does not read as stale the moment it passes a minute). A harness shown as
-<code>—</code> is a scope-style run, which picks its harness per phase rather than
+<code>—</code> is a plan-style run, which picks its harness per phase rather than
 fixing one for the whole run.</p>
 <p><strong>Nothing here is waiting on you</strong>, so nothing here counts toward the
-header&rsquo;s count or takes a cursor: hand-launched <code>wand run</code> and <code>wand scope</code>
+header&rsquo;s count or takes a cursor: hand-launched <code>wand run</code> and <code>wand plan</code>
 invocations journal identically to an engaged cockpit&rsquo;s own, and appear here
 identically, whether or not engage mode is on. The strip is read-only and
 disappears entirely when nothing is running — a cockpit nobody has pointed
@@ -291,7 +291,7 @@ disposition itself cannot know: an unranked ticket promoted to Todo sorts
 behind everything ranked, so the blessing works and the work still never
 starts.</p>
 <h2 id="blessing-a-plan">Blessing a plan</h2>
-<p>Opening a Scoped row shows the plan <a href="../scope/"><code>wand scope</code></a> wrote — the
+<p>Opening a Scoped row shows the plan <a href="../plan/"><code>wand plan</code></a> wrote — the
 marker-fenced region of the description, and nothing else. Not the ticket&rsquo;s
 original body, and not the scout&rsquo;s argued-options comment (the approaches it
 weighed, the trade-offs, the estimate): that stays in Linear, one click away
@@ -330,16 +330,16 @@ ticket. <code>t</code> blesses it into Todo, exactly like Triage&rsquo;s. <code>
 Backlog with your reasoning posted as a comment first, the same ordering
 Cancel and Duplicate use below, so a crash between the two leaves an open
 ticket carrying its own argument rather than a status move nobody can
-explain — and so the next scope of this ticket starts from why the last one
-did not land instead of guessing:</p>
+explain — and so the next plan run over this ticket starts from why the last
+one did not land instead of guessing:</p>
 <pre tabindex="0"><code>  Backlog, with reason
 
     WND-44  cockpit: a fifth queue for plans awaiting blessing
     Scoped → Backlog
 
     Backlog is the pool. The reason is posted as a comment before the status
-    moves, because a rejected plan with no reason on it leaves the next scope of
-    this ticket guessing at what was wrong.
+    moves, because a rejected plan with no reason on it leaves the next plan run
+    over this ticket guessing at what was wrong.
 
     reason       wrong
 
