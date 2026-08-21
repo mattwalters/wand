@@ -1,4 +1,4 @@
- stuck lane
+ stuck run
 
   run       20260304-1120-wnd-36
   ticket    WND-36
@@ -8,5 +8,5 @@
   held by pid 48213 on studio.local, which is gone; the run stopped in implement
   (round 2) and nothing is driving it
 
-  read-only: a lane is not a ticket — resolving one means going to the machine
+  read-only: a run is not a ticket — resolving one means going to the machine
   esc back • q quit

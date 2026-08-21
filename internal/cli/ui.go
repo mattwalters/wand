@@ -43,7 +43,7 @@ func newUICmd() *cobra.Command {
 		Short: "Open the cockpit: everything waiting on a human",
 		Long: "Open wand's cockpit — one screen answering one question: what is\n" +
 			"waiting on me? Triage to judge, Needs Input to answer, ready-for-human\n" +
-			"work to look at, and lanes no process is driving any more.\n\n" +
+			"work to look at, and stalled runs no process is driving any more.\n\n" +
 			"Blessing lives here. Promotion to Todo and to To Plan is the transition\n" +
 			"the guard refuses everywhere else, because it hands out authorization an\n" +
 			"agent does not have; this screen is the one place a person grants it.\n\n" +
@@ -312,7 +312,7 @@ func sweptActionWord(kind sweep.ActedKind) string {
 }
 
 // cockpitBackend is the live I/O behind the screen: Linear for the board and
-// the judgments, the run store for the lanes.
+// the judgments, the run store for the stalled runs.
 type cockpitBackend struct {
 	cl      cockpit.Linear
 	runs    cockpit.Runs

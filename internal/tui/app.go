@@ -334,8 +334,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		if msg.intent.Disp.Lane {
-			m.snap = withoutLane(m.snap, msg.intent.Lane.RunID)
+		if msg.intent.Disp.Stalled {
+			m.snap = withoutStalled(m.snap, msg.intent.Stalled.RunID)
 		} else {
 			m.snap = withoutIssue(m.snap, msg.intent.Issue.ID, msg.intent.Issue.Identifier)
 		}
@@ -501,7 +501,7 @@ const readOnlyRefusal = "read-only: this is the sample board. Every key here wal
 
 // begin moves to the confirmation for one disposition.
 func (m Model) begin(row cockpit.Row, disp cockpit.Disposition) Model {
-	m.pending = cockpit.Intent{Issue: row.Issue, Lane: row.Lane, Disp: disp}
+	m.pending = cockpit.Intent{Issue: row.Issue, Stalled: row.Stalled, Disp: disp}
 	m.from = m.state
 	m.state = stateConfirm
 	m.failure = ""
@@ -637,11 +637,11 @@ func (m *Model) resyncDetail() {
 }
 
 // rowKey is a row's identity across a re-read: the issue it names, or the
-// run behind a lane. Not the cursor index, which is a position and belongs
+// run behind a stalled row. Not the cursor index, which is a position and belongs
 // to the board rather than to the row.
 func rowKey(r cockpit.Row) string {
-	if r.IsLane() {
-		return "lane:" + r.Lane.RunID
+	if r.IsStalled() {
+		return "stalled:" + r.Stalled.RunID
 	}
 	if r.Issue.ID != "" {
 		return "issue:" + r.Issue.ID
@@ -651,11 +651,11 @@ func rowKey(r cockpit.Row) string {
 
 // rowGone names a row for the sentence saying it left the board.
 func rowGone(r cockpit.Row) string {
-	if r.IsLane() {
-		if r.Lane.Ticket != "" {
-			return "the " + string(r.Lane.Kind) + " lane on " + r.Lane.Ticket
+	if r.IsStalled() {
+		if r.Stalled.Ticket != "" {
+			return "the " + string(r.Stalled.Kind) + " run on " + r.Stalled.Ticket
 		}
-		return "run " + r.Lane.RunID
+		return "run " + r.Stalled.RunID
 	}
 	return r.Issue.Identifier
 }
@@ -664,8 +664,8 @@ func rowGone(r cockpit.Row) string {
 // names the destination, because the row vanishing is not by itself an
 // answer to what happened to it.
 func (m Model) applied(in cockpit.Intent) string {
-	if in.Disp.Lane {
-		return fmt.Sprintf("cleared the parked label on %s.", in.Lane.Ticket)
+	if in.Disp.Stalled {
+		return fmt.Sprintf("cleared the parked label on %s.", in.Stalled.Ticket)
 	}
 	verb := "moved"
 	if in.Disp.Bless {
@@ -719,18 +719,18 @@ func withoutIssue(s cockpit.Snapshot, id, identifier string) cockpit.Snapshot {
 	return s
 }
 
-// withoutLane drops one lane from the snapshot by run ID, the same "remove
-// locally rather than re-read" reasoning [withoutIssue] uses: the write
-// returned nil, so the lane is resolved, and a board that kept showing it
-// until a refresh would invite clearing the same label twice.
-func withoutLane(s cockpit.Snapshot, runID string) cockpit.Snapshot {
-	var kept []cockpit.Lane
-	for _, lane := range s.Lanes {
-		if lane.RunID != runID {
-			kept = append(kept, lane)
+// withoutStalled drops one stalled run from the snapshot by run ID, the same
+// "remove locally rather than re-read" reasoning [withoutIssue] uses: the
+// write returned nil, so the run is resolved, and a board that kept showing
+// it until a refresh would invite clearing the same label twice.
+func withoutStalled(s cockpit.Snapshot, runID string) cockpit.Snapshot {
+	var kept []cockpit.StalledRun
+	for _, st := range s.Stalled {
+		if st.RunID != runID {
+			kept = append(kept, st)
 		}
 	}
-	s.Lanes = kept
+	s.Stalled = kept
 	return s
 }
 

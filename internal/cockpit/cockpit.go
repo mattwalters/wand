@@ -1,10 +1,10 @@
 // Package cockpit answers one question: what is waiting on a human?
 //
 // Five queues, and nothing else. Triage to judge, Plan Review to bless a
-// plan, Needs Input to answer, ready-for-human work to look at, and lanes no
-// process is driving any more. Each is a queue that nothing drains on its
-// own — the failure mode PLAN.md names "queues nothing drains" — and each is
-// invisible until something puts it on one screen.
+// plan, Needs Input to answer, ready-for-human work to look at, and stalled
+// runs no process is driving any more. Each is a queue that nothing drains
+// on its own — the failure mode PLAN.md names "queues nothing drains" — and
+// each is invisible until something puts it on one screen.
 //
 // What is deliberately *not* here: Backlog. A Backlog ticket is not waiting
 // on you; it is the pool, and browsing a pool is Linear's job, done better
@@ -62,8 +62,8 @@ type Snapshot struct {
 	PlanReview []linear.Issue
 	// ReadyForHuman is every open issue carrying the ready-for-human label.
 	ReadyForHuman []linear.Issue
-	// Lanes are runs the journal says a person has to resolve.
-	Lanes []Lane
+	// Stalled are runs the journal says a person has to resolve.
+	Stalled []StalledRun
 	// Active are runs a live process is presently driving — WND-41's
 	// answer to "what is the machine doing?" rather than "what is waiting
 	// on a human?". See [Active] and [Board.Running].
@@ -78,20 +78,20 @@ const (
 	KindPlanReview    Kind = "plan_review"
 	KindNeedsInput    Kind = "needs_input"
 	KindReadyForHuman Kind = "ready_for_human"
-	KindLanes         Kind = "lanes"
+	KindStalled       Kind = "stalled"
 )
 
-// Row is one line a human can put a cursor on: an issue in one of the three
-// issue queues, or a lane. Exactly one of Issue and Lane is meaningful, and
-// [Row.IsLane] says which.
+// Row is one line a human can put a cursor on: an issue in one of the four
+// issue queues, or a stalled run. Exactly one of Issue and Stalled is
+// meaningful, and [Row.IsStalled] says which.
 type Row struct {
-	Kind  Kind
-	Issue linear.Issue
-	Lane  Lane
+	Kind    Kind
+	Issue   linear.Issue
+	Stalled StalledRun
 }
 
-// IsLane reports whether the row is a lane rather than an issue.
-func (r Row) IsLane() bool { return r.Kind == KindLanes }
+// IsStalled reports whether the row is a stalled run rather than an issue.
+func (r Row) IsStalled() bool { return r.Kind == KindStalled }
 
 // Section is one queue with its rows.
 type Section struct {
@@ -176,11 +176,11 @@ func Build(s Snapshot) Board {
 				Rows:  issueRows(KindReadyForHuman, openIssues(s.ReadyForHuman)),
 			},
 			{
-				Kind:  KindLanes,
-				Title: "Lanes",
+				Kind:  KindStalled,
+				Title: "Stalled",
 				Verb:  "to resolve",
 				Empty: "every run is either finished or being driven.",
-				Rows:  laneRows(s.Lanes),
+				Rows:  stalledRows(s.Stalled),
 			},
 		},
 	}
@@ -267,11 +267,11 @@ type Disposition struct {
 	// Bless marks the two promotions the guard forbids agents. The screen
 	// renders them differently, and that difference is the branding.
 	Bless bool
-	// Lane marks a disposition that acts on the lane a row names rather than
-	// on an issue's status — ClearParked is the only one. [Apply] and
-	// [Intent.Ready] branch on it, and the screen never asks it for a status
-	// name: a lane carries no covenant status to move to.
-	Lane bool
+	// Stalled marks a disposition that acts on the stalled run a row names
+	// rather than on an issue's status — ClearParked is the only one.
+	// [Apply] and [Intent.Ready] branch on it, and the screen never asks it
+	// for a status name: a stalled run carries no covenant status to move to.
+	Stalled bool
 }
 
 // The dispositions. Seven, and no more: five statuses plus the split between
@@ -325,13 +325,13 @@ var (
 			"moves, because a rejected plan with no reason on it leaves the next plan run " +
 			"over this ticket guessing at what was wrong.",
 	}
-	// ClearParked removes the parked label from the ticket a parked lane
+	// ClearParked removes the parked label from the ticket a parked run
 	// names — the act ReportPark's own comment instructs and, until this,
-	// nothing in wand could perform. It is offered only on a LaneParked row:
-	// a lane is not a ticket for the other six dispositions, but a park's
+	// nothing in wand could perform. It is offered only on a StallParked row:
+	// a stalled run is not a ticket for the other six dispositions, but a park's
 	// own comment names exactly one next move, and this is the door to it.
 	ClearParked = Disposition{
-		Key: "c", Name: "Clear parked label", Lane: true,
+		Key: "c", Name: "Clear parked label", Stalled: true,
 		Gravity: "Clearing the label authorizes wand dispatch to pick this ticket up again " +
 			"on a later pass. It does not explain the park away — the comment already on " +
 			"the ticket is what a later reader has to go on.",
@@ -349,9 +349,9 @@ var judgments = []Disposition{BlessTodo, BlessToPlan, ToBacklog, ToBacklogUnrank
 // else's ticket — so it gets a shorter list rather than the full six.
 var planReviewJudgments = []Disposition{BlessTodo, RejectPlan}
 
-// laneJudgments is what a parked lane row offers: the one act a park's own
+// stalledJudgments is what a parked row offers: the one act a park's own
 // comment names.
-var laneJudgments = []Disposition{ClearParked}
+var stalledJudgments = []Disposition{ClearParked}
 
 // Dispositions returns what a human may do to this row.
 //
@@ -362,19 +362,19 @@ var laneJudgments = []Disposition{ClearParked}
 // on-merge automation closes the ticket seconds later. A status write from
 // here would be racing that automation to say the same thing.
 //
-// Lanes get none, with one exception: a parked lane offers ClearParked. A
-// lane is otherwise not a ticket, and resolving one means going to the
-// machine — but a park is a hand-back with a stated next move, and clearing
-// its label is that move, not a judgment about the run.
+// Stalled rows get none, with one exception: a parked run offers
+// ClearParked. A stalled run is otherwise not a ticket, and resolving one
+// means going to the machine — but a park is a hand-back with a stated next
+// move, and clearing its label is that move, not a judgment about the run.
 func Dispositions(r Row) []Disposition {
 	switch r.Kind {
 	case KindTriage, KindNeedsInput:
 		return judgments
 	case KindPlanReview:
 		return planReviewJudgments
-	case KindLanes:
-		if r.Lane.Kind == LaneParked {
-			return laneJudgments
+	case KindStalled:
+		if r.Stalled.Kind == StallParked {
+			return stalledJudgments
 		}
 		return nil
 	default:
@@ -399,9 +399,10 @@ func DispositionByKey(r Row, key string) (Disposition, bool) {
 // carries the whole act.
 type Intent struct {
 	Issue linear.Issue
-	// Lane is what a lane disposition — ClearParked — acts on. Meaningful
-	// only when Disp.Lane is set; an issue disposition leaves it zero.
-	Lane     Lane
+	// Stalled is what a stalled-run disposition — ClearParked — acts on.
+	// Meaningful only when Disp.Stalled is set; an issue disposition leaves
+	// it zero.
+	Stalled  StalledRun
 	Disp     Disposition
 	Priority int    // when Disp.Field is FieldPriority
 	Text     string // the identifier or the reason
@@ -428,9 +429,9 @@ type Progress struct {
 // the confirm key does anything, and again by [Apply], because a screen is
 // not a validator.
 func (in Intent) Ready() (bool, string) {
-	if in.Disp.Lane {
-		if strings.TrimSpace(in.Lane.Ticket) == "" {
-			return false, "no lane selected"
+	if in.Disp.Stalled {
+		if strings.TrimSpace(in.Stalled.Ticket) == "" {
+			return false, "no stalled run selected"
 		}
 		return true, ""
 	}

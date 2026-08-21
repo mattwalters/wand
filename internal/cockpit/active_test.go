@@ -23,7 +23,7 @@ func activeReport(id, ticket, phase string, round int, started, renewed time.Tim
 
 // A repository with no run store yet has nothing running on it, and a
 // cockpit that refused to draw for want of one would be useless until the
-// first orchestrator shipped — the same tolerance [ReadLanes] gives a nil
+// first orchestrator shipped — the same tolerance [ReadStalled] gives a nil
 // store.
 func TestActiveRunsToleratesNoStore(t *testing.T) {
 	active, err := ActiveRuns(nil)
@@ -53,7 +53,7 @@ func TestActiveRunsSkipsEndedRuns(t *testing.T) {
 }
 
 // A run [Store.Inspect] cannot read is skipped here, not surfaced: that
-// failure is already an unclear lane, and this strip is not a second place
+// failure is already an unclear stalled run, and this strip is not a second place
 // to report corruption.
 func TestActiveRunsSkipsUnreadableRuns(t *testing.T) {
 	at := time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)

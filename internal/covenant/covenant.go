@@ -203,7 +203,7 @@ func Default() Covenant {
 			// In Progress. Its `started` type is the whole point — it is
 			// what puts a live plan run in the same swimlane as other work
 			// in flight, and what lets the cockpit's generic started-type
-			// read (internal/cockpit/lanes.go) recognize it without a
+			// read (internal/cockpit/stalled.go) recognize it without a
 			// verb-specific carve-out.
 			{Key: "in_planning", Name: "In Planning", Type: "started", Position: -40, Color: "#8A6FDF"},
 			// Plan Review sits midway between In Planning (-40) and Todo (1)

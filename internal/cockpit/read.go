@@ -30,7 +30,7 @@ type Linear interface {
 //
 // Optional: a repository with no runs yet has no store on disk, and a
 // cockpit that refused to draw for want of one would be useless until the
-// first orchestrator shipped. [Read] treats a nil Runs as "no lanes".
+// first orchestrator shipped. [Read] treats a nil Runs as "nothing stalled".
 type Runs interface {
 	List() ([]string, error)
 	Inspect(id string) (journal.Report, error)
@@ -40,7 +40,7 @@ type Runs interface {
 // that order, with no interleaving: this runs once per refresh and the
 // simplicity is worth more than the round trips.
 //
-// The started-status read exists only to classify lanes — see [Classify].
+// The started-status read exists only to classify runs — see [Classify].
 // It is a read of the board rather than a per-run lookup because one query
 // answers it for every run at once, and because a run whose ticket has been
 // deleted then reads as orphaned, which is exactly right.
@@ -81,11 +81,11 @@ func Read(ctx context.Context, cl Linear, runs Runs, cov covenant.Covenant, team
 		return Snapshot{}, fmt.Errorf("reading %s: %w", queue.ParkedLabel, err)
 	}
 
-	lanes, err := ReadLanes(runs, started, parked)
+	stalled, err := ReadStalled(runs, started, parked)
 	if err != nil {
 		return Snapshot{}, err
 	}
-	snap.Lanes = lanes
+	snap.Stalled = stalled
 
 	active, err := ActiveRuns(runs)
 	if err != nil {
@@ -95,16 +95,16 @@ func Read(ctx context.Context, cl Linear, runs Runs, cov covenant.Covenant, team
 	return snap, nil
 }
 
-// ReadLanes walks the run store and keeps the runs waiting on a person.
+// ReadStalled walks the run store and keeps the runs waiting on a person.
 //
 // A run whose journal will not replay is not skipped: it becomes an
-// unclear lane carrying the parse error. That is the point of the section
+// unclear row carrying the parse error. That is the point of the section
 // — an unreadable run is exactly a thing only a person can resolve, and
 // dropping it would hide the one state the journal itself calls refused.
 //
-// A parked lane whose ticket a later run resolved is dropped by
+// A parked run whose ticket a later run resolved is dropped by
 // [Reconcile] before this returns — see there for why.
-func ReadLanes(runs Runs, started, parked []linear.Issue) ([]Lane, error) {
+func ReadStalled(runs Runs, started, parked []linear.Issue) ([]StalledRun, error) {
 	if runs == nil {
 		return nil, nil
 	}
@@ -122,22 +122,22 @@ func ReadLanes(runs Runs, started, parked []linear.Issue) ([]Lane, error) {
 		stillParked[issue.Identifier] = true
 	}
 
-	var lanes []Lane
+	var stalled []StalledRun
 	var reports []journal.Report
 	for _, id := range ids {
 		report, err := runs.Inspect(id)
 		if err != nil {
-			lanes = append(lanes, Lane{
-				Kind:   LaneUnclear,
+			stalled = append(stalled, StalledRun{
+				Kind:   StallUnclear,
 				RunID:  id,
 				Reason: "the journal will not replay: " + err.Error(),
 			})
 			continue
 		}
 		reports = append(reports, report)
-		if lane, ok := Classify(report, inStarted); ok {
-			lanes = append(lanes, lane)
+		if st, ok := Classify(report, inStarted); ok {
+			stalled = append(stalled, st)
 		}
 	}
-	return Reconcile(lanes, reports, stillParked), nil
+	return Reconcile(stalled, reports, stillParked), nil
 }

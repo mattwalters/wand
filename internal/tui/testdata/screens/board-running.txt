@@ -17,7 +17,7 @@
   Ready for human  1 to look at
   WND-35  In Review  Run journal and lease store
 
-  Lanes  2 to resolve
+  Stalled  2 to resolve
   … 0 above, 2 below
 
   judge  t ✦Todo  s ✦To Plan  b Backlog  u unranked  d duplicate  x cancel

@@ -16,7 +16,7 @@ type Kind string
 const (
 	// KindDeadLease: the journal says a run is still going and its lease's
 	// holder is provably dead — the zombie run, still lying that it holds
-	// the ticket's lane.
+	// the ticket.
 	KindDeadLease Kind = "dead_lease"
 	// KindReReview: a human labeled a converged ticket for another cycle.
 	KindReReview Kind = "re_review"
@@ -50,7 +50,7 @@ type Candidate struct {
 // actively lying about itself on the board — the ticket reads In Progress
 // and nothing is behind it — while a re-review or an unresolved thread is
 // an orderly, already-visible request for another look. Mirrors
-// [cockpit.laneSeverity]'s own reasoning for the same ordering problem.
+// [cockpit.stallSeverity]'s own reasoning for the same ordering problem.
 var severity = map[Kind]int{
 	KindDeadLease:         0,
 	KindReReview:          1,

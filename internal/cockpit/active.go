@@ -13,7 +13,7 @@ import (
 // question from the one the four queues answer. A run belongs here for as
 // long as its journal has not recorded a terminal state, whether or not a
 // process can still be proven to hold it: the same run can be an Active row
-// now and a stuck [Lane] a moment later, once [Classify] (or a real sweep
+// now and a stuck [StalledRun] a moment later, once [Classify] (or a real sweep
 // pass) decides its holder is gone. Nothing here is waiting on a human, so
 // nothing here counts toward [Board.Waiting] or is reachable by the cursor
 // — see [Board.Running].
@@ -33,7 +33,7 @@ type Active struct {
 	// own Heartbeat method — see internal/worker's OnHeartbeat).
 	Heartbeat time.Time
 	// Live is the liveness judgment [Store.Inspect] already makes for this
-	// run — the same one [Classify] uses for the lanes. It is carried
+	// run — the same one [Classify] uses for the stalled section. It is carried
 	// through rather than re-derived, because inventing a second liveness
 	// judgment from the heartbeat's own age is exactly what this package
 	// must not do: a stale heartbeat is what sweep's dead-lease logic
@@ -66,7 +66,7 @@ func (a Active) HarnessLabel() string {
 // from the journal's own point of view, live holder or not.
 //
 // A run [Store.Inspect] cannot read is skipped rather than surfaced here:
-// [ReadLanes] already turns that failure into an unclear lane, which is the
+// [ReadStalled] already turns that failure into an unclear row, which is the
 // queue a person acts from. This one only shows what it could actually
 // read.
 func ActiveRuns(runs Runs) ([]Active, error) {

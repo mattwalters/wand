@@ -1,11 +1,13 @@
 package dispatch
 
 import (
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/mattwalters/wand/internal/journal"
 	"github.com/mattwalters/wand/internal/linear"
+	"github.com/mattwalters/wand/internal/queue"
 )
 
 func issue(id string, priority int, age time.Duration) linear.Issue {
@@ -174,5 +176,61 @@ func TestSelectFindsNoWinnerWhenEveryCandidateIsParked(t *testing.T) {
 	}
 	if len(toPlanSkips) != 1 {
 		t.Fatalf("skips = %+v, want the refusal reported rather than silent", toPlanSkips)
+	}
+}
+
+func skip(id, reason string) queue.Skip {
+	return queue.Skip{Issue: issue(id, 2, time.Hour), Reason: reason}
+}
+
+// TestIdleReasonTellsLanesFullApartFromNothingToDo is the whole point of
+// IdleReason: "idle" alone described the dispatcher while the lane count
+// beside it described the repo, and a reader could not tell a repo working
+// at capacity from one with an empty board.
+func TestIdleReasonTellsLanesFullApartFromNothingToDo(t *testing.T) {
+	full := IdleReason(5, 5, false, nil)
+	if !strings.Contains(full, "5/5 lanes in use") || !strings.Contains(full, "To Plan") {
+		t.Errorf("lanes-full reason = %q, want the occupancy and why only To Plan could still dispatch", full)
+	}
+
+	empty := IdleReason(0, 5, true, nil)
+	if strings.Contains(empty, "lanes in use") {
+		t.Errorf("empty-board reason = %q, want no lane talk: a free lane is not why this pass idled", empty)
+	}
+	if !strings.Contains(empty, "nothing startable") {
+		t.Errorf("empty-board reason = %q, want it to say both queues came back with nothing", empty)
+	}
+	if full == empty {
+		t.Error("the two causes render identically, which is the bug this function exists to fix")
+	}
+}
+
+// TestIdleReasonNamesSkippedTickets pins the actionable half: an idle caused
+// by a human-only label or an unresolved blocker is one a person can clear,
+// and a count with no identifier does not tell them what to go and look at.
+func TestIdleReasonNamesSkippedTickets(t *testing.T) {
+	got := IdleReason(0, 5, true, []queue.Skip{skip("WND-1", "human-only")})
+	if !strings.Contains(got, "WND-1") || !strings.Contains(got, "human-only") {
+		t.Errorf("reason = %q, want the skipped ticket and its reason", got)
+	}
+}
+
+// TestIdleReasonCapsTheSkipList keeps the line readable on a busy board: two
+// identifiers and a total, not every skip the pass saw.
+func TestIdleReasonCapsTheSkipList(t *testing.T) {
+	got := IdleReason(0, 5, true, []queue.Skip{
+		skip("WND-1", "human-only"),
+		skip("WND-2", "human-only"),
+		skip("WND-3", "human-only"),
+		skip("WND-4", "human-only"),
+	})
+	if !strings.Contains(got, "4 skipped") {
+		t.Errorf("reason = %q, want the full count", got)
+	}
+	if strings.Contains(got, "WND-3") || strings.Contains(got, "WND-4") {
+		t.Errorf("reason = %q, want at most two named", got)
+	}
+	if !strings.Contains(got, "and 2 more") {
+		t.Errorf("reason = %q, want the unnamed remainder counted", got)
 	}
 }

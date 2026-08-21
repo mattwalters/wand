@@ -219,7 +219,7 @@ type columns struct {
 	// id spans the five queues and the Running strip both: the identifier
 	// is the same kind of thing everywhere on screen, so it gets one width.
 	id int
-	// tag spans the five queues only — priority, status, lane kind.
+	// tag spans the five queues only — priority, status, stall kind.
 	tag int
 	// phase is the Running strip's own tag width. It is separate because a
 	// phase label ("implement (round 2)") is twice the width of a priority,
@@ -248,10 +248,10 @@ func (m Model) columns() columns {
 }
 
 // rowIdentifier is the row's left column: the ticket, whether the row is a
-// ticket or a lane standing in front of one.
+// ticket or a stalled run standing in front of one.
 func rowIdentifier(row cockpit.Row) string {
-	if row.IsLane() {
-		return row.Lane.Ticket
+	if row.IsStalled() {
+		return row.Stalled.Ticket
 	}
 	return row.Issue.Identifier
 }
@@ -264,7 +264,7 @@ func rowIdentifier(row cockpit.Row) string {
 // human?". None of these lines carry a cursor row: an active run is not a
 // ticket a person disposits, and resolving one, if it ever needs resolving,
 // means going to the machine — the same read-only reasoning [noJudgment]
-// already gives a lane.
+// already gives a stalled row.
 func (m Model) runningLines(cols columns) []line {
 	heading := m.theme.Heading.Render(pad(gutter) + "Running")
 	heading += m.theme.Muted.Render(fmt.Sprintf("  %d in flight", len(m.board.Running)))
@@ -325,8 +325,8 @@ func (m Model) rowView(row cockpit.Row, selected bool, cols columns) string {
 	}
 
 	text := row.Issue.Title
-	if row.IsLane() {
-		text = row.Lane.Reason
+	if row.IsStalled() {
+		text = row.Stalled.Reason
 	}
 	body := cols.render(rowIdentifier(row), m.rowTag(row), text, cols.tag)
 
@@ -334,7 +334,7 @@ func (m Model) rowView(row cockpit.Row, selected bool, cols columns) string {
 	if selected {
 		return m.theme.Selected.Render(line)
 	}
-	if row.IsLane() && row.Lane.Kind != cockpit.LaneParked {
+	if row.IsStalled() && row.Stalled.Kind != cockpit.StallParked {
 		return m.theme.Warn.Render(line)
 	}
 	return m.theme.Body.Render(line)
@@ -342,15 +342,15 @@ func (m Model) rowView(row cockpit.Row, selected bool, cols columns) string {
 
 // rowTag is the middle column: the one short fact about the row that its
 // title does not say. For work you are ranking that is the rank; for work
-// already moving it is where it has got to; for a lane it is why the lane
+// already moving it is where it has got to; for a stalled run it is why it
 // is there.
 //
 // An unranked ticket gets a dash rather than a blank. Blank reads as "this
 // column does not apply here", and in Triage the absence of a rank is
 // precisely the thing being judged.
 func (m Model) rowTag(row cockpit.Row) string {
-	if row.IsLane() {
-		return string(row.Lane.Kind)
+	if row.IsStalled() {
+		return string(row.Stalled.Kind)
 	}
 	if row.Kind == cockpit.KindReadyForHuman {
 		return row.Issue.State.Name
@@ -436,8 +436,8 @@ func noJudgment(k cockpit.Kind) string {
 	switch k {
 	case cockpit.KindReadyForHuman:
 		return "read-only: this one is asking for a review, which happens on the pull request"
-	case cockpit.KindLanes:
-		return "read-only: a lane is not a ticket — resolving one means going to the machine"
+	case cockpit.KindStalled:
+		return "read-only: a run is not a ticket — resolving one means going to the machine"
 	default:
 		return "read-only"
 	}
@@ -448,7 +448,7 @@ func noJudgment(k cockpit.Kind) string {
 // The ✦ is the same mark the blessing screen wears, and it is the only
 // place it appears on the board — one glyph for one act.
 func shortName(d cockpit.Disposition, status string) string {
-	if d.Lane {
+	if d.Stalled {
 		return "clear parked"
 	}
 	switch d.Field {
@@ -477,17 +477,17 @@ func (m Model) detailView() string {
 	row := m.detail
 	var b strings.Builder
 
-	if row.IsLane() {
-		b.WriteString(m.theme.Title.Render(string(row.Lane.Kind) + " lane"))
+	if row.IsStalled() {
+		b.WriteString(m.theme.Title.Render(string(row.Stalled.Kind) + " run"))
 		b.WriteString("\n\n")
-		b.WriteString(m.field("run", row.Lane.RunID))
-		b.WriteString(m.field("ticket", row.Lane.Ticket))
-		b.WriteString(m.field("verb", row.Lane.Verb))
-		b.WriteString(m.field("repo", row.Lane.Repo))
+		b.WriteString(m.field("run", row.Stalled.RunID))
+		b.WriteString(m.field("ticket", row.Stalled.Ticket))
+		b.WriteString(m.field("verb", row.Stalled.Verb))
+		b.WriteString(m.field("repo", row.Stalled.Repo))
 		b.WriteString("\n")
-		b.WriteString(m.wrap(m.theme.Body, row.Lane.Reason))
+		b.WriteString(m.wrap(m.theme.Body, row.Stalled.Reason))
 		b.WriteString("\n\n")
-		b.WriteString(m.indentWrap(m.theme.Muted, noJudgment(cockpit.KindLanes), gutter))
+		b.WriteString(m.indentWrap(m.theme.Muted, noJudgment(cockpit.KindStalled), gutter))
 		b.WriteString("\n")
 		b.WriteString(m.flashLine())
 		b.WriteString(m.theme.Muted.Render(pad(gutter) + "esc back • q quit"))
@@ -607,9 +607,9 @@ func (m Model) confirmView() string {
 
 	subject, transition := in.Issue.Identifier+"  "+in.Issue.Title,
 		in.Issue.State.Name+" → "+m.statusName(d.Status)
-	if d.Lane {
-		subject = in.Lane.Ticket + "  " + in.Lane.Reason
-		transition = string(in.Lane.Kind) + " → cleared"
+	if d.Stalled {
+		subject = in.Stalled.Ticket + "  " + in.Stalled.Reason
+		transition = string(in.Stalled.Kind) + " → cleared"
 	}
 	b.WriteString(m.theme.Body.Render(pad(gutter+2) + truncate(subject, m.width-gutter-2)))
 	b.WriteString("\n")
@@ -721,8 +721,8 @@ func (m Model) confirmHelp(in cockpit.Intent) string {
 	}
 	var confirm string
 	switch {
-	case in.Disp.Lane:
-		confirm = fmt.Sprintf("enter clear parked → %s", in.Lane.Ticket)
+	case in.Disp.Stalled:
+		confirm = fmt.Sprintf("enter clear parked → %s", in.Stalled.Ticket)
 	case in.Disp.Bless:
 		confirm = fmt.Sprintf("enter bless %s → %s", in.Issue.Identifier, m.statusName(in.Disp.Status))
 	default:

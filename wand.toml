@@ -24,3 +24,16 @@ key = "WND"
 # revise round. That is the cheaper failure, and it lands on a human who is
 # already reading the PR.
 verify = "make check"
+
+[caps]
+# Three `wand run` loops against this repo at once, against a stock default
+# of one. The default is one because a repo that has not thought about
+# concurrency should not discover it by surprise; this repo has thought
+# about it. Three keeps a second and third ticket moving while the first
+# waits on CI, and stays few enough that the pull requests arrive at a rate
+# one human can read — the real limit here is not the machine but the one
+# person reviewing what comes out of it.
+#
+# A To Plan ticket never counts against this — research needs no lane — so
+# planning still dispatches with all three lanes full.
+lanes = 3

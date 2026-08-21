@@ -29,7 +29,7 @@ func TestDumpScreenNeedsNothing(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ui --dump-screen: %v", err)
 	}
-	for _, want := range []string{"wand cockpit", "Triage", "Needs Input", "Ready for human", "Lanes", sampleNotice} {
+	for _, want := range []string{"wand cockpit", "Triage", "Needs Input", "Ready for human", "Stalled", sampleNotice} {
 		if !strings.Contains(out, want) {
 			t.Errorf("dump is missing %q; screen was:\n%s", want, out)
 		}

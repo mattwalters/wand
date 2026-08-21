@@ -25,7 +25,7 @@ type Theme struct {
 	// makes the blessing screen read as a different kind of moment rather
 	// than another confirmation dialog.
 	Bless lipgloss.Style
-	// Warn marks a state that needs a person — a stuck lane, an unranked
+	// Warn marks a state that needs a person — a stuck run, an unranked
 	// ticket about to be blessed.
 	Warn lipgloss.Style
 	// Bad marks a failure the user has to read: a refused write.

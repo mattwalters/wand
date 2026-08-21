@@ -73,8 +73,8 @@ func Apply(ctx context.Context, cl Linear, cov covenant.Covenant, in Intent) (In
 		return in, fmt.Errorf("%s: %s", in.Disp.Name, why)
 	}
 
-	if in.Disp.Lane {
-		return in, clearParkedLabel(ctx, cl, in.Lane.Ticket)
+	if in.Disp.Stalled {
+		return in, clearParkedLabel(ctx, cl, in.Stalled.Ticket)
 	}
 
 	// Resolve the destination before anything is written. A board that has
@@ -122,9 +122,10 @@ func Apply(ctx context.Context, cl Linear, cov covenant.Covenant, in Intent) (In
 	return in, cl.UpdateIssue(ctx, in.Issue.ID, update)
 }
 
-// clearParkedLabel removes the parked label from the ticket a lane names.
+// clearParkedLabel removes the parked label from the ticket a stalled run
+// names.
 //
-// A lane carries only the ticket's identifier — it is built from the
+// A stalled run carries only the ticket's identifier — it is built from the
 // journal, not from a Linear read — so this looks the issue up rather than
 // taking a UUID the way the issue dispositions above already have one. This
 // is the write [verbs.ReportPark]'s own comment instructs and, before this,
@@ -137,7 +138,7 @@ func clearParkedLabel(ctx context.Context, cl Linear, ticket string) error {
 	}
 	// Already cleared is success, not failure. Linear refuses to remove a
 	// label an issue does not carry, and a person who cleared a park and
-	// then saw the lane again — which is exactly what this ticket's own
+	// then saw the row again — which is exactly what this ticket's own
 	// defect caused — would land on that refusal for having done the
 	// right thing the first time.
 	for _, name := range issue.Labels {

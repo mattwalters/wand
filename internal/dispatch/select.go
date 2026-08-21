@@ -1,7 +1,9 @@
 package dispatch
 
 import (
+	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/mattwalters/wand/internal/journal"
 	"github.com/mattwalters/wand/internal/linear"
@@ -92,4 +94,63 @@ func LanesUsed(reports []journal.Report, repo string) int {
 		n++
 	}
 	return n
+}
+
+// IdleReason says why a pass dispatched nothing, as the tail
+// [sweptSummary] folds into the watcher's one-line report — so it carries no
+// "dispatch:" prefix of its own.
+//
+// `--watch` prints one line per state change, so the cause has to travel in
+// the line: "idle" on its own describes the dispatcher while the lane count
+// beside it describes the repo, and a reader is left to guess which of
+// several unrelated situations produced them. The single-pass path already
+// says this much across several lines (see [Deps.selectWinner]); this is the
+// same account compressed to the one line a watcher gets.
+//
+// Two causes reach here and they are not the same situation. Lanes full
+// means Todo is locked out and only research may still dispatch — the repo
+// is working, and the watcher is waiting for a lane. Nothing startable means
+// both queues came back with nothing a pass could take, and the repo is
+// genuinely idle. Skips are named on top of either, because a skip is the
+// actionable kind of idle: a human-only label or an unresolved blocker is
+// something a person can clear, and a count with no identifier tells them
+// there is something to clear without saying what.
+//
+// Pure, like [Select], so the sentence a watcher prints is testable without
+// a board, a store or a clock.
+func IdleReason(used, lanes int, laneFree bool, skips []queue.Skip) string {
+	var b strings.Builder
+	b.WriteString("idle — ")
+	if laneFree {
+		b.WriteString("nothing startable in Todo or To Plan")
+	} else {
+		fmt.Fprintf(&b, "%d/%d lanes in use, and no To Plan ticket is eligible", used, lanes)
+	}
+	if s := skipSummary(skips); s != "" {
+		b.WriteString("; " + s)
+	}
+	return b.String()
+}
+
+// skipSummary names the skipped tickets, at most two of them and then a
+// count. The whole list would make the line unreadable on a busy board and
+// would churn the watcher's state-change check on every reordering; two
+// identifiers and a total is enough for a person to know whether the idle
+// is one they can do something about.
+func skipSummary(skips []queue.Skip) string {
+	if len(skips) == 0 {
+		return ""
+	}
+	named := make([]string, 0, 2)
+	for _, s := range skips {
+		if len(named) == 2 {
+			break
+		}
+		named = append(named, fmt.Sprintf("%s (%s)", s.Issue.Identifier, s.Reason))
+	}
+	out := fmt.Sprintf("%d skipped: %s", len(skips), strings.Join(named, ", "))
+	if len(skips) > len(named) {
+		out += fmt.Sprintf(", and %d more", len(skips)-len(named))
+	}
+	return out
 }

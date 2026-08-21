@@ -25,7 +25,7 @@ func TestBuildAlwaysHasFiveSections(t *testing.T) {
 	if len(b.Sections) != 5 {
 		t.Fatalf("sections = %d, want 5", len(b.Sections))
 	}
-	want := []Kind{KindTriage, KindPlanReview, KindNeedsInput, KindReadyForHuman, KindLanes}
+	want := []Kind{KindTriage, KindPlanReview, KindNeedsInput, KindReadyForHuman, KindStalled}
 	for i, k := range want {
 		if b.Sections[i].Kind != k {
 			t.Errorf("section %d = %q, want %q", i, b.Sections[i].Kind, k)
@@ -104,7 +104,7 @@ func TestDispositions(t *testing.T) {
 		{kind: KindNeedsInput, want: 6},
 		{kind: KindPlanReview, want: 2},
 		{kind: KindReadyForHuman, want: 0},
-		{kind: KindLanes, want: 0},
+		{kind: KindStalled, want: 0},
 	}
 	for _, tt := range tests {
 		t.Run(string(tt.kind), func(t *testing.T) {
@@ -115,20 +115,20 @@ func TestDispositions(t *testing.T) {
 	}
 }
 
-// A parked lane is the one lane kind that offers a disposition: the act its
+// A parked stalled run is the one stalled run kind that offers a disposition: the act its
 // own park comment names. The other three stay read-only.
-func TestParkedLaneOffersClearDisposition(t *testing.T) {
-	row := Row{Kind: KindLanes, Lane: Lane{Kind: LaneParked, Ticket: "WND-33"}}
+func TestParkedRunOffersClearDisposition(t *testing.T) {
+	row := Row{Kind: KindStalled, Stalled: StalledRun{Kind: StallParked, Ticket: "WND-33"}}
 	disps := Dispositions(row)
 	if len(disps) != 1 || disps[0].Key != ClearParked.Key {
 		t.Errorf("dispositions = %v, want just ClearParked", disps)
 	}
 }
 
-func TestOtherLaneKindsOfferNoDisposition(t *testing.T) {
-	for _, k := range []LaneKind{LaneStuck, LaneOrphaned, LaneUnclear} {
+func TestOtherStallKindsOfferNoDisposition(t *testing.T) {
+	for _, k := range []StallKind{StallStuck, StallOrphaned, StallUnclear} {
 		t.Run(string(k), func(t *testing.T) {
-			row := Row{Kind: KindLanes, Lane: Lane{Kind: k}}
+			row := Row{Kind: KindStalled, Stalled: StalledRun{Kind: k}}
 			if got := len(Dispositions(row)); got != 0 {
 				t.Errorf("dispositions = %d, want 0", got)
 			}
@@ -141,7 +141,7 @@ func TestOtherLaneKindsOfferNoDisposition(t *testing.T) {
 // searches one row's own list, so a collision across lists is not a bug,
 // but a collision within one silently shadows a judgment.
 func TestDispositionKeysAreUnique(t *testing.T) {
-	for name, disps := range map[string][]Disposition{"judgments": judgments, "planReviewJudgments": planReviewJudgments, "laneJudgments": laneJudgments} {
+	for name, disps := range map[string][]Disposition{"judgments": judgments, "planReviewJudgments": planReviewJudgments, "stalledJudgments": stalledJudgments} {
 		seen := map[string]string{}
 		for _, d := range disps {
 			if d.Key == "" {
@@ -163,7 +163,7 @@ func TestDispositionKeysAreUnique(t *testing.T) {
 // will one day cancel a ticket somebody was only scrolling past.
 func TestDispositionKeysAvoidNavigation(t *testing.T) {
 	for _, nav := range []string{"j", "k", "q", "enter", "esc", "r", "up", "down"} {
-		for name, disps := range map[string][]Disposition{"judgments": judgments, "planReviewJudgments": planReviewJudgments, "laneJudgments": laneJudgments} {
+		for name, disps := range map[string][]Disposition{"judgments": judgments, "planReviewJudgments": planReviewJudgments, "stalledJudgments": stalledJudgments} {
 			for _, d := range disps {
 				if d.Key == nav {
 					t.Errorf("%s: %q is bound to %q, which the screen uses for navigation", name, d.Name, nav)
@@ -231,8 +231,8 @@ func TestIntentReady(t *testing.T) {
 		{name: "cancel with a reason", in: Intent{Issue: subject, Disp: Cancel, Text: "obsolete"}, want: true},
 		{name: "reject with no reason", in: Intent{Issue: subject, Disp: RejectPlan}},
 		{name: "reject with a reason", in: Intent{Issue: subject, Disp: RejectPlan, Text: "wrong approach"}, want: true},
-		{name: "clear parked with no lane", in: Intent{Disp: ClearParked}},
-		{name: "clear parked with a lane", in: Intent{Lane: Lane{Ticket: "WND-33"}, Disp: ClearParked}, want: true},
+		{name: "clear parked with no stalled run", in: Intent{Disp: ClearParked}},
+		{name: "clear parked with a stalled run", in: Intent{Stalled: StalledRun{Ticket: "WND-33"}, Disp: ClearParked}, want: true},
 	}
 
 	for _, tt := range tests {

@@ -52,7 +52,7 @@ and should feel like one.
    In Planning before it touches anything, the lock is gone, and the
    research half is symmetric with the build half: To Plan/In
    Planning/Plan Review mirror Todo/In Progress/In Review exactly, and the
-   cockpit's generic started-type read (`internal/cockpit/lanes.go`) needs
+   cockpit's generic started-type read (`internal/cockpit/stalled.go`) needs
    no plan-specific carve-out any more (the one WND-66 added is deleted).
    Nothing had shipped when this landed, which is what made the reversal
    free — the bill this convictions text describes ("topology changes ship
