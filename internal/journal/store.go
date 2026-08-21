@@ -24,7 +24,7 @@ import (
 // refuses if it does not. That is the PW-175 lesson made structural: a
 // worker's scratch output — a CI watch log, a debug dump — written inside
 // the worktree leaves the tree dirty, and a dirty tree forces a park. Parks
-// have to stay reserved for work genuinely at risk; lanes parked by noise
+// have to stay reserved for work genuinely at risk; runs parked by noise
 // train people to stop reading parks at all.
 //
 // The lock guards one *run*, not one ticket. Two runs against the same

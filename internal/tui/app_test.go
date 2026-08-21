@@ -106,14 +106,14 @@ func TestCursorMoves(t *testing.T) {
 		name    string
 		script  string
 		want    int
-		wantRow string // identifier or lane ticket under the cursor
+		wantRow string // identifier or stalled run's ticket under the cursor
 	}{
 		{name: "starts on the first row", script: "", want: 0, wantRow: "WND-42"},
 		{name: "j moves down", script: "j", want: 1, wantRow: "WND-41"},
 		{name: "arrow moves down", script: "down", want: 1, wantRow: "WND-41"},
 		{name: "k moves back up", script: "j,k", want: 0, wantRow: "WND-42"},
 		{name: "crosses a section boundary", script: "j,j", want: 2, wantRow: "WND-44"},
-		{name: "reaches the lanes", script: "j,j,j,j,j", want: 5, wantRow: "WND-36"},
+		{name: "reaches the stalled", script: "j,j,j,j,j", want: 5, wantRow: "WND-36"},
 		{name: "stops at the last row", script: "j,j,j,j,j,j,j,j", want: 6, wantRow: "WND-33"},
 		{name: "stops at the first row", script: "k,k,k", want: 0, wantRow: "WND-42"},
 	}
@@ -129,8 +129,8 @@ func TestCursorMoves(t *testing.T) {
 				t.Fatal("no row under the cursor")
 			}
 			got := row.Issue.Identifier
-			if row.IsLane() {
-				got = row.Lane.Ticket
+			if row.IsStalled() {
+				got = row.Stalled.Ticket
 			}
 			if got != tt.wantRow {
 				t.Errorf("row under cursor = %q, want %q", got, tt.wantRow)
@@ -222,7 +222,7 @@ func TestDispositionKeysOpenTheConfirmation(t *testing.T) {
 	}
 }
 
-// Lanes and ready-for-human rows are read-only by design: the act each is
+// Stalled and ready-for-human rows are read-only by design: the act each is
 // asking for happens somewhere other than a status field.
 func TestRowsWithoutDispositions(t *testing.T) {
 	for _, script := range []string{"j,j,j,j", "j,j,j,j,j"} {
@@ -267,15 +267,15 @@ func TestBlessWritesAndDropsTheRow(t *testing.T) {
 
 // The key ReportPark's own comment names — clear the parked label — must
 // exist somewhere in wand, and this is it: WND-33 is the sample board's
-// parked lane, the disposition writes through the same read-only-free path
-// every other judgment does, and the lane leaves the board the same way a
+// parked stalled run, the disposition writes through the same read-only-free path
+// every other judgment does, and the stalled run leaves the board the same way a
 // judged issue does.
-func TestClearParkedWritesAndDropsTheLane(t *testing.T) {
+func TestClearParkedWritesAndDropsTheRow(t *testing.T) {
 	back := &fakeBackend{}
 	m, _ := apply(t, board(t, back), "j,j,j,j,j,j")
 	row, ok := m.current()
-	if !ok || !row.IsLane() || row.Lane.Ticket != "WND-33" {
-		t.Fatalf("row under cursor = %+v, want the WND-33 parked lane", row)
+	if !ok || !row.IsStalled() || row.Stalled.Ticket != "WND-33" {
+		t.Fatalf("row under cursor = %+v, want the WND-33 parked run", row)
 	}
 
 	m, cmd := apply(t, m, "c,enter")
@@ -288,15 +288,15 @@ func TestClearParkedWritesAndDropsTheLane(t *testing.T) {
 		t.Fatalf("applied %d intents, want 1", len(back.applied))
 	}
 	got := back.applied[0]
-	if got.Lane.Ticket != "WND-33" || !got.Disp.Lane {
-		t.Errorf("applied %+v, want a lane disposition on WND-33", got)
+	if got.Stalled.Ticket != "WND-33" || !got.Disp.Stalled {
+		t.Errorf("applied %+v, want a stalled-run disposition on WND-33", got)
 	}
 	if m.state != stateBoard {
 		t.Errorf("state = %v, want stateBoard", m.state)
 	}
 	for _, row := range m.rows() {
-		if row.IsLane() && row.Lane.Ticket == "WND-33" {
-			t.Error("the WND-33 lane is still on the board after its park was cleared")
+		if row.IsStalled() && row.Stalled.Ticket == "WND-33" {
+			t.Error("the WND-33 stalled run is still on the board after its park was cleared")
 		}
 	}
 	if !m.flashOK || m.flash == "" {
@@ -517,11 +517,11 @@ func TestScreens(t *testing.T) {
 		script string
 	}{
 		{golden: "board", script: ""},
-		{golden: "board-lane-selected", script: "j,j,j,j,j"},
+		{golden: "board-stalled-selected", script: "j,j,j,j,j"},
 		{golden: "board-parked-selected", script: "j,j,j,j,j,j"},
 		{golden: "clear-parked", script: "j,j,j,j,j,j,c"},
 		{golden: "detail", script: "j,enter"},
-		{golden: "detail-lane", script: "j,j,j,j,j,enter"},
+		{golden: "detail-stalled", script: "j,j,j,j,j,enter"},
 		{golden: "detail-plan-review", script: "j,j,enter"},
 		{golden: "bless-todo", script: "t"},
 		{golden: "bless-todo-unranked", script: "j,t"},

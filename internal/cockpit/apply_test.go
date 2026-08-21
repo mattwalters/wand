@@ -402,7 +402,7 @@ func TestApplyStillPreWritesWhenNothingHasLanded(t *testing.T) {
 
 // ClearParked is the write ReportPark's own comment instructs and, before
 // this, nothing in wand could perform. It looks the ticket up by identifier
-// — a lane carries no UUID — resolves the label, then removes it.
+// — a stalled run carries no UUID — resolves the label, then removes it.
 func TestApplyClearsTheParkedLabel(t *testing.T) {
 	cl := newFake()
 	// The ticket has to actually carry the label, or this passes for the
@@ -412,7 +412,7 @@ func TestApplyClearsTheParkedLabel(t *testing.T) {
 	cl.byID["WND-3"] = issue
 
 	_, err := Apply(context.Background(), cl, covenant.Default(),
-		Intent{Lane: Lane{Ticket: "WND-3"}, Disp: ClearParked})
+		Intent{Stalled: StalledRun{Ticket: "WND-3"}, Disp: ClearParked})
 	if err != nil {
 		t.Fatalf("Apply: %v", err)
 	}
@@ -424,14 +424,14 @@ func TestApplyClearsTheParkedLabel(t *testing.T) {
 
 // WND-85. Clearing a park that is already cleared is success, not failure.
 // Linear refuses to remove a label an issue does not carry, and until the
-// lane derived from the label a person who cleared a park saw it come
+// stalled run derived from the label a person who cleared a park saw it come
 // straight back — so the second click landed on a hard error for having
 // done the right thing the first time.
 func TestApplyClearingAnAlreadyClearedParkIsANoOp(t *testing.T) {
 	cl := newFake() // WND-3 carries no parked label
 
 	_, err := Apply(context.Background(), cl, covenant.Default(),
-		Intent{Lane: Lane{Ticket: "WND-3"}, Disp: ClearParked})
+		Intent{Stalled: StalledRun{Ticket: "WND-3"}, Disp: ClearParked})
 	if err != nil {
 		t.Fatalf("Apply: %v, want silence on an already-cleared park", err)
 	}
@@ -442,12 +442,12 @@ func TestApplyClearingAnAlreadyClearedParkIsANoOp(t *testing.T) {
 	}
 }
 
-// A lane row's identity is its ticket. Nothing selected must refuse before
+// A stalled run row's identity is its ticket. Nothing selected must refuse before
 // touching the network, the same as every other disposition's missing field.
-func TestApplyRefusesToClearWithNoLaneSelected(t *testing.T) {
+func TestApplyRefusesToClearWithNoStalledRunSelected(t *testing.T) {
 	cl := newFake()
 	if _, err := Apply(context.Background(), cl, covenant.Default(), Intent{Disp: ClearParked}); err == nil {
-		t.Fatal("Apply succeeded, want a refusal for no lane selected")
+		t.Fatal("Apply succeeded, want a refusal for no stalled run selected")
 	}
 	if len(cl.calls) != 0 {
 		t.Errorf("calls = %v, want nothing written", cl.calls)
@@ -457,7 +457,7 @@ func TestApplyRefusesToClearWithNoLaneSelected(t *testing.T) {
 func TestApplyClearParkRefusesAnUnknownTicket(t *testing.T) {
 	cl := newFake()
 	_, err := Apply(context.Background(), cl, covenant.Default(),
-		Intent{Lane: Lane{Ticket: "WND-404"}, Disp: ClearParked})
+		Intent{Stalled: StalledRun{Ticket: "WND-404"}, Disp: ClearParked})
 	if err == nil {
 		t.Fatal("Apply succeeded, want a refusal for a ticket that does not exist")
 	}

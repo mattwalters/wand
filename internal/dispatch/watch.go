@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mattwalters/wand/internal/journal"
+	"github.com/mattwalters/wand/internal/queue"
 	"github.com/mattwalters/wand/internal/sweep"
 )
 
@@ -245,8 +246,9 @@ func (w WatchDeps) Tick(ctx context.Context, store *journal.Store, p *Pending, l
 		return TickResult{}, fmt.Errorf("reading To Plan: %w", err)
 	}
 
-	winner, ok, _, _ := Select(todo, toPlan, laneFree)
+	winner, ok, todoSkips, toPlanSkips := Select(todo, toPlan, laneFree)
 	if !ok {
+		skips := append(append([]queue.Skip{}, todoSkips...), toPlanSkips...)
 		return TickResult{
 			Swept:       swept,
 			SweptKind:   sweptKind,
@@ -255,7 +257,7 @@ func (w WatchDeps) Tick(ctx context.Context, store *journal.Store, p *Pending, l
 			LanesUsed:   used,
 			LanesCap:    w.Cov.Caps.Lanes,
 			Summary: sweptSummary(swept, sweptKind, sweptTicket, sweptReason,
-				fmt.Sprintf("idle (%d/%d lanes in use)", used, w.Cov.Caps.Lanes)),
+				IdleReason(used, w.Cov.Caps.Lanes, laneFree, skips)),
 		}, nil
 	}
 
@@ -264,6 +266,13 @@ func (w WatchDeps) Tick(ctx context.Context, store *journal.Store, p *Pending, l
 		return TickResult{}, fmt.Errorf("spawning %s: %w", winner.Issue.Identifier, err)
 	}
 	p.add(winner.Issue.Identifier, winner.Verb, cmd)
+	// Only a build winner takes a lane. Reporting used+1 for a plan winner
+	// would claim an occupancy the very next tick contradicts, since
+	// neither [Pending.count] nor [LanesUsed] counts a plan run.
+	now := used
+	if winner.Verb == VerbRun {
+		now++
+	}
 	return TickResult{
 		Dispatched:  true,
 		Winner:      winner,
@@ -272,11 +281,11 @@ func (w WatchDeps) Tick(ctx context.Context, store *journal.Store, p *Pending, l
 		SweptKind:   sweptKind,
 		SweptTicket: sweptTicket,
 		SweptReason: sweptReason,
-		LanesUsed:   used + 1,
+		LanesUsed:   now,
 		LanesCap:    w.Cov.Caps.Lanes,
 		Summary: sweptSummary(swept, sweptKind, sweptTicket, sweptReason,
-			fmt.Sprintf("dispatched %s %s (pid %d, %d/%d lanes now in use)",
-				winner.Verb, winner.Issue.Identifier, cmd.Process.Pid, used+1, w.Cov.Caps.Lanes)),
+			fmt.Sprintf("dispatched %s %s (pid %d, %d/%d lanes in use)",
+				winner.Verb, winner.Issue.Identifier, cmd.Process.Pid, now, w.Cov.Caps.Lanes)),
 	}, nil
 }
 

@@ -39,7 +39,7 @@ wand ui --dump-screen [--script KEYS] [--width N] [--height N]
   Ready for human  1 to look at
   WND-35  In Review  Run journal and lease store
 
-  Lanes  2 to resolve
+  Stalled  2 to resolve
   WND-36  stuck      held by pid 48213 on studio.local, which is gone; the run …
   WND-33  parked     the worktree was dirty at handoff; refusing to park noise …
 
@@ -64,19 +64,24 @@ invisible until something puts it on one screen:
 * **Ready for human** — every open issue carrying the `ready-for-human`
   label: a pull request to review, a merge to press. Closed issues are
   dropped, because the label outlives the merge that answered it.
-* **Lanes** — runs the crash-only run journal says a person has to
+* **Stalled** — runs the crash-only run journal says a person has to
   resolve. Four kinds, worst first: `stuck` (the journal says it is running
   and its holder is provably dead), `orphaned` (a live run whose ticket is
-  not in a started status — nothing on the board claims the lane),
+  not in a started status — nothing on the board claims the run),
   `unclear` (a holder on a machine this one cannot see, which is never swept
   automatically), and `parked` (the run stopped and recorded why).
 
-  A parked lane is the one a person can act on: `clear parked` removes the
-  `parked` label from its ticket, and the lane goes with it. That is not a
+  A parked run is the one a person can act on: `clear parked` removes the
+  `parked` label from its ticket, and the row goes with it. That is not a
   cosmetic dismissal — the label is what makes a park a live obligation, so
-  clearing it is the act, and the lane is a picture of it. The other three
+  clearing it is the act, and the row is a picture of it. The other three
   kinds are read-only: they describe a process misbehaving right now, and
   resolving one means going to the machine.
+
+  These are runs, not the dispatch *lanes* of the same name that
+  [`wand dispatch`](../dispatch/) counts. A lane is a concurrency slot; a
+  stalled run is one that needs you, and a `stuck` one holds no lane at all
+  — being provably dead is exactly what frees it.
 
 The sections are always all five, even when empty. A queue that vanished
 when it drained would teach you to stop looking for it, and the day it
@@ -126,12 +131,12 @@ at a live run still reads exactly as it did before this existed.
 
 A run whose own liveness judgment says its holder is gone reads
 `possibly dead, sweep will confirm` rather than being dropped or guessed at
-a second time: that judgment is the same one [Lanes](#the-four-queues) uses
-for a `stuck` lane, and only [`wand sweep`](../sweep/) ever turns it into an
-action. A run that is actually stuck this way is *also* a `stuck` lane below
-— the strip says what the journal currently believes is running, the lane
-says a person has to do something about it, and a run can be both at once
-until sweep reaps it.
+a second time: that judgment is the same one [Stalled](#the-four-queues)
+uses for a `stuck` run, and only [`wand sweep`](../sweep/) ever turns it
+into an action. A run that is actually stuck this way is *also* a `stuck`
+row below — the strip says what the journal currently believes is running,
+the Stalled section says a person has to do something about it, and a run
+can be both at once until sweep reaps it.
 
 ## Blessing
 
@@ -230,7 +235,7 @@ one did not land instead of guessing:
 Triage and Needs Input rows get all six of the first table below. A Plan
 Review row gets only two — bless, or reject with a reason — which is `t`
 and `b` from the same table, but pointed at a plan rather than a raw
-ticket. Ready-for-human and lane rows offer none, and the screen says why
+ticket. Ready-for-human and stalled rows offer none, and the screen says why
 rather than leaving a key to do nothing.
 
 | Key | Judgment | Where | Asks for | Writes |

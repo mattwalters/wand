@@ -63,15 +63,15 @@ func Sample() Snapshot {
 				Labels: []string{"ready-for-human"}, Assignee: "Matt Walters", CreatedAt: at(1),
 			},
 		},
-		Lanes: []Lane{
+		Stalled: []StalledRun{
 			{
-				Kind: LaneStuck, RunID: "20260304-1120-wnd-36", Ticket: "WND-36",
+				Kind: StallStuck, RunID: "20260304-1120-wnd-36", Ticket: "WND-36",
 				Verb: "run", Repo: "/Users/you/src/wand", Since: at(4),
 				Reason: "held by pid 48213 on studio.local, which is gone; the run stopped in " +
 					"implement (round 2) and nothing is driving it",
 			},
 			{
-				Kind: LaneParked, RunID: "20260303-0902-wnd-33", Ticket: "WND-33",
+				Kind: StallParked, RunID: "20260303-0902-wnd-33", Ticket: "WND-33",
 				Verb: "run", Repo: "/Users/you/src/wand", Since: at(3),
 				Reason: "the worktree was dirty at handoff; refusing to park noise into the ticket",
 			},

@@ -12,7 +12,7 @@
   Ready for human
     nothing is labeled ready-for-human.
 
-  Lanes
+  Stalled
     every run is either finished or being driven.
 
   ↑/k ↓/j move • enter open • r refresh • q quit

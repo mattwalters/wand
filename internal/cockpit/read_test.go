@@ -59,13 +59,13 @@ func TestReadFollowsTheCovenantsNames(t *testing.T) {
 		t.Errorf("statuses read = %v, want the covenant's own names", cl.states)
 	}
 	// Two label reads: ready-for-human fills a queue, and parked decides
-	// which parked lanes are still a live obligation rather than a run
+	// which parked stalled runs are still a live obligation rather than a run
 	// that happened (WND-85). Both are covenant topology, so neither is
 	// renamed by a covenant file.
 	if len(cl.labels) != 2 || cl.labels[0] != ReadyForHumanLabel || cl.labels[1] != queue.ParkedLabel {
 		t.Errorf("labels read = %v, want %q then %q", cl.labels, ReadyForHumanLabel, queue.ParkedLabel)
 	}
-	// The started read exists only to tell a held lane from an orphaned
+	// The started read exists only to tell a held stalled run from an orphaned
 	// one; it is by type because a covenant may name two started columns.
 	if len(cl.types) != 1 || cl.types[0] != "started" {
 		t.Errorf("state types read = %v, want [started]", cl.types)
@@ -76,18 +76,18 @@ func TestReadFollowsTheCovenantsNames(t *testing.T) {
 	if len(snap.Triage) != 1 || len(snap.PlanReview) != 1 || len(snap.NeedsInput) != 1 || len(snap.ReadyForHuman) != 1 {
 		t.Errorf("snapshot = %+v, want one issue in each queue", snap)
 	}
-	if snap.Lanes != nil {
-		t.Errorf("lanes = %v, want none without a run store", snap.Lanes)
+	if snap.Stalled != nil {
+		t.Errorf("stalled = %v, want none without a run store", snap.Stalled)
 	}
 	if snap.Active != nil {
 		t.Errorf("active = %v, want none without a run store", snap.Active)
 	}
 }
 
-// Read's walk of the run store fills both Lanes and Active from the same
-// journal — a live, started run is not a lane (nobody has to resolve it),
+// Read's walk of the run store fills both Stalled and Active from the same
+// journal — a live, started run is not a stalled run (nobody has to resolve it),
 // but it is what the machine is doing right now.
-func TestReadFillsActiveAlongsideLanes(t *testing.T) {
+func TestReadFillsActiveAlongsideStalled(t *testing.T) {
 	at := time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)
 	runs := &fakeRuns{
 		ids: []string{"r"},
@@ -104,9 +104,9 @@ func TestReadFillsActiveAlongsideLanes(t *testing.T) {
 		t.Errorf("active = %+v, want the one live run", snap.Active)
 	}
 	// readFake's started read answers WND-9 as started, so the same run is
-	// not also a lane — Classify already covers this; this test is only
+	// not also a stalled run — Classify already covers this; this test is only
 	// about Active being wired into Read at all.
-	if len(snap.Lanes) != 0 {
-		t.Errorf("lanes = %+v, want none: a live run on a started ticket needs nobody", snap.Lanes)
+	if len(snap.Stalled) != 0 {
+		t.Errorf("stalled = %+v, want none: a live run on a started ticket needs nobody", snap.Stalled)
 	}
 }

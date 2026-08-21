@@ -437,8 +437,8 @@ const reportParkTimeout = 15 * time.Second
 // interface here, not an implementation detail.
 //
 // It says what stopped, why, and what the reader is expected to do — a
-// park with no next move reads as noise, and lanes people learn to skip
-// are lanes that stop being read at all.
+// park with no next move reads as noise, and rows people learn to skip
+// are rows that stop being read at all.
 func ParkedComment(reason string) string {
 	return fmt.Sprintf(
 		"**This run parked.** It stopped without deciding, so nothing is driving this ticket right now.\n\n> %s\n\n"+

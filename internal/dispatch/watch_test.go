@@ -105,6 +105,16 @@ func TestWatchToPlanWinnerDoesNotOccupyALane(t *testing.T) {
 	if got := p.count(); got != 0 {
 		t.Fatalf("pending.count() = %d, want 0: a plan child holds no lane", got)
 	}
+	// The reported occupancy has to agree with p.count(), not with "one more
+	// than before": a summary claiming 1/1 for a plan winner is one the very
+	// next tick contradicts by dispatching into the lane it just claimed was
+	// taken.
+	if res.LanesUsed != 0 {
+		t.Errorf("LanesUsed = %d, want 0: a plan winner takes no lane", res.LanesUsed)
+	}
+	if strings.Contains(res.Summary, "1/1") {
+		t.Errorf("summary = %q, want it not to claim an occupied lane for a plan winner", res.Summary)
+	}
 
 	// A Todo ticket now shows up while the plan child is still (per
 	// sleeperBinary, briefly) running. With one lane and zero run winners

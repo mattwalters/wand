@@ -88,7 +88,7 @@ wand version                # build info, and the covenant schema this binary sp
   Ready for human  1 to look at
   WND-35  In Review  Run journal and lease store
 
-  Lanes  2 to resolve
+  Stalled  2 to resolve
   WND-36  stuck      held by pid 48213 on studio.local, which is gone; the run …
   WND-33  parked     the worktree was dirty at handoff; refusing to park noise …
 
