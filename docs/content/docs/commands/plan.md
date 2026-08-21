@@ -67,7 +67,30 @@ The comment comes before the estimate for the same reason: a ticket carrying
 the argument for an estimate it does not have is recoverable, while a ticket
 carrying a number nothing explains is a number nobody can weigh.
 
-Promoting the result to Todo is yours. An agent does not bless its own plan.
+Promoting the result to Todo is yours: promotion to Todo *is* approval of
+the plan. An agent does not bless its own plan.
+
+## The plan review loop
+
+Planning is not one shot. A draft almost always ends with things the scout
+could not resolve, and the questions it composed for `--interactive` (see
+below) go into the options comment too — the same questions, the same
+blast-radius order, the same verbatim quoting, just posted to the board
+instead of asked over stdin. Answer any of them in a comment, then label
+the ticket `re-plan`: [`wand sweep`](../sweep/) hands it back into In
+Planning (not Needs Input — the comments already are the answer), and
+`wand dispatch` treats a re-plan-labeled In Planning ticket exactly like a
+fresh To Plan one, so the cycle resumes with no second blessing needed.
+`wand plan <identifier>` also works run by hand against such a ticket.
+
+A re-plan does not draft from nothing: a fresh cold reviser reads the plan
+already on the ticket and every comment since it was posted, and revises
+the fenced region *in place*. What replaces the full "plan superseded"
+comment WND-77 gave a To Plan re-plan is a diff-shaped account — what was
+asked, what moved, what stayed and why — posted as the re-plan's own
+comment, so the reasoning trail stays a chain of comments rather than a
+stack of dead plans. Blessing to Todo with a question left unanswered is a
+legitimate choice too; the implementer is told it went unanswered.
 
 ## Nothing is written unless the whole handoff is valid
 

@@ -26,10 +26,12 @@ type fake struct {
 	commentErr error
 	labelErr   error
 	addErr     error
+	removeErr  error
 
 	calls    []string
 	comments []string
 	added    []string
+	removed  []string
 	updates  []linear.IssueUpdate
 	creates  []linear.IssueCreate
 }
@@ -78,6 +80,18 @@ func (f *fake) AddLabel(ctx context.Context, issueID, labelID string) error {
 	}
 	f.calls = append(f.calls, "label")
 	f.added = append(f.added, labelID)
+	return nil
+}
+
+func (f *fake) RemoveLabel(ctx context.Context, issueID, labelID string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if f.removeErr != nil {
+		return f.removeErr
+	}
+	f.calls = append(f.calls, "unlabel")
+	f.removed = append(f.removed, labelID)
 	return nil
 }
 
@@ -280,6 +294,110 @@ func TestClaimForPlanningRefusesWhatVetRejects(t *testing.T) {
 	rejectAll := func(linear.Issue) string { return "labeled human-only" }
 
 	_, err := ClaimForPlanning(context.Background(), f, covenant.Default(), "WND-6", rejectAll)
+	if err == nil || !strings.Contains(err.Error(), "human-only") {
+		t.Fatalf("err = %v, want the vet's reason", err)
+	}
+	if w := f.writes(); len(w) != 0 {
+		t.Errorf("writes = %v, want none on refusal", w)
+	}
+}
+
+func inPlanningIssue() linear.Issue {
+	return linear.Issue{
+		ID:         "uuid-6",
+		Identifier: "WND-6",
+		Title:      "Lifecycle verbs",
+		TeamID:     "team-1",
+		State:      linear.IssueState{Name: "In Planning", Type: "started"},
+		Labels:     []string{RePlanLabel},
+	}
+}
+
+func TestReturnToPlanningCommentsBeforeStatus(t *testing.T) {
+	f := &fake{issue: toPlanIssue(), states: wndStates}
+
+	_, err := ReturnToPlanning(context.Background(), f, covenant.Default(), "WND-6",
+		"labeled re-plan: a human asked for another cycle")
+	if err != nil {
+		t.Fatalf("ReturnToPlanning: %v", err)
+	}
+	want := []string{"comment", "update"}
+	got := f.writes()
+	if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("writes = %v, want %v: the comment lands before In Planning", got, want)
+	}
+	if f.updates[0].StateID != "st-in-planning" {
+		t.Errorf("state = %q, want In Planning's id", f.updates[0].StateID)
+	}
+}
+
+func TestReturnToPlanningNeedsAComment(t *testing.T) {
+	f := &fake{issue: toPlanIssue(), states: wndStates}
+
+	_, err := ReturnToPlanning(context.Background(), f, covenant.Default(), "WND-6", "  ")
+	if err == nil {
+		t.Fatal("ReturnToPlanning with a blank comment must refuse")
+	}
+	if w := f.writes(); len(w) != 0 {
+		t.Errorf("writes = %v, want none on refusal", w)
+	}
+}
+
+func TestClaimForReplanningRemovesTheLabel(t *testing.T) {
+	f := &fake{issue: inPlanningIssue(), states: wndStates, labels: []linear.Label{{ID: "l-re-plan", Name: RePlanLabel}}}
+
+	issue, err := ClaimForReplanning(context.Background(), f, covenant.Default(), "WND-6", noVet)
+	if err != nil {
+		t.Fatalf("ClaimForReplanning: %v", err)
+	}
+	if got := f.writes(); len(got) != 1 || got[0] != "unlabel" {
+		t.Fatalf("writes = %v, want exactly one label removal: there is no status to flip, the ticket is already In Planning", got)
+	}
+	if len(f.removed) != 1 || f.removed[0] != "l-re-plan" {
+		t.Errorf("removed = %v, want the re-plan label's id", f.removed)
+	}
+	if issue.Identifier != "WND-6" {
+		t.Errorf("claim result = %+v, want the issue as read", issue)
+	}
+}
+
+func TestClaimForReplanningRefusesOutsideInPlanning(t *testing.T) {
+	issue := inPlanningIssue()
+	issue.State = linear.IssueState{Name: "Plan Review", Type: "unstarted"}
+	f := &fake{issue: issue, states: wndStates}
+
+	_, err := ClaimForReplanning(context.Background(), f, covenant.Default(), "WND-6", noVet)
+	if err == nil || !strings.Contains(err.Error(), "In Planning") {
+		t.Fatalf("err = %v, want a refusal naming In Planning", err)
+	}
+	if w := f.writes(); len(w) != 0 {
+		t.Errorf("writes = %v, want none on refusal", w)
+	}
+}
+
+// A ticket In Planning with no re-plan label is exactly what a live plan
+// run's claim leaves behind — taking it as a re-plan too would let two
+// plan runs write over the same ticket at once, the invariant
+// ClaimForPlanning's own status flip protects on the fresh-plan side.
+func TestClaimForReplanningRefusesWithoutTheLabel(t *testing.T) {
+	issue := inPlanningIssue()
+	issue.Labels = nil
+	f := &fake{issue: issue, states: wndStates}
+
+	_, err := ClaimForReplanning(context.Background(), f, covenant.Default(), "WND-6", noVet)
+	if err == nil || !strings.Contains(err.Error(), "re-plan") {
+		t.Fatalf("err = %v, want a refusal naming the missing label", err)
+	}
+	if w := f.writes(); len(w) != 0 {
+		t.Errorf("writes = %v, want none on refusal", w)
+	}
+}
+
+func TestClaimForReplanningRefusesWhatVetRejects(t *testing.T) {
+	f := &fake{issue: inPlanningIssue(), states: wndStates, labels: []linear.Label{{ID: "l-re-plan", Name: RePlanLabel}}}
+	rejectAll := func(linear.Issue) string { return "labeled human-only" }
+
+	_, err := ClaimForReplanning(context.Background(), f, covenant.Default(), "WND-6", rejectAll)
 	if err == nil || !strings.Contains(err.Error(), "human-only") {
 		t.Fatalf("err = %v, want the vet's reason", err)
 	}

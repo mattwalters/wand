@@ -34,6 +34,12 @@ type board struct {
 	comments    []string
 	labels      []string
 
+	// existingComments is what IssueComments returns — the ticket's own
+	// comment history, scripted by a re-plan test rather than written by
+	// this run. Distinct from comments, which is what this run itself
+	// posts.
+	existingComments []linear.Comment
+
 	failComment  bool
 	failEstimate bool
 	failState    bool
@@ -55,7 +61,7 @@ func (b *board) IssueByIdentifier(ctx context.Context, identifier string) (linea
 }
 
 func (b *board) IssueComments(ctx context.Context, issueID string) ([]linear.Comment, error) {
-	return nil, nil
+	return b.existingComments, nil
 }
 
 func (b *board) TeamStates(ctx context.Context, teamID string) ([]linear.WorkflowState, error) {
@@ -165,6 +171,23 @@ func (b *board) AddLabel(ctx context.Context, issueID, labelID string) error {
 	}
 	b.log("park:label")
 	b.labels = append(b.labels, labelID)
+	return nil
+}
+
+// RemoveLabel is a re-plan's claim: verbs.ClaimForReplanning removes the
+// re-plan label instead of writing a status, since the ticket is already
+// In Planning. Logged with the same "claim:" prefix the first-plan status
+// write gets, and for the same reason: the many tests asserting the *rest*
+// of a run's writes should not have to repeat the claim in every want list.
+func (b *board) RemoveLabel(ctx context.Context, issueID, labelID string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if b.failLabel {
+		return fmt.Errorf("linear is down")
+	}
+	b.log("claim:unlabel=" + labelID)
+	b.claimed = true
 	return nil
 }
 func (b *board) CreateIssue(ctx context.Context, in linear.IssueCreate) (linear.Issue, error) {
@@ -1362,5 +1385,160 @@ func TestJournalFailureHandsThePlanningClaimBack(t *testing.T) {
 	}
 	if c := h.board.comments[0]; !strings.Contains(c, "run journal") {
 		t.Errorf("the hand-back comment does not name the journal failure:\n%s", c)
+	}
+}
+
+// --- the re-plan cycle (WND-82) --------------------------------------------
+//
+// A re-plan ticket is already In Planning, carrying the re-plan label
+// wand sweep's own hand-back left, and its description already carries a
+// plan a human commented on. plan.Execute must tell this apart from a
+// fresh To Plan claim and revise the existing plan in place instead of
+// drafting a new one.
+
+// rePlanIssue is a ticket sweep has already handed back for another
+// planning cycle: In Planning, labeled, and carrying the plan a prior run
+// wrote.
+func rePlanIssue(t *testing.T) linear.Issue {
+	t.Helper()
+	priorPlan := plan.PlanMarkdown(parsedGoodDraft(t))
+	desc, err := linear.WithSection("A human wrote this.\n", plan.PlanSectionID, priorPlan)
+	if err != nil {
+		t.Fatalf("WithSection: %v", err)
+	}
+	return linear.Issue{
+		ID:          "issue-1",
+		Identifier:  "WND-9",
+		Title:       "wand plan",
+		Description: desc,
+		TeamID:      "team",
+		State:       linear.IssueState{Name: "In Planning", Type: "started"},
+		Labels:      []string{"re-plan"},
+	}
+}
+
+// parsedGoodDraft mirrors render_test.go's parsedDraft, duplicated here
+// because that helper lives in a file this one does not need the rest of.
+func parsedGoodDraft(t *testing.T) plan.Draft {
+	t.Helper()
+	d, err := plan.ParseDraft(raw(t, goodDraft()), covenant.Default())
+	if err != nil {
+		t.Fatalf("ParseDraft: %v", err)
+	}
+	return d
+}
+
+// A re-plan run reads the human's comments since the last plan and revises
+// the plan in place — the payoff this ticket is named for: a plan review
+// loop mediated by the board instead of a terminal.
+func TestARePlanReadsCommentsAndRevisesThePlanInPlace(t *testing.T) {
+	revised := withChanges(draftHandoff(), "You said Vet already carries too much, so I moved the filter into Build instead.")
+	revised["recommendation"] = map[string]any{"approach": "Filter in Build", "why": "Vet should not grow a second responsibility."}
+
+	h := newHarness(t, workerResult{handoff: revised})
+	h.board.issue = rePlanIssue(t)
+	h.board.existingComments = []linear.Comment{
+		{Author: "wand", CreatedAt: time.Now().Add(-time.Hour),
+			Body: plan.OptionsComment(parsedGoodDraft(t), "fibonacci", "Plan Review", plan.Provenance{RunID: "r-1", Harness: "claude-code"})},
+		{Author: "Matt Walters", CreatedAt: time.Now(),
+			Body: "Vet already carries too much; put the filter in Build instead."},
+	}
+
+	out, err := h.run(t)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if out.Kind != journal.Converged {
+		t.Fatalf("outcome = %s (%s), want converged", out.Kind, out.Reason)
+	}
+
+	// The claim is the label removal, not a status write — the ticket is
+	// already In Planning — and the deliverables land in the same fixed
+	// order a first plan's do, minus the estimate this draft carries too.
+	want := []string{"claim:unlabel=label-re-plan", "section=plan", "comment", "estimate", "state=state-plan-review"}
+	if strings.Join(h.board.calls, ",") != strings.Join(want, ",") {
+		t.Fatalf("writes = %v\nwant  %v", h.board.calls, want)
+	}
+
+	if !strings.Contains(h.board.description, "Filter in Build") {
+		t.Errorf("the revised plan's fenced region does not reflect the human's comment:\n%s", h.board.description)
+	}
+	if strings.Contains(h.board.description, "Vet grows a second responsibility") {
+		t.Error("the old recommendation's argument was left in the fenced region")
+	}
+
+	if len(h.board.comments) != 1 {
+		t.Fatalf("comments = %v, want exactly the what-changed comment", h.board.comments)
+	}
+	for _, want := range []string{
+		"Plan revised",
+		"You said Vet already carries too much, so I moved the filter into Build instead.",
+	} {
+		if !strings.Contains(h.board.comments[0], want) {
+			t.Errorf("the comment does not name what changed and why (%q):\n%s", want, h.board.comments[0])
+		}
+	}
+
+	// The reviser was handed the human's comment as input, not asked to
+	// imagine one, and it read the plan already on the ticket rather than
+	// researching from nothing.
+	if !strings.Contains(h.work.prompts[0], "Vet already carries too much") {
+		t.Error("the reviser was not given the human's comment")
+	}
+	if !strings.Contains(h.work.prompts[0], "Filter in Vet") {
+		t.Error("the reviser was not given the plan already on the ticket")
+	}
+	if len(h.work.modes) != 1 {
+		t.Fatalf("spawned %d workers (%v), want the reviser alone — no critic, no interview on a re-plan cycle", len(h.work.modes), h.work.modes)
+	}
+}
+
+// A ticket labeled for a re-plan but with no comment since the plan it
+// would revise has nothing to read: parking rather than guessing at what
+// the human meant leaves the research budget unspent.
+func TestARePlanWithNoCommentsSinceTheLastPlanParks(t *testing.T) {
+	h := newHarness(t)
+	h.board.issue = rePlanIssue(t)
+	h.board.existingComments = []linear.Comment{
+		{Author: "wand", CreatedAt: time.Now(),
+			Body: plan.OptionsComment(parsedGoodDraft(t), "fibonacci", "Plan Review", plan.Provenance{RunID: "r-1", Harness: "claude-code"})},
+	}
+
+	out, err := h.run(t)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if out.Kind != journal.Parked {
+		t.Fatalf("outcome = %s (%s), want parked", out.Kind, out.Reason)
+	}
+	if !strings.Contains(out.Reason, "nothing to revise against") {
+		t.Errorf("the park does not say why: %s", out.Reason)
+	}
+	if len(h.board.deliverables()) != 0 {
+		t.Errorf("a re-plan with nothing to read still wrote to the ticket: %v", h.board.deliverables())
+	}
+}
+
+// A ticket In Planning with no re-plan label is what a live plan run's own
+// claim leaves behind, not a re-plan waiting for a cycle — claimEither must
+// not treat it as one, the same refusal TestASecondPlanOfOneTicketRefuses
+// already covers for the fresh-plan side.
+func TestARePlanLabelIsRequiredToResumeInPlanning(t *testing.T) {
+	h := newHarness(t)
+	h.board.issue = rePlanIssue(t)
+	h.board.issue.Labels = nil
+
+	_, err := h.run(t)
+	if err == nil {
+		t.Fatal("a ticket In Planning with no re-plan label was resumed")
+	}
+	// claimEither falls back to the fresh-plan claim, which refuses the
+	// same way TestASecondPlanOfOneTicketRefuses already checks: a ticket
+	// In Planning is not To Plan, whatever labels it carries.
+	if !strings.Contains(err.Error(), "not yours to plan") {
+		t.Errorf("error = %v, want the fresh-plan claim's own refusal", err)
+	}
+	if len(h.board.calls) != 0 {
+		t.Errorf("the refused resume wrote to the ticket: %v", h.board.calls)
 	}
 }

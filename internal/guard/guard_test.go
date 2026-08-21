@@ -138,6 +138,9 @@ func TestReasonsNameTheAlternative(t *testing.T) {
 	if !strings.Contains(todo, "Backlog") {
 		t.Error("Todo block does not point at the Backlog hand-back")
 	}
+	if !strings.Contains(todo, "Promotion to Todo is approval of the plan") {
+		t.Error("Todo block does not say promotion is plan approval")
+	}
 
 	if done := reasonFor("Done"); !strings.Contains(done, "Backlog") {
 		t.Error("close block does not point at Backlog")

@@ -1,7 +1,7 @@
 // Package verbs implements the single-writer lifecycle actions an
-// interactive session performs: claim, claim-for-planning, handback,
-// abandon, file, and the one an orchestrator performs on its way out,
-// report-park.
+// interactive session performs: claim, claim-for-planning,
+// claim-for-replanning, handback, return-to-planning, abandon, file, and
+// the one an orchestrator performs on its way out, report-park.
 //
 // Each verb encodes an ordering rule the reference system carried as prose —
 // and prose ordering is remembered ordering, which is to say sometimes
@@ -12,10 +12,16 @@
 //     move is the cheapest place to lose a race: two sessions that both
 //     branch and then both claim have each done work one must throw away,
 //     while two that claim first collide before either has anything.
+//     claim-for-replanning is claim-for-planning's own mirror one cycle
+//     later: the ticket is already In Planning, so the re-plan label it
+//     carries is the claim signal, and removing it is the write instead of
+//     a status flip.
 //   - handback posts the question before setting Needs Input, so a failure
 //     between the two never leaves a Needs Input ticket with no question on
 //     it — that ticket parks forever, because the human it waits on was
-//     never asked anything.
+//     never asked anything. return-to-planning is its planning-side twin,
+//     aimed at In Planning instead: a re-plan resumes a cycle the human's
+//     comments already answered, not a fresh question.
 //   - abandon posts the evidence first, then corrects the description,
 //     moves to Backlog and unassigns in one write, so the body stops
 //     asserting the false premise in the same act that demotes the ticket.
@@ -51,6 +57,23 @@ import (
 // human-only label, it is covenant topology, not a parameter — no covenant
 // file renames it (see covenant.Default).
 const AgentFiledLabel = "agent-filed"
+
+// RePlanLabel marks a Plan Review ticket a human wants another planning
+// cycle over — the planning-side twin of sweep's own re-review label.
+// Covenant topology, not a parameter (see covenant.Default): sweep is what
+// watches for it, and [ClaimForReplanning] is what consumes it.
+const RePlanLabel = "re-plan"
+
+// hasLabel reports whether issue carries name, case-insensitively — Linear
+// labels round-trip with whatever case a person typed.
+func hasLabel(issue linear.Issue, name string) bool {
+	for _, l := range issue.Labels {
+		if strings.EqualFold(l, name) {
+			return true
+		}
+	}
+	return false
+}
 
 // Linear is the slice of the Linear client the verbs use. An interface so
 // tests can hold a fake that records call order — the ordering rules above
@@ -198,6 +221,97 @@ func ClaimForPlanning(ctx context.Context, cl Linear, cov covenant.Covenant, ide
 		return linear.Issue{}, err
 	}
 	if err := cl.UpdateIssue(ctx, issue.ID, linear.IssueUpdate{StateID: stateID}); err != nil {
+		return linear.Issue{}, err
+	}
+	return issue, nil
+}
+
+// ReturnToPlanning hands one ticket back into In Planning for another
+// planning cycle: the comment naming why, then the status move — the same
+// comment-before-status ordering [Handback] uses, so a failure between the
+// two never leaves a ticket that moved with nothing on it explaining the
+// move. It is `wand sweep`'s write for a ticket labeled [RePlanLabel], the
+// exact twin of the re-review candidate's own hand-back, aimed at In
+// Planning instead of Needs Input: a re-plan resumes a cycle the human's
+// comments already answered, rather than asking a fresh question.
+func ReturnToPlanning(ctx context.Context, cl Linear, cov covenant.Covenant, identifier, comment string) (linear.Issue, error) {
+	comment = strings.TrimSpace(comment)
+	if comment == "" {
+		return linear.Issue{}, fmt.Errorf("return-to-planning needs a comment: why the ticket is going back for another cycle")
+	}
+	issue, err := cl.IssueByIdentifier(ctx, identifier)
+	if err != nil {
+		return linear.Issue{}, err
+	}
+	if err := refuseIfClosed(issue, "return to planning"); err != nil {
+		return linear.Issue{}, err
+	}
+	stateID, err := ResolveState(ctx, cl, cov, issue.TeamID, "in_planning")
+	if err != nil {
+		return linear.Issue{}, err
+	}
+	if err := cl.CreateComment(ctx, issue.ID, comment); err != nil {
+		return linear.Issue{}, err
+	}
+	if err := cl.UpdateIssue(ctx, issue.ID, linear.IssueUpdate{StateID: stateID}); err != nil {
+		return linear.Issue{}, err
+	}
+	return issue, nil
+}
+
+// ReplanClaimer is what [ClaimForReplanning] writes through: [Linear] plus
+// the one extra method a status-based claim never needed. Its own
+// interface, narrower than a caller's full board, for the same reason
+// [Parker] and [StateResolver] are their own — a caller should not have to
+// grow its interface to reach one verb.
+type ReplanClaimer interface {
+	Linear
+	RemoveLabel(ctx context.Context, issueID, labelID string) error
+}
+
+// ClaimForReplanning claims one ticket already In Planning for a re-plan
+// cycle: a ticket [ReturnToPlanning] has already handed back, carrying
+// [RePlanLabel] as sweep left it.
+//
+// Unlike [ClaimForPlanning] there is no status to flip — the ticket is
+// already In Planning — so the label itself is the claim signal, and
+// removing it is the write that consumes it, mirroring the status write's
+// role in the fresh-plan claim: two processes racing for the same re-plan
+// both find the label and both try to remove it, and only the one whose
+// removal actually changes the ticket wins; the loser's mutation is refused,
+// the same shape two ClaimForPlanning callers race on the status write
+// instead. A ticket In Planning with no [RePlanLabel] is not a re-plan
+// waiting for a cycle — it reads as one a live run already claimed — so it
+// refuses rather than being taken as one.
+func ClaimForReplanning(ctx context.Context, cl ReplanClaimer, cov covenant.Covenant, identifier string, vet func(linear.Issue) string) (linear.Issue, error) {
+	issue, err := cl.IssueByIdentifier(ctx, identifier)
+	if err != nil {
+		return linear.Issue{}, err
+	}
+	inPlanning := cov.StatusName("in_planning")
+	if !strings.EqualFold(issue.State.Name, inPlanning) {
+		return linear.Issue{}, fmt.Errorf(
+			"%s is in %q, not %q: a re-plan resumes a ticket wand sweep has already handed back into %q",
+			issue.Identifier, issue.State.Name, inPlanning, inPlanning)
+	}
+	if !hasLabel(issue, RePlanLabel) {
+		return linear.Issue{}, fmt.Errorf(
+			"%s is in %q but carries no %q label: that reads as a ticket a live plan run already claimed, not one waiting for another cycle",
+			issue.Identifier, inPlanning, RePlanLabel)
+	}
+	if reason := vet(issue); reason != "" {
+		return linear.Issue{}, fmt.Errorf("%s may not be planned: %s", issue.Identifier, reason)
+	}
+
+	label, found, err := cl.LabelByName(ctx, RePlanLabel)
+	if err != nil {
+		return linear.Issue{}, err
+	}
+	if !found {
+		return linear.Issue{}, fmt.Errorf(
+			"no %q label anywhere in the workspace; run `wand init` to bring the team to the covenant", RePlanLabel)
+	}
+	if err := cl.RemoveLabel(ctx, issue.ID, label.ID); err != nil {
 		return linear.Issue{}, err
 	}
 	return issue, nil

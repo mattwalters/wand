@@ -145,6 +145,23 @@ func TestSelectSkipsAParkedToPlanTicket(t *testing.T) {
 	}
 }
 
+// WND-82. A ticket wand sweep has handed back into In Planning for another
+// planning cycle (labeled re-plan) is a candidate the same way a fresh To
+// Plan ticket is — the whole point of the label surviving the hand-back is
+// that dispatch's normal pass resumes it without a human blessing it a
+// second time. One In Planning without the label is a live plan run's own
+// claim, not a candidate for anything here.
+func TestRePlanEligibleFiltersToTheLabel(t *testing.T) {
+	labeled := issue("WND-9", 1, time.Hour)
+	labeled.Labels = []string{"re-plan"}
+	unlabeled := issue("WND-10", 1, time.Hour)
+
+	got := rePlanEligible([]linear.Issue{labeled, unlabeled})
+	if len(got) != 1 || got[0].Identifier != "WND-9" {
+		t.Errorf("rePlanEligible = %+v, want only the re-plan-labeled ticket", got)
+	}
+}
+
 // A parked ticket is the only one on the board: nothing runs, and the pass
 // says why rather than looking like an empty queue.
 func TestSelectFindsNoWinnerWhenEveryCandidateIsParked(t *testing.T) {

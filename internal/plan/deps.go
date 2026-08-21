@@ -24,6 +24,11 @@ type Board interface {
 	// it is here so a parked plan run can be reported with verbs.ReportPark,
 	// which labels rather than moving a status the scout does not own.
 	AddLabel(ctx context.Context, issueID, labelID string) error
+	// RemoveLabel is what a re-plan's claim consumes: verbs.ClaimForReplanning
+	// removes the re-plan label sweep's own hand-back left, in place of the
+	// status write a fresh plan's claim makes — a re-plan ticket is already
+	// In Planning, so the label is the only claim signal there is.
+	RemoveLabel(ctx context.Context, issueID, labelID string) error
 	// UpsertSection writes one marker-fenced region of the description,
 	// leaving every byte outside it alone.
 	UpsertSection(ctx context.Context, issueID, description, id, markdown string) (next string, changed bool, err error)
