@@ -20,6 +20,16 @@
 //     or recommending an approach it never described reads finished and
 //     is not, so it is refused whole rather than written partially.
 //
+//   - **The fence is absolute.** A plan run writes only the marker-fenced
+//     plan region of the description (linear.UpsertSection leaves every
+//     other byte alone — see that package). The ticket's goals, problem
+//     statement and title are the human's and are checked *against* by
+//     the plan, never rewritten by it; that is what lets a human notice a
+//     plan that answers the wrong question. A scout that judges the
+//     ticket itself wrong has the wrong-premise ending for exactly that —
+//     it writes no plan and hands back to a person — rather than a way to
+//     correct the body in the same act as planning it.
+//
 //   - **The deliverables land before the transition that advertises
 //     them.** Plan into the description's fenced region, then the options
 //     comment, then the estimate, and Scoped last. Each write is
