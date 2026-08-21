@@ -2,6 +2,7 @@ package cockpit
 
 import (
 	"context"
+	"github.com/mattwalters/wand/internal/queue"
 	"testing"
 	"time"
 
@@ -57,8 +58,12 @@ func TestReadFollowsTheCovenantsNames(t *testing.T) {
 	if len(cl.states) != 3 || cl.states[0] != "Inbox" || cl.states[1] != "Scoped" || cl.states[2] != "Blocked on me" {
 		t.Errorf("statuses read = %v, want the covenant's own names", cl.states)
 	}
-	if len(cl.labels) != 1 || cl.labels[0] != ReadyForHumanLabel {
-		t.Errorf("labels read = %v, want %q", cl.labels, ReadyForHumanLabel)
+	// Two label reads: ready-for-human fills a queue, and parked decides
+	// which parked lanes are still a live obligation rather than a run
+	// that happened (WND-85). Both are covenant topology, so neither is
+	// renamed by a covenant file.
+	if len(cl.labels) != 2 || cl.labels[0] != ReadyForHumanLabel || cl.labels[1] != queue.ParkedLabel {
+		t.Errorf("labels read = %v, want %q then %q", cl.labels, ReadyForHumanLabel, queue.ParkedLabel)
 	}
 	// The started read exists only to tell a held lane from an orphaned
 	// one; it is by type because a covenant may name two started columns.

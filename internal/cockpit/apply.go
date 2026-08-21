@@ -135,14 +135,24 @@ func clearParkedLabel(ctx context.Context, cl Linear, ticket string) error {
 	if err != nil {
 		return err
 	}
-	label, found, err := cl.LabelByName(ctx, queue.ParkedLabel)
-	if err != nil {
-		return err
+	// Already cleared is success, not failure. Linear refuses to remove a
+	// label an issue does not carry, and a person who cleared a park and
+	// then saw the lane again — which is exactly what this ticket's own
+	// defect caused — would land on that refusal for having done the
+	// right thing the first time.
+	for _, name := range issue.Labels {
+		if strings.EqualFold(name, queue.ParkedLabel) {
+			label, found, lerr := cl.LabelByName(ctx, queue.ParkedLabel)
+			if lerr != nil {
+				return lerr
+			}
+			if !found {
+				return fmt.Errorf("no %q label anywhere in the workspace; run `wand init` to bring the team to the covenant", queue.ParkedLabel)
+			}
+			return cl.RemoveLabel(ctx, issue.ID, label.ID)
+		}
 	}
-	if !found {
-		return fmt.Errorf("no %q label anywhere in the workspace; run `wand init` to bring the team to the covenant", queue.ParkedLabel)
-	}
-	return cl.RemoveLabel(ctx, issue.ID, label.ID)
+	return nil
 }
 
 // resolveState turns a covenant status key into the team's workflow state
