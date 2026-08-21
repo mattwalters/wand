@@ -438,6 +438,35 @@ suspended mid-response. So <code>0</code> does not mean &ldquo;loop forever&rdqu
 is ever retried: a failure that might be about the work, a timeout, and an
 interrupt all park on the first attempt. See
 <a href="../commands/run/"><code>wand run</code></a> for the rules that keep it narrow.</p>
+<p><code>caps.worker_timeout_minutes</code> (default <code>60</code>) is a different kind of cap
+from <code>review_rounds</code> and <code>ci_attempts</code>, worth naming so the three are not
+tuned by the same instinct. The round caps bound <em>semantic looping</em> — they
+exist so a run cannot converge by exhausting a counter, and changing them
+changes what a run is willing to conclude. The worker timeout bounds <em>a
+wedged process</em> — a liveness backstop only, and changing it changes
+nothing about correctness.</p>
+<p>One number applied to every phase asks a reviewer to justify the
+implementer&rsquo;s budget, or asks an implementer to make do with the
+reviewer&rsquo;s. <code>caps.phase_timeout_minutes</code> overrides the global timeout for
+specific phases, falling back to it for any phase left unmentioned:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-toml" data-lang="toml"><span class="line"><span class="cl"><span class="p">[</span><span class="nx">caps</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="nx">worker_timeout_minutes</span> <span class="p">=</span> <span class="mi">60</span>
+</span></span><span class="line"><span class="cl">
+</span></span><span class="line"><span class="cl"><span class="p">[</span><span class="nx">caps</span><span class="p">.</span><span class="nx">phase_timeout_minutes</span><span class="p">]</span>
+</span></span><span class="line"><span class="cl"><span class="nx">review</span> <span class="p">=</span> <span class="mi">20</span>
+</span></span><span class="line"><span class="cl"><span class="nx">fix-ci</span> <span class="p">=</span> <span class="mi">20</span>
+</span></span></code></pre></div><p>The stock covenant already ships <code>review</code> and <code>fix-ci</code> at 20 minutes, over
+a 60-minute global default that <code>implement</code> and scope&rsquo;s research phases
+(<code>scout</code>, <code>critic</code>, <code>revise</code>) fall back to. These are early defaults —
+sized from this machine&rsquo;s own run journals (an <code>implement</code> phase
+legitimately running into the 40s of minutes on a real multi-package
+ticket; <code>review</code> and <code>fix-ci</code> never observed past a few) rather than from
+guessing, but from a small sample, and subject to revision as more runs
+accumulate. Every key is validated the same way as the other caps: an
+unknown phase name is refused loudly, the same as any other misspelled key
+in this file, and an explicit zero or negative is refused for the same
+reason a bare cap of zero is — a cap of nothing is a request to loop
+forever.</p>
 <h2 id="toggles">Toggles</h2>
 <p>Two optional stages of the plan orchestrator are the covenant&rsquo;s to switch,
 because whether they run is a property of a team&rsquo;s process rather than of
