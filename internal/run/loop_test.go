@@ -169,17 +169,34 @@ type fakeHub struct {
 	openedTitle string
 	openedBody  string
 	unresolved  int
+
+	// lookups counts PRForBranch calls, so a test can make the PR change
+	// under the run the way a human merging mid-run does. The loop looks
+	// the PR up once to open or repair it and again to converge; a race
+	// that only exists between those two calls cannot be reproduced by a
+	// hub that answers the same thing every time.
+	lookups        int
+	mergeAtLookup  int // >0: from this lookup on, the PR reads merged
+	vanishAtLookup int // >0: from this lookup on, there is no PR at all
 }
 
 func (h *fakeHub) PRForBranch(context.Context, string, string) (PR, bool, error) {
+	h.lookups++
+	if h.vanishAtLookup > 0 && h.lookups >= h.vanishAtLookup {
+		return PR{}, false, nil
+	}
 	if h.pr == nil {
 		return PR{}, false, nil
 	}
-	return *h.pr, true, nil
+	got := *h.pr
+	if h.mergeAtLookup > 0 && h.lookups >= h.mergeAtLookup {
+		got.State = PRStateMerged
+	}
+	return got, true, nil
 }
 func (h *fakeHub) OpenPR(_ context.Context, _, base, _, title, body string) (string, error) {
 	h.openedBase, h.openedTitle, h.openedBody = base, title, body
-	h.pr = &PR{Number: 1, Title: title, URL: "https://example.test/pr/1"}
+	h.pr = &PR{Number: 1, Title: title, URL: "https://example.test/pr/1", State: PRStateOpen}
 	return h.pr.URL, nil
 }
 func (h *fakeHub) RetitlePR(_ context.Context, _ string, _ int, title string) error {
@@ -1044,5 +1061,56 @@ func TestAParkThatCannotReachLinearIsStillOnePark(t *testing.T) {
 	}
 	if st := f.journalOutcome(t, out.RunID); st.Outcome != journal.Parked {
 		t.Errorf("journal outcome = %q, want exactly one parked ending", st.Outcome)
+	}
+}
+
+// WND-70. Merging is the outcome this loop exists to reach, and a human who
+// merges the PR between the reviewer's approval and the final lookup used
+// to turn that into a park. Three runs in the reference journal ended this
+// way — WND-41, WND-44 and WND-53 — and all three are on main.
+func TestAPRMergedMidRunConvergesRatherThanParking(t *testing.T) {
+	f := newFixture(t)
+	f.workers.steps = []workerStep{{handoff: doneHandoff}, {handoff: approveHandoff}}
+	f.shell.steps = []shellStep{{ok: true}}
+	f.hub.mergeAtLookup = 2 // open when the PR is ensured, merged by convergence
+
+	out := f.execute(t)
+
+	if out.Kind != journal.Converged {
+		t.Fatalf("outcome %+v, want converged over a PR that landed mid-run", out)
+	}
+	if !strings.Contains(out.Reason, "already merged") {
+		t.Errorf("the reason does not say the PR had landed: %q", out.Reason)
+	}
+	// The merge automation owns the ticket's status now. In Review over a
+	// ticket the merge already closed reopens a close, which is a human's
+	// call — the same reasoning verbs.refuseIfClosed is built on.
+	if w := f.board.statusWrites(); len(w) != 1 {
+		t.Errorf("status writes = %v, want only the claim's In Progress", w)
+	}
+	if c := f.board.lastComment(); !strings.Contains(c, "already merged") {
+		t.Errorf("the ticket is not told the work landed:\n%s", c)
+	}
+	// ready-for-human means "In Review, with a PR a human should read".
+	// A merged PR has been read.
+	for _, c := range f.board.calls {
+		if c.kind == "label" && c.body == "label-rfh" {
+			t.Error("a merged PR was labeled ready-for-human")
+		}
+	}
+}
+
+// The park this replaces is still reachable, and still says the same thing:
+// a PR that is genuinely absent is not a PR that merged.
+func TestAnAbsentPRStillParks(t *testing.T) {
+	f := newFixture(t)
+	f.workers.steps = []workerStep{{handoff: doneHandoff}, {handoff: approveHandoff}}
+	f.shell.steps = []shellStep{{ok: true}}
+	f.hub.vanishAtLookup = 2 // opened, then gone by convergence
+
+	out := f.execute(t)
+
+	if out.Kind != journal.Parked || !strings.Contains(out.Reason, "is gone") {
+		t.Fatalf("outcome %+v, want a park over the vanished PR", out)
 	}
 }

@@ -252,7 +252,7 @@ func TestExecuteUnresolvedThreads(t *testing.T) {
 	board.label[run.ReadyForHumanLabel] = []linear.Issue{{ID: "id-1", Identifier: "WND-1", BranchName: "wand/wnd-1", State: linear.IssueState{Type: "started"}, CreatedAt: time.Now()}}
 
 	hub := &fakeHub{
-		prs:        map[string]run.PR{"wand/wnd-1": {Number: 7, URL: "https://github.com/x/y/pull/7"}},
+		prs:        map[string]run.PR{"wand/wnd-1": {Number: 7, URL: "https://github.com/x/y/pull/7", State: run.PRStateOpen}},
 		unresolved: map[int]int{7: 2},
 	}
 	d := baseSweepDeps(t, board, hub, store)
@@ -283,5 +283,34 @@ func TestExecuteReportsZombiesWithoutActing(t *testing.T) {
 	}
 	if len(res.Zombies) != 1 || res.Zombies[0].Ticket != "WND-1" {
 		t.Fatalf("Zombies = %+v, want WND-1 reported", res.Zombies)
+	}
+}
+
+// WND-70. PRForBranch now returns a branch's most recent PR whatever state
+// it is in, so the open-only requirement lives at the call sites that have
+// it — and this is one. A thread left unresolved on a PR that has since
+// merged is not a person still waiting: merging is the answer, and handing
+// the ticket back over it would reopen a question already settled by the
+// strongest means available.
+func TestAMergedPRsUnresolvedThreadsAreNotACandidate(t *testing.T) {
+	store := newSweepStore(t)
+	board := newFakeBoard()
+	board.addIssue(linear.Issue{ID: "id-1", Identifier: "WND-1", State: linear.IssueState{Name: "In Review", Type: "started"}, BranchName: "wand/wnd-1"})
+	board.label[run.ReadyForHumanLabel] = []linear.Issue{{ID: "id-1", Identifier: "WND-1", BranchName: "wand/wnd-1", State: linear.IssueState{Type: "started"}, CreatedAt: time.Now()}}
+
+	hub := &fakeHub{
+		prs:        map[string]run.PR{"wand/wnd-1": {Number: 7, URL: "https://github.com/x/y/pull/7", State: run.PRStateMerged}},
+		unresolved: map[int]int{7: 2},
+	}
+	d := baseSweepDeps(t, board, hub, store)
+	res, err := Execute(context.Background(), d, store)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if res.Acted != ActedNothing {
+		t.Fatalf("res = %+v, want nothing done over a merged PR's threads", res)
+	}
+	if got := board.issues["WND-1"].State.Name; got != "In Review" {
+		t.Errorf("issue state = %q, want it left alone", got)
 	}
 }

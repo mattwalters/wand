@@ -59,6 +59,15 @@ to the ticket, adds the `ready-for-human` label, moves the ticket to
 In Review, and removes the now-clean worktree. The PR is a human's to
 merge.
 
+If a human merges it first — between the reviewer's approval and the
+orchestrator's last look, a race the loop cannot prevent — that is still
+convergence, not a failure: the work landed, which is what the loop was
+for. The run posts its summary and stops there. It does **not** move the
+ticket to In Review, because the merge automation owns the status now and
+In Review over a ticket the merge already closed would reopen a close,
+which is a human's call. A PR that is genuinely absent, or closed without
+merging, still parks.
+
 **Handed back** — a human owns the next move. The reason is posted as a
 comment **first**, then the ticket moves to Needs Input — in that order,
 always, so a failure between the two never leaves a Needs Input ticket
@@ -126,7 +135,7 @@ The codes are a contract a scheduler can read:
 
 | Code | Meaning |
 |---|---|
-| `0` | Converged: In Review, `ready-for-human`, PR open. |
+| `0` | Converged: In Review, `ready-for-human`, PR open — or the PR already merged, in which case the summary is posted and the status left to the merge automation. |
 | `1` | The run never started — refused claim, missing configuration, no journal. Nothing to sweep. |
 | `2` | Handed back: Needs Input, with the reason posted as a comment. |
 | `3` | Parked: the journal has the reason, the ticket carries it as a comment and the `parked` label, and the worktree is preserved. |

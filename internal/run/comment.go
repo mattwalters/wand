@@ -160,6 +160,25 @@ func humanThreadsComment(threads int, reviewSummary, prURL string) string {
 // convergedComment announces the terminal success on the ticket: what the
 // reviewer verified (the positive evidence), any plan deviations, and the
 // PR a human should now read.
+// mergedComment is convergedComment for a PR that landed before the run
+// could finish. It says the work is on the default branch rather than
+// waiting to be read, and says the status was left alone — otherwise the
+// next reader sees a converged run that did not move the ticket and reads
+// it as a run that failed halfway.
+func mergedComment(round int, reviewSummary, prURL string, deviations []string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "Implemented, verify green, and the reviewer approved on round %d:\n\n", round)
+	b.WriteString(blockquote(reviewSummary))
+	b.WriteString("\n")
+	if len(deviations) > 0 {
+		b.WriteString("\n")
+		b.WriteString(deviationList(deviations))
+	}
+	fmt.Fprintf(&b, "\nPR: %s — already merged by the time this run finished, so the work is on the "+
+		"default branch. This run left the ticket's status alone: merging is what moves it now.\n", prURL)
+	return b.String()
+}
+
 func convergedComment(round int, reviewSummary, prURL string, deviations []string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "Implemented, verify green, and the reviewer approved on round %d:\n\n", round)
