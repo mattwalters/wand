@@ -404,7 +404,39 @@ func (s *planning) parse(ctx context.Context, raw json.RawMessage, phase string)
 	return draft, nil
 }
 
+// parseRevision validates a reviser's handoff to a critique the same way
+// [planning.parse] validates a draft — persisting a rejected handoff before
+// parking, journaling what came back, then checking the tree — except
+// against [ParseRevision], which additionally demands one resolution per
+// objection the critic raised.
+func (s *planning) parseRevision(ctx context.Context, raw json.RawMessage, objections int) (Revision, *Outcome) {
+	rev, err := ParseRevision(raw, s.d.Cov, objections)
+	if err != nil {
+		if werr := os.WriteFile(s.r.RejectedHandoffPath(), raw, 0o644); werr != nil {
+			fmt.Fprintf(s.d.Out, "could not persist the rejected reviser handoff: %v\n", werr)
+		}
+		return Revision{}, s.park(ctx, fmt.Sprintf("the reviser's handoff is unusable, so nothing was written to the ticket: %v", err))
+	}
+	if len(rev.Dropped) > 0 {
+		s.note("reviser citations dropped for carrying no line", rev.Dropped)
+	}
+	s.note("reviser handoff", rev)
+	if out := s.requireUntouched(ctx, "reviser"); out != nil {
+		return Revision{}, out
+	}
+	return rev, nil
+}
+
 // critique runs the cold critic and, if anything stuck, a cold reviser.
+//
+// What the reviser says about each objection is routed, not just carried
+// along inside the new draft: an objection it resolved goes into the
+// options comment's reasoning trail (challengesSection, via prov.Challenges)
+// as what was challenged and what changed; one it could not resolve is
+// promoted into the draft's own open questions, so it reaches the human at
+// Plan Review the same way a scout's unanswered question does. A draft
+// that survived nothing is not thereby sound, and a human should be able
+// to see which it was.
 func (s *planning) critique(ctx context.Context, draft Draft) (Draft, *Outcome) {
 	rendered := renderDraft(draft, s.d.Cov)
 	res, out := s.work(ctx, "critic", 1, criticRules(), criticPrompt(s.ticketText, rendered))
@@ -427,7 +459,54 @@ func (s *planning) critique(ctx context.Context, draft Draft) (Draft, *Outcome) 
 		return draft, nil
 	}
 	fmt.Fprintf(s.d.Out, "critic: %d objection(s), revising\n", len(critique.Objections))
-	return s.revise(ctx, draft, 1, renderObjections(critique), "a cold critic's objections to it")
+
+	prompt := reviseAfterCritiquePrompt(s.ticketText, rendered, critique, s.d.Cov)
+	res, out = s.work(ctx, "revise", 1, scoutRules(), prompt)
+	if out != nil {
+		return draft, out
+	}
+	rev, out := s.parseRevision(ctx, res.Handoff, len(critique.Objections))
+	if out != nil {
+		return draft, out
+	}
+
+	revised := rev.Draft
+	if revised.Premise == PremiseWrong {
+		// The whole draft is being withdrawn; wrongPremise ends the run
+		// right after this returns, so there is nothing left to resolve
+		// and nothing to route.
+		return revised, nil
+	}
+	resolved, openQuestions := routeResolutions(critique.Objections, rev.Resolutions)
+	s.prov.Challenges = resolved
+	revised.OpenQuestions = append(revised.OpenQuestions, openQuestions...)
+	if len(openQuestions) > 0 {
+		fmt.Fprintf(s.d.Out, "critic: %d objection(s) unresolved, promoted to open questions\n", len(openQuestions))
+	}
+	return revised, nil
+}
+
+// routeResolutions splits what the reviser said about each objection into
+// the reasoning trail (resolved: what was challenged and what changed) and
+// the human's open questions (not resolved: the reviser could not settle
+// it either, so a person decides). objections and resolutions are the same
+// length, paired positionally — [ParseRevision] refuses anything else.
+func routeResolutions(objections []Objection, resolutions []Resolution) (resolved []Challenge, openQuestions []string) {
+	for i, o := range objections {
+		r := resolutions[i]
+		if r.Resolved {
+			resolved = append(resolved, Challenge{
+				Target:      o.Target,
+				Summary:     o.Summary,
+				Explanation: r.Explanation,
+			})
+			continue
+		}
+		openQuestions = append(openQuestions, fmt.Sprintf(
+			"A cold critic objected to %s: %s. Not resolved: %s",
+			strings.TrimSpace(o.Target), strings.TrimSpace(o.Summary), strings.TrimSpace(r.Explanation)))
+	}
+	return resolved, openQuestions
 }
 
 // interview puts the draft to the human and, if they said anything, hands
@@ -449,10 +528,13 @@ func (s *planning) interview(ctx context.Context, draft Draft) (Draft, *Outcome)
 	return s.revise(ctx, draft, 2, Transcript(answers), "what a human said when it was put to them question by question")
 }
 
-// revise spawns a fresh session over the draft and whatever was said
-// against it. The result replaces the draft whole and is validated
-// identically: a revision is not allowed to be a weaker plan than the one
-// it replaces.
+// revise spawns a fresh session over the draft and what a human said
+// against it in the interview. The result replaces the draft whole and is
+// validated identically: a revision is not allowed to be a weaker plan
+// than the one it replaces. The critic's own revision round is
+// [planning.critique]'s, not this one — it additionally demands a
+// resolution for every objection, which an interview's free-form answers
+// have no equivalent of.
 func (s *planning) revise(ctx context.Context, draft Draft, round int, objections, source string) (Draft, *Outcome) {
 	prompt := revisePrompt(s.ticketText, renderDraft(draft, s.d.Cov), objections, s.d.Cov, source)
 	res, out := s.work(ctx, "revise", round, scoutRules(), prompt)

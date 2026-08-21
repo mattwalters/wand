@@ -114,9 +114,12 @@ type Toggles struct {
 	// over its draft before writing anything.
 	PlanInterview bool
 	// PlanCritic runs a cold critic over the draft plan before the
-	// interview. Off by default: it costs a whole extra model call per
-	// plan run, and unlike the rest of this covenant it is not a rule the
-	// reference system has finished paying for.
+	// interview. On by default: the build side already runs an adversarial
+	// pass as a matter of course — a cold reviewer that must approve on
+	// positive evidence — and a plan that goes unchallenged is the
+	// asymmetry. A plan is a decision paid for over the whole life of the
+	// work it describes, which makes one extra model call here the
+	// cheapest place in the lifecycle to spend it.
 	PlanCritic bool
 }
 
@@ -254,7 +257,7 @@ func Default() Covenant {
 		},
 		Toggles: Toggles{
 			PlanInterview: true,
-			PlanCritic:    false,
+			PlanCritic:    true,
 		},
 	}
 }
