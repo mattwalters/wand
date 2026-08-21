@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mattwalters/wand/internal/journal"
+	"github.com/mattwalters/wand/internal/sweep"
 )
 
 // WatchDeps is what a poll loop needs beyond one pass's own Deps: the
@@ -31,6 +32,20 @@ type WatchDeps struct {
 	// watch session and the journal only carries the structured half of it.
 	// Defaults to <store root>/dispatch/logs.
 	LogDir string
+	// Sweep, when set, is run once at the top of every Tick, before
+	// dispatch reads Todo/To Plan or counts lanes — nil means no sweep,
+	// preserving today's dispatch-only behavior for any caller that does
+	// not wire it (including every existing test). Sweep-first is chosen
+	// for narration simplicity, not because it changes lane math:
+	// LanesUsed already excludes a dead-lease report by its lease's
+	// live-computed liveness regardless of whether sweep has reaped it yet
+	// (see select.go's LanesUsed), and none of sweep's own targets
+	// (re-plan/re-review labeled tickets, unresolved-thread tickets, or a
+	// just-reaped dead-lease ticket handed to Needs Input) land in
+	// Todo/To Plan as a same-pass side effect — so dispatch's read in the
+	// same tick cannot pick up a ticket sweep just touched, whichever order
+	// the two run in.
+	Sweep *sweep.Deps
 }
 
 func (w WatchDeps) validate() error {
@@ -172,6 +187,14 @@ type TickResult struct {
 	// Summary is the one-line, human-readable report `wand dispatch
 	// --watch` prints on a state change.
 	Summary string
+
+	// Swept reports whether sweep acted this tick. Always false when
+	// w.Sweep is nil.
+	Swept bool
+	// SweptKind, SweptTicket and SweptReason describe what sweep did. Only
+	// meaningful when Swept.
+	SweptKind                sweep.ActedKind
+	SweptTicket, SweptReason string
 }
 
 // Tick is one poll: read, select, maybe spawn. It is non-blocking — every
@@ -182,6 +205,22 @@ type TickResult struct {
 // tea.Cmd fired on its own interval, holding the same *Pending across ticks
 // the way Watch holds one across its own.
 func (w WatchDeps) Tick(ctx context.Context, store *journal.Store, p *Pending, logDir string) (TickResult, error) {
+	var swept bool
+	var sweptKind sweep.ActedKind
+	var sweptTicket, sweptReason string
+	if w.Sweep != nil {
+		sres, err := sweep.Execute(ctx, *w.Sweep, store)
+		if err != nil {
+			return TickResult{}, fmt.Errorf("sweep: %w", err)
+		}
+		if sres.Acted != sweep.ActedNothing {
+			swept = true
+			sweptKind = sres.Acted
+			sweptTicket = sres.Candidate.Ticket
+			sweptReason = sres.Candidate.Reason
+		}
+	}
+
 	ids, err := w.Runs.List()
 	if err != nil {
 		return TickResult{}, fmt.Errorf("listing runs: %w", err)
@@ -209,9 +248,14 @@ func (w WatchDeps) Tick(ctx context.Context, store *journal.Store, p *Pending, l
 	winner, ok, _, _ := Select(todo, toPlan, laneFree)
 	if !ok {
 		return TickResult{
-			LanesUsed: used,
-			LanesCap:  w.Cov.Caps.Lanes,
-			Summary:   fmt.Sprintf("dispatch: idle (%d/%d lanes in use)", used, w.Cov.Caps.Lanes),
+			Swept:       swept,
+			SweptKind:   sweptKind,
+			SweptTicket: sweptTicket,
+			SweptReason: sweptReason,
+			LanesUsed:   used,
+			LanesCap:    w.Cov.Caps.Lanes,
+			Summary: sweptSummary(swept, sweptKind, sweptTicket, sweptReason,
+				fmt.Sprintf("idle (%d/%d lanes in use)", used, w.Cov.Caps.Lanes)),
 		}, nil
 	}
 
@@ -221,14 +265,29 @@ func (w WatchDeps) Tick(ctx context.Context, store *journal.Store, p *Pending, l
 	}
 	p.add(winner.Issue.Identifier, winner.Verb, cmd)
 	return TickResult{
-		Dispatched: true,
-		Winner:     winner,
-		PID:        cmd.Process.Pid,
-		LanesUsed:  used + 1,
-		LanesCap:   w.Cov.Caps.Lanes,
-		Summary: fmt.Sprintf("dispatch: dispatched %s %s (pid %d, %d/%d lanes now in use)",
-			winner.Verb, winner.Issue.Identifier, cmd.Process.Pid, used+1, w.Cov.Caps.Lanes),
+		Dispatched:  true,
+		Winner:      winner,
+		PID:         cmd.Process.Pid,
+		Swept:       swept,
+		SweptKind:   sweptKind,
+		SweptTicket: sweptTicket,
+		SweptReason: sweptReason,
+		LanesUsed:   used + 1,
+		LanesCap:    w.Cov.Caps.Lanes,
+		Summary: sweptSummary(swept, sweptKind, sweptTicket, sweptReason,
+			fmt.Sprintf("dispatched %s %s (pid %d, %d/%d lanes now in use)",
+				winner.Verb, winner.Issue.Identifier, cmd.Process.Pid, used+1, w.Cov.Caps.Lanes)),
 	}, nil
+}
+
+// sweptSummary folds sweep's outcome, if any, into the same one-line
+// summary dispatch's own idle/dispatched report already is — a tick that
+// both swept and dispatched reads as one line, not two.
+func sweptSummary(swept bool, kind sweep.ActedKind, ticket, reason, dispatchTail string) string {
+	if !swept {
+		return "dispatch: " + dispatchTail
+	}
+	return fmt.Sprintf("dispatch: swept %s %s (%s); %s", kind, ticket, reason, dispatchTail)
 }
 
 // spawn starts the winner's loop as a detached child: its own session, so

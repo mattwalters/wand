@@ -135,18 +135,27 @@ func (m Model) headerView() string {
 }
 
 // engageLine is the header's second line while engage mode is on: idle
-// with a countdown to the next poll, or the ticket the last poll spawned.
-// Empty while disengaged, so a cockpit nobody has turned into a scheduler
-// still reads exactly as it did before this mode existed.
+// with a countdown to the next poll, the ticket the last poll swept, the
+// ticket it dispatched, or both — a tick that did both still reads as one
+// line. Empty while disengaged, so a cockpit nobody has turned into a
+// scheduler still reads exactly as it did before this mode existed.
 func (m Model) engageLine() string {
 	if !m.engaged {
 		return ""
 	}
-	status := "idle"
+	var parts []string
 	style := m.theme.Muted
-	if m.tickResult.Dispatched {
-		status = fmt.Sprintf("dispatched %s (%s)", m.tickResult.Ticket, m.tickResult.Verb)
+	if m.tickResult.Swept {
+		parts = append(parts, fmt.Sprintf("%s %s", m.tickResult.SweptAction, m.tickResult.SweptTicket))
 		style = m.theme.Good
+	}
+	if m.tickResult.Dispatched {
+		parts = append(parts, fmt.Sprintf("dispatched %s (%s)", m.tickResult.Ticket, m.tickResult.Verb))
+		style = m.theme.Good
+	}
+	status := "idle"
+	if len(parts) > 0 {
+		status = strings.Join(parts, ", ")
 	}
 	if !m.nextPollAt.IsZero() && !m.now.IsZero() {
 		remaining := int(m.nextPollAt.Sub(m.now).Seconds())

@@ -115,6 +115,54 @@ func TestEngageToggleOnAcquiresLockAndPolls(t *testing.T) {
 	}
 }
 
+// A poll that swept something reports it distinctly from idle, both in the
+// model and in the flash — the same shape a dispatch already gets.
+func TestEngageTickReportingASweepFlashesTheAction(t *testing.T) {
+	eng := &fakeEngager{}
+	m := boardEngaged(t, &fakeBackend{}, eng)
+	m.engaged = true
+
+	next, _ := m.Update(engageTickMsg{
+		at:  time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		res: EngageResult{Swept: true, SweptTicket: "WND-1", SweptAction: "reaped"},
+	})
+	m = next.(Model)
+
+	if !m.tickResult.Swept {
+		t.Fatal("tickResult.Swept is false, want true")
+	}
+	if m.tickResult.SweptTicket != "WND-1" || m.tickResult.SweptAction != "reaped" {
+		t.Errorf("tickResult = %+v, want WND-1/reaped", m.tickResult)
+	}
+	if !m.flashOK || !strings.Contains(m.flash, "WND-1") || !strings.Contains(m.flash, "reaped") {
+		t.Errorf("flash = %q (ok=%v), want it to name the reaped ticket", m.flash, m.flashOK)
+	}
+}
+
+// A poll that both swept and dispatched in the same tick reports both,
+// rather than either clobbering the other.
+func TestEngageTickReportingASweepAndADispatchFlashesBoth(t *testing.T) {
+	eng := &fakeEngager{}
+	m := boardEngaged(t, &fakeBackend{}, eng)
+	m.engaged = true
+
+	next, _ := m.Update(engageTickMsg{
+		at: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
+		res: EngageResult{
+			Swept: true, SweptTicket: "WND-1", SweptAction: "reaped",
+			Dispatched: true, Ticket: "WND-9", Verb: "run",
+		},
+	})
+	m = next.(Model)
+
+	if !m.tickResult.Swept || !m.tickResult.Dispatched {
+		t.Fatalf("tickResult = %+v, want both Swept and Dispatched", m.tickResult)
+	}
+	if !m.flashOK || !strings.Contains(m.flash, "WND-1") || !strings.Contains(m.flash, "WND-9") {
+		t.Errorf("flash = %q (ok=%v), want it to name both WND-1 and WND-9", m.flash, m.flashOK)
+	}
+}
+
 // A poll that finds a winner reports it distinctly from idle, both in the
 // model and in the flash.
 func TestEngageTickReportingADispatchFlashesTheWinner(t *testing.T) {
@@ -222,6 +270,13 @@ func TestEngageHeaderScreens(t *testing.T) {
 	dispatched.nextPollAt = at.Add(60 * time.Second)
 	dispatched.now = at
 	tuitest.AssertScreen(t, "board-engaged-dispatched", dispatched, "")
+
+	swept := boardEngaged(t, &fakeBackend{}, &fakeEngager{})
+	swept.engaged = true
+	swept.tickResult = EngageResult{Swept: true, SweptTicket: "WND-1", SweptAction: "reaped"}
+	swept.nextPollAt = at.Add(60 * time.Second)
+	swept.now = at
+	tuitest.AssertScreen(t, "board-engaged-swept", swept, "")
 }
 
 // Quitting while engaged must release the lock before the program actually

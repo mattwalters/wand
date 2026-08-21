@@ -2,8 +2,10 @@ package dispatch
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -11,6 +13,7 @@ import (
 	"github.com/mattwalters/wand/internal/covenant"
 	"github.com/mattwalters/wand/internal/journal"
 	"github.com/mattwalters/wand/internal/linear"
+	"github.com/mattwalters/wand/internal/sweep"
 )
 
 // TestWatchSpawnsAWinnerAndStopsRedispatchingItBeforeTheJournalCatchesUp
@@ -167,6 +170,121 @@ func TestTickIdlesWhenNoLaneAndNoToPlanWinner(t *testing.T) {
 	}
 
 	waitForPending(t, p, 0)
+}
+
+// TestTickReapsADeadLeaseAndDispatchesATodoWinnerInTheSameTick proves the
+// property WND-88 is actually about: sweep and dispatch coexist correctly
+// within one Tick call, each carrying its own outcome without clobbering
+// the other's fields or Summary. This is not a lane-freeing-order test —
+// LanesUsed already excludes a dead-lease report by its lease's own
+// live-computed liveness whether or not sweep has reaped it yet (see
+// select.go's LanesUsed and select_test.go's pin of the same), so the one
+// lane here is free before Tick runs at all, sweep or no sweep.
+func TestTickReapsADeadLeaseAndDispatchesATodoWinnerInTheSameTick(t *testing.T) {
+	store := journal.New(t.TempDir())
+	repo := t.TempDir()
+
+	board := &fakeBoard{
+		todo: []linear.Issue{
+			{Identifier: "WND-2", Title: "todo winner", State: linear.IssueState{Name: "Todo"}, CreatedAt: time.Now()},
+		},
+		issues: map[string]*linear.Issue{
+			"WND-1": {ID: "id-1", Identifier: "WND-1", State: linear.IssueState{Name: "In Progress", Type: "started"}},
+		},
+		states: []linear.WorkflowState{
+			{ID: "st-needs-input", Name: "Needs Input", Type: "unstarted"},
+		},
+		comments: map[string][]string{},
+	}
+	cov := covenant.Default()
+	cov.Caps.Lanes = 1
+
+	fabricateDeadRun(t, store, "run-1", journal.Meta{Ticket: "WND-1", Verb: "run", Repo: repo})
+
+	w := WatchDeps{
+		Deps: Deps{
+			Board: board, Cov: cov, Runs: store,
+			Git: unimplementedGit{}, Hub: unimplementedHub{}, Shell: unimplementedShell{},
+			Tree: unimplementedTree{}, Workers: unimplementedWorkers{},
+			TeamKey: "WND", Repo: repo,
+		},
+		Bin:      sleeperBinary(t),
+		Interval: time.Hour,
+		Sweep: &sweep.Deps{
+			Board:   board,
+			Hub:     unimplementedHub{},
+			Runs:    store,
+			Cov:     cov,
+			TeamKey: "WND",
+			Repo:    repo,
+		},
+	}
+
+	p := NewPending()
+	logDir := t.TempDir()
+
+	res, err := w.Tick(context.Background(), store, p, logDir)
+	if err != nil {
+		t.Fatalf("tick: %v", err)
+	}
+
+	if !res.Swept || res.SweptKind != sweep.ActedReaped || res.SweptTicket != "WND-1" {
+		t.Fatalf("res = %+v, want the dead lease reaped in the same tick", res)
+	}
+	if got := board.issues["WND-1"].State.Name; got != "Needs Input" {
+		t.Errorf("WND-1 state = %q, want Needs Input: sweep's hand-back", got)
+	}
+	if len(board.comments["WND-1"]) != 1 {
+		t.Errorf("WND-1 comments = %v, want exactly one from the reap", board.comments["WND-1"])
+	}
+	rep, err := store.Inspect("run-1")
+	if err != nil {
+		t.Fatalf("inspecting run-1: %v", err)
+	}
+	if !rep.State.Ended() {
+		t.Error("run-1's journal was not ended by the reap")
+	}
+
+	if !res.Dispatched || res.Winner.Issue.Identifier != "WND-2" {
+		t.Fatalf("res = %+v, want WND-2 dispatched in the same tick", res)
+	}
+	if !strings.Contains(res.Summary, "WND-1") || !strings.Contains(res.Summary, "WND-2") {
+		t.Errorf("summary = %q, want it to name both the swept WND-1 and the dispatched WND-2", res.Summary)
+	}
+
+	waitForPending(t, p, 0)
+}
+
+// fabricateDeadRun writes a run directory by hand, the way a crashed
+// process would leave one: one run.started record and a lease, but no
+// terminal record and no held lock — the same fixture
+// internal/sweep/sweep_test.go uses to pin the same fact.
+func fabricateDeadRun(t *testing.T, store *journal.Store, id string, m journal.Meta) {
+	t.Helper()
+	dir := store.Dir(id)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	host, err := os.Hostname()
+	if err != nil || host == "" {
+		host = "unknown-host"
+	}
+	rec := journal.Record{Seq: 1, At: time.Now(), Kind: journal.KindStarted, Run: &m, Host: host, PID: 999999}
+	raw, err := json.Marshal(rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "journal.jsonl"), append(raw, '\n'), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	lease := journal.Lease{RunID: id, Ticket: m.Ticket, Host: host, PID: 999999, Taken: time.Now(), Renewed: time.Now()}
+	raw, err = json.Marshal(lease)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "lease.json"), raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func waitForPending(t *testing.T, p *Pending, want int) {

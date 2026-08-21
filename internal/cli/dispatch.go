@@ -9,8 +9,10 @@ import (
 
 	"github.com/mattwalters/wand/internal/dispatch"
 	"github.com/mattwalters/wand/internal/journal"
+	"github.com/mattwalters/wand/internal/linear"
 	"github.com/mattwalters/wand/internal/plan"
 	"github.com/mattwalters/wand/internal/run"
+	"github.com/mattwalters/wand/internal/sweep"
 	"github.com/mattwalters/wand/internal/worker"
 )
 
@@ -32,9 +34,12 @@ func newDispatchCmd() *cobra.Command {
 			"decision; an unattended selector has not.\n\n" +
 			"A repository dispatches from one process at a time — a directory and a\n" +
 			"pid, reclaimed once its holder is provably dead, never assumed. Pass\n" +
-			"--watch to poll instead of running one pass and exiting: each tick\n" +
-			"that finds capacity spawns the winner as a detached process that\n" +
-			"survives the watcher, so several lanes can be in flight at once.\n\n" +
+			"--watch to poll instead of running one pass and exiting: each tick runs\n" +
+			"a sweep pass first — the same one `wand sweep` runs standalone,\n" +
+			"reclaiming a dead lease and draining a re-plan, re-review or\n" +
+			"unresolved-thread hand-back — then, when it finds capacity, spawns the\n" +
+			"winner as a detached process that survives the watcher, so several\n" +
+			"lanes can be in flight at once.\n\n" +
 			"Exit codes are a contract a scheduler can read: 0 converged, 1 refused\n" +
 			"(nothing started, or a claim raced and lost), 2 handed back or parked\n" +
 			"(the journal has the detail), 3 locked (another dispatch already runs\n" +
@@ -71,32 +76,36 @@ func newDispatchCmd() *cobra.Command {
 // dispatchDeps builds what one pass, or one watch, needs — the same
 // wiring runRun and runPlan already assemble, shared here because
 // dispatch hands the same interfaces to run.Execute and plan.Execute
-// rather than reimplementing either.
-func dispatchDeps(cmd *cobra.Command, teamKey, harness, model, effort string) (dispatch.Deps, *journal.Store, error) {
+// rather than reimplementing either. The concrete *linear.Client is
+// returned alongside dispatch.Deps because dispatch.Deps.Board is typed as
+// the narrower dispatch.Board interface — no TeamIssuesByLabel — and
+// cannot on its own build a sweep.Deps.Board; the concrete client
+// satisfies both.
+func dispatchDeps(cmd *cobra.Command, teamKey, harness, model, effort string) (dispatch.Deps, *linear.Client, *journal.Store, error) {
 	var zero dispatch.Deps
 	cov, fileTeamKey, _, err := covenantFromCwd()
 	if err != nil {
-		return zero, nil, err
+		return zero, nil, nil, err
 	}
 	resolvedTeamKey, err := resolveTeamKey(teamKey, fileTeamKey)
 	if err != nil {
-		return zero, nil, err
+		return zero, nil, nil, err
 	}
 	cl, err := linearFromEnv()
 	if err != nil {
-		return zero, nil, err
+		return zero, nil, nil, err
 	}
 	adapter, err := worker.AdapterFor(harness)
 	if err != nil {
-		return zero, nil, err
+		return zero, nil, nil, err
 	}
 	repo, err := repoRoot("dispatch")
 	if err != nil {
-		return zero, nil, err
+		return zero, nil, nil, err
 	}
 	store, err := journal.Default()
 	if err != nil {
-		return zero, nil, err
+		return zero, nil, nil, err
 	}
 
 	return dispatch.Deps{
@@ -114,7 +123,22 @@ func dispatchDeps(cmd *cobra.Command, teamKey, harness, model, effort string) (d
 		Model:   model,
 		Effort:  effort,
 		Out:     cmd.OutOrStdout(),
-	}, store, nil
+	}, cl, store, nil
+}
+
+// sweepDepsFor builds a sweep.Deps that mirrors d's own board, team, repo
+// and covenant — the same dependencies dispatch.WatchDeps.Sweep needs to
+// run inside the same tick dispatch already does.
+func sweepDepsFor(cmd *cobra.Command, cl *linear.Client, d dispatch.Deps) *sweep.Deps {
+	return &sweep.Deps{
+		Board:   cl,
+		Hub:     run.ExecHub{},
+		Runs:    d.Runs,
+		Cov:     d.Cov,
+		TeamKey: d.TeamKey,
+		Repo:    d.Repo,
+		Out:     cmd.OutOrStdout(),
+	}
 }
 
 func runDispatchOnce(cmd *cobra.Command, teamKey, harness, model, effort string) int {
@@ -124,7 +148,7 @@ func runDispatchOnce(cmd *cobra.Command, teamKey, harness, model, effort string)
 		return dispatch.ExitRefused
 	}
 
-	d, store, err := dispatchDeps(cmd, teamKey, harness, model, effort)
+	d, _, store, err := dispatchDeps(cmd, teamKey, harness, model, effort)
 	if err != nil {
 		return fail(err)
 	}
@@ -141,7 +165,7 @@ func runDispatchOnce(cmd *cobra.Command, teamKey, harness, model, effort string)
 }
 
 func runDispatchWatch(cmd *cobra.Command, teamKey, harness, model, effort string, interval time.Duration) error {
-	d, store, err := dispatchDeps(cmd, teamKey, harness, model, effort)
+	d, cl, store, err := dispatchDeps(cmd, teamKey, harness, model, effort)
 	if err != nil {
 		return err
 	}
@@ -153,5 +177,5 @@ func runDispatchWatch(cmd *cobra.Command, teamKey, harness, model, effort string
 	ctx, stop := journal.Interruptible(cmd.Context())
 	defer stop()
 
-	return dispatch.Watch(ctx, dispatch.WatchDeps{Deps: d, Bin: bin, Interval: interval}, store)
+	return dispatch.Watch(ctx, dispatch.WatchDeps{Deps: d, Bin: bin, Interval: interval, Sweep: sweepDepsFor(cmd, cl, d)}, store)
 }
