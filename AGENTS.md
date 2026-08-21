@@ -123,6 +123,14 @@ test can hold (`bootstrap.Plan` is the pattern), no ambient time or
 randomness. When a live-API behavior costs an incident to learn, pin it in a
 test named for the lesson.
 
+**Every Linear connection carries an explicit `first:`.** Linear costs a query
+before it runs it, and a filter is not part of the estimate — an unbounded
+connection is budgeted at its default page of 50, and one nested inside it
+multiplies. That is what parked every `wand pm` run on a live workspace, and
+`TestEveryConnectionIsBounded` in `internal/linear` now enforces the rule over
+every query the package sends. A new `Client` method needs a row in that
+test's table, or the test says so.
+
 ## Process
 
 Work lives in Linear, in the **Wand** team (key `WND`). wand runs its own
