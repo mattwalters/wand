@@ -406,6 +406,9 @@ func noJudgment(k cockpit.Kind) string {
 // The ✦ is the same mark the blessing screen wears, and it is the only
 // place it appears on the board — one glyph for one act.
 func shortName(d cockpit.Disposition, status string) string {
+	if d.Lane {
+		return "clear parked"
+	}
 	switch d.Field {
 	case cockpit.FieldPriority:
 		return status
@@ -559,11 +562,15 @@ func (m Model) confirmView() string {
 	b.WriteString(style.Render(pad(gutter) + title))
 	b.WriteString("\n\n")
 
-	b.WriteString(m.theme.Body.Render(pad(gutter+2) + truncate(
-		in.Issue.Identifier+"  "+in.Issue.Title, m.width-gutter-2)))
+	subject, transition := in.Issue.Identifier+"  "+in.Issue.Title,
+		in.Issue.State.Name+" → "+m.statusName(d.Status)
+	if d.Lane {
+		subject = in.Lane.Ticket + "  " + in.Lane.Reason
+		transition = string(in.Lane.Kind) + " → cleared"
+	}
+	b.WriteString(m.theme.Body.Render(pad(gutter+2) + truncate(subject, m.width-gutter-2)))
 	b.WriteString("\n")
-	b.WriteString(m.theme.Muted.Render(fmt.Sprintf("%s%s → %s",
-		pad(gutter+2), in.Issue.State.Name, m.statusName(d.Status))))
+	b.WriteString(m.theme.Muted.Render(pad(gutter+2) + transition))
 	b.WriteString("\n\n")
 
 	b.WriteString(m.indentWrap(m.theme.Body, d.Gravity, gutter+2))
@@ -669,11 +676,15 @@ func (m Model) confirmHelp(in cockpit.Intent) string {
 		return m.theme.Muted.Render(pad(gutter)+why) + "\n" +
 			m.theme.Muted.Render(pad(gutter)+"esc back")
 	}
-	verb := "move"
-	if in.Disp.Bless {
-		verb = "bless"
+	var confirm string
+	switch {
+	case in.Disp.Lane:
+		confirm = fmt.Sprintf("enter clear parked → %s", in.Lane.Ticket)
+	case in.Disp.Bless:
+		confirm = fmt.Sprintf("enter bless %s → %s", in.Issue.Identifier, m.statusName(in.Disp.Status))
+	default:
+		confirm = fmt.Sprintf("enter move %s → %s", in.Issue.Identifier, m.statusName(in.Disp.Status))
 	}
-	confirm := fmt.Sprintf("enter %s %s → %s", verb, in.Issue.Identifier, m.statusName(in.Disp.Status))
 	return m.theme.Muted.Render(pad(gutter) + confirm + " • esc back")
 }
 

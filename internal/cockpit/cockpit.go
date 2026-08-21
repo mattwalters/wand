@@ -267,6 +267,11 @@ type Disposition struct {
 	// Bless marks the two promotions the guard forbids agents. The screen
 	// renders them differently, and that difference is the branding.
 	Bless bool
+	// Lane marks a disposition that acts on the lane a row names rather than
+	// on an issue's status — ClearParked is the only one. [Apply] and
+	// [Intent.Ready] branch on it, and the screen never asks it for a status
+	// name: a lane carries no covenant status to move to.
+	Lane bool
 }
 
 // The dispositions. Seven, and no more: five statuses plus the split between
@@ -319,6 +324,17 @@ var (
 			"moves, because a rejected plan with no reason on it leaves the next scope of " +
 			"this ticket guessing at what was wrong.",
 	}
+	// ClearParked removes the parked label from the ticket a parked lane
+	// names — the act ReportPark's own comment instructs and, until this,
+	// nothing in wand could perform. It is offered only on a LaneParked row:
+	// a lane is not a ticket for the other six dispositions, but a park's
+	// own comment names exactly one next move, and this is the door to it.
+	ClearParked = Disposition{
+		Key: "c", Name: "Clear parked label", Lane: true,
+		Gravity: "Clearing the label authorizes wand dispatch to pick this ticket up again " +
+			"on a later pass. It does not explain the park away — the comment already on " +
+			"the ticket is what a later reader has to go on.",
+	}
 )
 
 // judgments are the six Triage and Needs Input rows offer, in the order they
@@ -332,6 +348,10 @@ var judgments = []Disposition{BlessTodo, BlessScoping, ToBacklog, ToBacklogUnran
 // it gets a shorter list rather than the full six.
 var scopedJudgments = []Disposition{BlessTodo, RejectPlan}
 
+// laneJudgments is what a parked lane row offers: the one act a park's own
+// comment names.
+var laneJudgments = []Disposition{ClearParked}
+
 // Dispositions returns what a human may do to this row.
 //
 // Triage and Needs Input get all six. Scoped gets the narrower pair: bless
@@ -341,14 +361,21 @@ var scopedJudgments = []Disposition{BlessTodo, RejectPlan}
 // automation closes the ticket seconds later. A status write from here would
 // be racing that automation to say the same thing.
 //
-// Lanes get none because a lane is not a ticket. Resolving one means going
-// to the machine.
+// Lanes get none, with one exception: a parked lane offers ClearParked. A
+// lane is otherwise not a ticket, and resolving one means going to the
+// machine — but a park is a hand-back with a stated next move, and clearing
+// its label is that move, not a judgment about the run.
 func Dispositions(r Row) []Disposition {
 	switch r.Kind {
 	case KindTriage, KindNeedsInput:
 		return judgments
 	case KindScoped:
 		return scopedJudgments
+	case KindLanes:
+		if r.Lane.Kind == LaneParked {
+			return laneJudgments
+		}
+		return nil
 	default:
 		return nil
 	}
@@ -370,7 +397,10 @@ func DispositionByKey(r Row, key string) (Disposition, bool) {
 // confirmation step is the point — and so [Apply] takes one argument that
 // carries the whole act.
 type Intent struct {
-	Issue    linear.Issue
+	Issue linear.Issue
+	// Lane is what a lane disposition — ClearParked — acts on. Meaningful
+	// only when Disp.Lane is set; an issue disposition leaves it zero.
+	Lane     Lane
 	Disp     Disposition
 	Priority int    // when Disp.Field is FieldPriority
 	Text     string // the identifier or the reason
@@ -397,6 +427,12 @@ type Progress struct {
 // the confirm key does anything, and again by [Apply], because a screen is
 // not a validator.
 func (in Intent) Ready() (bool, string) {
+	if in.Disp.Lane {
+		if strings.TrimSpace(in.Lane.Ticket) == "" {
+			return false, "no lane selected"
+		}
+		return true, ""
+	}
 	switch in.Disp.Field {
 	case FieldPriority:
 		if in.Priority < 1 || in.Priority > 4 {

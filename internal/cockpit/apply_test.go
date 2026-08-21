@@ -89,6 +89,20 @@ func (f *fakeLinear) TeamIssuesByLabel(context.Context, string, string) ([]linea
 	return nil, f.record("TeamIssuesByLabel")
 }
 
+func (f *fakeLinear) LabelByName(_ context.Context, name string) (linear.Label, bool, error) {
+	if err := f.record("LabelByName " + name); err != nil {
+		return linear.Label{}, false, err
+	}
+	if name != "parked" {
+		return linear.Label{}, false, nil
+	}
+	return linear.Label{ID: "label-parked", Name: "parked"}, true, nil
+}
+
+func (f *fakeLinear) RemoveLabel(_ context.Context, issueID, labelID string) error {
+	return f.record("RemoveLabel " + issueID + " " + labelID)
+}
+
 func subject() linear.Issue {
 	return linear.Issue{
 		ID: "uuid-WND-9", Identifier: "WND-9", TeamID: "team",
@@ -382,6 +396,46 @@ func TestApplyStillPreWritesWhenNothingHasLanded(t *testing.T) {
 	}
 	if !out.Done.PreWritten {
 		t.Error("a landed pre-write was not recorded on the returned intent")
+	}
+}
+
+// ClearParked is the write ReportPark's own comment instructs and, before
+// this, nothing in wand could perform. It looks the ticket up by identifier
+// — a lane carries no UUID — resolves the label, then removes it.
+func TestApplyClearsTheParkedLabel(t *testing.T) {
+	cl := newFake()
+	_, err := Apply(context.Background(), cl, covenant.Default(),
+		Intent{Lane: Lane{Ticket: "WND-3"}, Disp: ClearParked})
+	if err != nil {
+		t.Fatalf("Apply: %v", err)
+	}
+	want := "RemoveLabel uuid-WND-3 label-parked"
+	if last := cl.calls[len(cl.calls)-1]; last != want {
+		t.Errorf("last call = %q, want %q", last, want)
+	}
+}
+
+// A lane row's identity is its ticket. Nothing selected must refuse before
+// touching the network, the same as every other disposition's missing field.
+func TestApplyRefusesToClearWithNoLaneSelected(t *testing.T) {
+	cl := newFake()
+	if _, err := Apply(context.Background(), cl, covenant.Default(), Intent{Disp: ClearParked}); err == nil {
+		t.Fatal("Apply succeeded, want a refusal for no lane selected")
+	}
+	if len(cl.calls) != 0 {
+		t.Errorf("calls = %v, want nothing written", cl.calls)
+	}
+}
+
+func TestApplyClearParkRefusesAnUnknownTicket(t *testing.T) {
+	cl := newFake()
+	_, err := Apply(context.Background(), cl, covenant.Default(),
+		Intent{Lane: Lane{Ticket: "WND-404"}, Disp: ClearParked})
+	if err == nil {
+		t.Fatal("Apply succeeded, want a refusal for a ticket that does not exist")
+	}
+	if i := indexOf(cl.calls, "RemoveLabel"); i >= 0 {
+		t.Errorf("calls = %v, want nothing written", cl.calls)
 	}
 }
 

@@ -265,6 +265,45 @@ func TestBlessWritesAndDropsTheRow(t *testing.T) {
 	}
 }
 
+// The key ReportPark's own comment names — clear the parked label — must
+// exist somewhere in wand, and this is it: WND-33 is the sample board's
+// parked lane, the disposition writes through the same read-only-free path
+// every other judgment does, and the lane leaves the board the same way a
+// judged issue does.
+func TestClearParkedWritesAndDropsTheLane(t *testing.T) {
+	back := &fakeBackend{}
+	m, _ := apply(t, board(t, back), "j,j,j,j,j,j")
+	row, ok := m.current()
+	if !ok || !row.IsLane() || row.Lane.Ticket != "WND-33" {
+		t.Fatalf("row under cursor = %+v, want the WND-33 parked lane", row)
+	}
+
+	m, cmd := apply(t, m, "c,enter")
+	if !m.busy {
+		t.Error("model is not busy after confirming; the write should be in flight")
+	}
+	m = run(t, m, cmd)
+
+	if len(back.applied) != 1 {
+		t.Fatalf("applied %d intents, want 1", len(back.applied))
+	}
+	got := back.applied[0]
+	if got.Lane.Ticket != "WND-33" || !got.Disp.Lane {
+		t.Errorf("applied %+v, want a lane disposition on WND-33", got)
+	}
+	if m.state != stateBoard {
+		t.Errorf("state = %v, want stateBoard", m.state)
+	}
+	for _, row := range m.rows() {
+		if row.IsLane() && row.Lane.Ticket == "WND-33" {
+			t.Error("the WND-33 lane is still on the board after its park was cleared")
+		}
+	}
+	if !m.flashOK || m.flash == "" {
+		t.Errorf("flash = %q (ok=%v), want a success message", m.flash, m.flashOK)
+	}
+}
+
 // A refused write must not throw away what the user typed: the commonest
 // refusal is a mistyped identifier, and the fix is one keystroke away only
 // if the screen is still holding the text.
@@ -479,6 +518,8 @@ func TestScreens(t *testing.T) {
 	}{
 		{golden: "board", script: ""},
 		{golden: "board-lane-selected", script: "j,j,j,j,j"},
+		{golden: "board-parked-selected", script: "j,j,j,j,j,j"},
+		{golden: "clear-parked", script: "j,j,j,j,j,j,c"},
 		{golden: "detail", script: "j,enter"},
 		{golden: "detail-lane", script: "j,j,j,j,j,enter"},
 		{golden: "detail-scoped", script: "j,j,enter"},

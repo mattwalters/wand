@@ -1,0 +1,10 @@
+  Clear parked label
+
+    WND-33  the worktree was dirty at handoff; refusing to park noise into the …
+    parked → cleared
+
+    Clearing the label authorizes wand dispatch to pick this ticket up again on
+    a later pass. It does not explain the park away — the comment already on the
+    ticket is what a later reader has to go on.
+
+  enter clear parked → WND-33 • esc back
