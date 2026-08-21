@@ -166,19 +166,21 @@
       
 
 <h1 class="cmd">wand plan</h1>
-<p><code>plan</code> is the research orchestrator. It sends a cold, read-only scout over
-your repository to research one ticket, validates what the scout hands back,
-and writes the result onto the ticket: the plan into the description, the
-approaches and their trade-offs as a comment, the estimate, and Scoped
-last.</p>
+<p><code>plan</code> is the research orchestrator. It claims the ticket into In Planning
+— before anything else happens, the same claim-before-filesystem ordering
+<code>wand run</code> uses for Todo and In Progress — then sends a cold, read-only
+scout over your repository to research it, validates what the scout hands
+back, and writes the result onto the ticket: the plan into the description,
+the approaches and their trade-offs as a comment, the estimate, and Plan
+Review last.</p>
 <p>It is the smallest orchestrator wand has — no worktree, no branch, no PR, no
 CI — and the one to run first if you want to see the machinery work before
 you let it write code.</p>
 <h2 id="synopsis">Synopsis</h2>
 <pre tabindex="0"><code>wand plan &lt;identifier&gt; [--interactive] [--harness NAME] [--model M] [--effort E]
-</code></pre><h2 id="the-ticket-must-be-in-scoping">The ticket must be in Scoping</h2>
+</code></pre><h2 id="the-ticket-must-be-in-to-plan">The ticket must be in To Plan</h2>
 <p>Blessing research is a human act, the same way blessing building is: a
-ticket in Scoping is one you have decided is worth spending a scout on.
+ticket in To Plan is one you have decided is worth spending a scout on.
 <code>plan</code> refuses anything else, and refuses a <code>human-only</code> or <code>parked</code>
 ticket outright — a plan run is a full cold research pass, and re-buying one
 that already stopped is the most expensive way to learn nothing.</p>
@@ -197,12 +199,12 @@ merged and never appended to.</li>
 every approach with its trade-off, which one is recommended and why,
 what the plan rests on, what is still open, and the ask.</li>
 <li><strong>The estimate</strong>, on the team&rsquo;s scale.</li>
-<li><strong>Scoped</strong>.</li>
+<li><strong>Plan Review</strong>.</li>
 </ol>
 <p>Each deliverable lands before the transition that advertises it. A ticket in
-Scoped promises a finished plan to judge, so the status move is last, and if
-anything before it fails the ticket stays in Scoping — carrying whatever
-did land, and nothing claiming to be finished.</p>
+Plan Review promises a finished plan to judge, so the status move is last,
+and if anything before it fails the ticket stays in In Planning — carrying
+whatever did land, and nothing claiming to be finished.</p>
 <p>The comment comes before the estimate for the same reason: a ticket carrying
 the argument for an estimate it does not have is recoverable, while a ticket
 carrying a number nothing explains is a number nobody can weigh.</p>
@@ -282,17 +284,21 @@ finished paying for.</p>
 <p>The footer of the options comment says which stages ran, so you can tell a
 first draft from a plan that survived a critic and an interview.</p>
 <h2 id="one-plan-run-per-ticket">One plan run per ticket</h2>
-<p><code>wand plan</code> takes a per-ticket lock for the life of the process. <code>wand run</code>
-does not need one — it claims its ticket out of Todo, so the board is its
-mutex — but a plan run&rsquo;s ticket sits in Scoping from the first read to the
-last write, so nothing on the board can keep a second plan run out. Two plan
-runs over one ticket would write two plans into one fenced region and argue
-two recommendations at a reader who cannot tell which the estimate belongs
-to.</p>
-<p>The lock is a file in wand&rsquo;s state directory, released by the operating
-system when the process dies, however it dies. It is machine-local: it
-serializes the processes on your machine and says nothing about anyone
-else&rsquo;s.</p>
+<p><code>wand plan</code> claims its ticket out of To Plan into In Planning before it
+touches anything else, the same way <code>wand run</code> claims its ticket out of
+Todo into In Progress — the board is the mutex on both sides now. A second
+plan run over the same ticket finds it already In Planning and refuses,
+the same way a second <code>wand claim</code> finds a ticket already In Progress and
+refuses. Two plan runs over one ticket would otherwise write two plans
+into one fenced region and argue two recommendations at a reader who
+cannot tell which the estimate belongs to.</p>
+<p>This is a deliberate reversal of the topology <code>wand plan</code> originally
+shipped with, which held its ticket in a single unstarted status (Scoping)
+for the whole research phase and took a machine-local per-ticket lock
+instead of a claim, because it had no board move to lose a race on. That
+lock could never stop two machines planning one ticket, where a board
+claim can — which is why it is gone now that research has a started
+status of its own to claim.</p>
 <h2 id="flags">Flags</h2>
 <table>
 	<thead>
@@ -332,11 +338,11 @@ else&rsquo;s.</p>
 	<tbody>
 			<tr>
 					<td><code>0</code></td>
-					<td>Planned. The plan, the options and the estimate are on the ticket, and it is in Scoped for a human to judge.</td>
+					<td>Planned. The plan, the options and the estimate are on the ticket, and it is in Plan Review for a human to judge.</td>
 			</tr>
 			<tr>
 					<td><code>1</code></td>
-					<td>The run never started: no API key, the ticket is not in Scoping, <code>--interactive</code> with no terminal, another process holds the ticket. Nothing was written.</td>
+					<td>The run never started: no API key, the ticket is not in To Plan, <code>--interactive</code> with no terminal, the claim raced and lost. Nothing was written.</td>
 			</tr>
 			<tr>
 					<td><code>2</code></td>
@@ -360,8 +366,9 @@ under <code>$XDG_STATE_HOME/wand/runs</code> (or <code>WAND_STATE_DIR</code>), o
 repository. The journal is written before the ticket is, deliberately — a
 park has to be reachable when Linear itself is what failed. Once it is
 journaled, the ticket gets the same sentence as a comment and the <code>parked</code>
-label, best-effort: a plan run never owns its ticket&rsquo;s status, so the mark is
-a label and the ticket stays in Scoping where a human put it.</p>
+label, best-effort: a plan run never advances its own status past the claim
+on a park, so the mark is a label and the ticket stays In Planning, claimed,
+where the run left it.</p>
 <h3 id="the-failure-that-retries-instead">The failure that retries instead</h3>
 <p>A scout that died of infrastructure — a provider error, a host suspended
 mid-response — does not park on the first try. When the harness&rsquo;s own
@@ -385,12 +392,13 @@ runs before the harness starts, and the isolation is proven per adapter by
 wand&rsquo;s conformance suite.</p>
 <h2 id="examples">Examples</h2>
 <div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand plan WND-42
-</span></span></code></pre></div><pre tabindex="0"><code>planning WND-42 (Scoping), journaling to ~/.local/state/wand/runs/WND-42-20260819T120000Z
+</span></span></code></pre></div><pre tabindex="0"><code>claimed WND-42: In Planning
+planning WND-42, journaling to ~/.local/state/wand/runs/WND-42-20260819T120000Z
 phase scout: spawning a cold worker (claude-code)
 wrote the plan into the ticket&#39;s description
 posted the options comment
 set the estimate to 3
-run WND-42-20260819T120000Z ended: converged — scoped: …
+run WND-42-20260819T120000Z ended: converged — plan review: …
 </code></pre><p>Grilled first:</p>
 <div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand plan WND-42 --interactive
 </span></span></code></pre></div><h2 id="see-also">See also</h2>
@@ -407,7 +415,7 @@ description and every comment, in one piece.</p>
       <nav id="TableOfContents">
   <ul>
     <li><a href="#synopsis">Synopsis</a></li>
-    <li><a href="#the-ticket-must-be-in-scoping">The ticket must be in Scoping</a></li>
+    <li><a href="#the-ticket-must-be-in-to-plan">The ticket must be in To Plan</a></li>
     <li><a href="#what-it-writes-and-in-what-order">What it writes, and in what order</a></li>
     <li><a href="#nothing-is-written-unless-the-whole-handoff-is-valid">Nothing is written unless the whole handoff is valid</a>
       <ul>

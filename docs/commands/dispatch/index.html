@@ -192,12 +192,12 @@ retried once; a holder on another host is never assumed dead.</li>
 lane, up to <code>caps.lanes</code>. Read-only: a run whose lease says its holder
 is provably dead does not hold a lane, whatever phase its journal last
 opened — the same [journal.Report.Zombie] proof <code>wand sweep</code> acts on.</li>
-<li><strong>Read and rank.</strong> Todo and Scoping, each ranked and vetted the way
+<li><strong>Read and rank.</strong> Todo and To Plan, each ranked and vetted the way
 <code>wand queue</code> ranks Todo.</li>
 <li><strong>Pick the winner.</strong> The highest-ranked, vetted Todo issue when a lane
 is free, through <code>wand run</code>; otherwise the highest-ranked, vetted
-Scoping issue, through <code>wand plan</code>. A plan run needs no lane, so an
-eligible Scoping ticket dispatches even at full lane occupancy —
+To Plan issue, through <code>wand plan</code>. A plan run needs no lane, so an
+eligible To Plan ticket dispatches even at full lane occupancy —
 research is never starved by full lane occupancy — and it is also what
 a pass falls back to when Todo simply has nothing startable.</li>
 <li><strong>Run it.</strong> One ticket per pass, to one of <code>run</code>&rsquo;s or <code>plan</code>&rsquo;s own
@@ -257,7 +257,7 @@ single-shot pass can reach gets its own code:</p>
 			</tr>
 			<tr>
 					<td><code>4</code></td>
-					<td>Nothing to do: Todo and Scoping are both empty or fully vetted out.</td>
+					<td>Nothing to do: Todo and To Plan are both empty or fully vetted out.</td>
 			</tr>
 			<tr>
 					<td><code>5</code></td>
@@ -308,7 +308,7 @@ each pass it dispatches is a detached child, not this process&rsquo;s own exit.<
 the repository — which is also where the team key comes from, unless
 <code>--team-key</code> overrides it.</p>
 <p><code>caps.lanes</code> in the covenant sets how many <code>wand run</code> loops this repository
-runs at once (default <code>1</code>); a Scoping ticket never counts against it.</p>
+runs at once (default <code>1</code>); a To Plan ticket never counts against it.</p>
 <h2 id="see-also">See also</h2>
 <p><a href="../run/"><code>wand run</code></a> and <a href="../plan/"><code>wand plan</code></a> are the two
 orchestrators a winner runs through; <a href="../sweep/"><code>wand sweep</code></a> is

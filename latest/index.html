@@ -67,7 +67,7 @@ close, and what only a human may decide.</div>
 </span></span></span><span class="line"><span class="cl"><span class="go">› WND-42  doctor prints an empty drift section on a clean board              Low
 </span></span></span><span class="line"><span class="cl"><span class="go">  WND-41  guard: a raw state UUID is not matched
 </span></span></span><span class="line"><span class="cl"><span class="err">
-</span></span></span><span class="line"><span class="cl"><span class="go">  Scoped  1 to bless
+</span></span></span><span class="line"><span class="cl"><span class="go">  Plan Review  1 to bless
 </span></span></span><span class="line"><span class="cl"><span class="go">  WND-44  cockpit: a fifth queue for plans awaiting blessing              Urgent
 </span></span></span><span class="line"><span class="cl"><span class="err">
 </span></span></span><span class="line"><span class="cl"><span class="go">  Needs Input  1 to answer
@@ -80,7 +80,7 @@ close, and what only a human may decide.</div>
 </span></span></span><span class="line"><span class="cl"><span class="go">  stuck    WND-36  held by pid 48213 on studio.local, which is gone; the run …
 </span></span></span><span class="line"><span class="cl"><span class="go">  parked   WND-33  the worktree was dirty at handoff; refusing to park noise …
 </span></span></span><span class="line"><span class="cl"><span class="err">
-</span></span></span><span class="line"><span class="cl"><span class="go">  judge  t ✦Todo  s ✦Scoping  b Backlog  u unranked  d duplicate  x cancel
+</span></span></span><span class="line"><span class="cl"><span class="go">  judge  t ✦Todo  s ✦To Plan  b Backlog  u unranked  d duplicate  x cancel
 </span></span></span><span class="line"><span class="cl"><span class="go">  ↑/k ↓/j move • enter open • q quit
 </span></span></span></code></pre></div><p>One screen answering one question — <em>what is waiting on me?</em> — and the one
 place in wand where a human blesses work. Everything on it is a decision an
@@ -95,12 +95,12 @@ and <code>plan</code> and <code>run</code> are the first two orchestrators. <cod
 last one, is not built yet.</p>
 </blockquote>
 <p><strong>A covenant, not a config file.</strong> The state graph — Triage → Backlog →
-Scoping → Scoped → Todo → Needs Input → In Progress → In Review → Done — is
+To Plan → In Planning → Plan Review → Todo → Needs Input → In Progress → In Review → Done — is
 wand&rsquo;s opinion, gofmt-style. A checked-in <code>wand.toml</code> carries the <em>parameters</em> of
 the machine — status names, caps, commands — never its shape.
 <a href="docs/covenant/">The covenant</a> is the reasoning behind every state in it.</p>
 <p><strong>A guard that outranks the agent.</strong> Promoting to Todo blesses building,
-promoting to Scoping blesses research, and Done, Canceled and Duplicate
+promoting to To Plan blesses research, and Done, Canceled and Duplicate
 close a ticket. Those are a human&rsquo;s call, so
 <a href="docs/commands/guard/"><code>wand guard</code></a> refuses them — as a harness hook, on the
 tool call, before the write happens.</p>
@@ -110,9 +110,10 @@ tool call, before the write happens.</p>
 prose, where it was followed only sometimes: the question is posted before
 the ticket parks on it, the evidence before the demotion, the duplicate
 search before the filing.</p>
-<p><strong>Orchestrators that hand back.</strong> <a href="docs/commands/plan/"><code>wand plan</code></a> sends
-a cold, read-only scout over one ticket and writes a plan plus the argued
-options a human blesses it on — ending at Scoped, never at Todo.
+<p><strong>Orchestrators that hand back.</strong> <a href="docs/commands/plan/"><code>wand plan</code></a> claims
+a ticket into In Planning, sends a cold, read-only scout over it, and writes
+a plan plus the argued options a human blesses it on — ending at Plan
+Review, never at Todo.
 <a href="docs/commands/run/"><code>wand run</code></a> takes a ticket a human <em>has</em> blessed and
 drives it through implement → CI → review → revise. Neither ever blesses
 its own work.</p>

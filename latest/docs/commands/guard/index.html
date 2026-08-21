@@ -201,8 +201,8 @@ because the connector id changes when Linear is reconnected;</li>
 					<td>Todo blesses work — the gate between &ldquo;written down&rdquo; and &ldquo;a bot may act on this unattended&rdquo;.</td>
 			</tr>
 			<tr>
-					<td><code>Scoping</code></td>
-					<td>The same blessing one rung lower: a ticket in Scoping is one a dispatcher may spend a scout on unattended.</td>
+					<td><code>To Plan</code></td>
+					<td>The same blessing one rung lower: a ticket in To Plan is one a dispatcher may spend a scout on unattended.</td>
 			</tr>
 			<tr>
 					<td><code>Done</code>, <code>Canceled</code>, <code>Cancelled</code>, <code>Duplicate</code></td>
@@ -213,17 +213,20 @@ because the connector id changes when Linear is reconnected;</li>
 <p>Matching is on the trimmed, whitespace-collapsed, lowercased value, and
 covers Linear&rsquo;s state <em>types</em> as well as its names: <code>completed</code> and
 <code>canceled</code> block, and <code>unstarted</code> blocks with a message asking the caller
-to name the status instead, since it covers Todo, Needs Input, Scoping and
-Scoped alike.</p>
+to name the status instead, since it covers Todo, Needs Input, To Plan and
+Plan Review alike.</p>
 <p>Every status an agent legitimately sets passes: <strong>In Progress</strong>, <strong>In
-Review</strong>, <strong>Needs Input</strong>, <strong>Scoped</strong>, <strong>Backlog</strong>, <strong>Triage</strong>. So does
-every write that is not a status move — assigning, relabelling, editing a
-description. A guard that blocked ordinary work would be routed around
-within a day.</p>
-<p>Note the direction. Moving a ticket <em>into</em> Scoping is a promotion and is
-refused; moving one <em>out</em> of Scoping is what every plan run ends with,
-either way it ends — to Needs Input, a blocking question, or to Scoped, a
-finished plan — and both are allowed. The guard sees only the destination.</p>
+Review</strong>, <strong>Needs Input</strong>, <strong>In Planning</strong>, <strong>Plan Review</strong>, <strong>Backlog</strong>,
+<strong>Triage</strong>. So does every write that is not a status move — assigning,
+relabelling, editing a description. A guard that blocked ordinary work
+would be routed around within a day.</p>
+<p>Note the direction. Moving a ticket <em>into</em> To Plan is a promotion and is
+refused; moving one <em>out</em> of To Plan is the claim <code>wand plan</code> makes into
+In Planning before anything else — the same WND-47 rule restated: agents
+may enter a state they do not bless, only humans may leave one that
+authorizes something. From In Planning, a plan run ends either way it
+ends — to Needs Input, a blocking question, or to Plan Review, a finished
+plan — and both are allowed. The guard sees only the destination.</p>
 <h3 id="the-block-message-is-most-of-the-value">The block message is most of the value</h3>
 <p>A blocked agent that is not told where to go next improvises, which is how
 tickets reach Todo in the first place. Each refusal names the correct

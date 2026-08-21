@@ -184,7 +184,7 @@ wand ui --dump-screen [--script KEYS] [--width N] [--height N]
 › WND-42  doctor prints an empty drift section on a clean board              Low
   WND-41  guard: a raw state UUID is not matched
 
-  Scoped  1 to bless
+  Plan Review  1 to bless
   WND-44  cockpit: a fifth queue for plans awaiting blessing              Urgent
 
   Needs Input  1 to answer
@@ -197,7 +197,7 @@ wand ui --dump-screen [--script KEYS] [--width N] [--height N]
   stuck    WND-36  held by pid 48213 on studio.local, which is gone; the run …
   parked   WND-33  the worktree was dirty at handoff; refusing to park noise …
 
-  judge  t ✦Todo  s ✦Scoping  b Backlog  u unranked  d duplicate  x cancel
+  judge  t ✦Todo  s ✦To Plan  b Backlog  u unranked  d duplicate  x cancel
   ↑/k ↓/j move • enter open • r refresh • q quit
 </code></pre><p>Each of the five is a queue nothing drains on its own, and each is
 invisible until something puts it on one screen:</p>
@@ -208,16 +208,16 @@ order <a href="../queue/"><code>wand queue</code></a> ranks work, so the ticket 
 is the one an agent starts first.</p>
 </li>
 <li>
-<p><strong>Scoped</strong> — tickets carrying a finished plan, waiting on the judgment
-that either blesses it into Todo or sends it back. Opening a row shows
-the plan itself — the marker-fenced region <a href="../plan/"><code>wand plan</code></a>
+<p><strong>Plan Review</strong> — tickets carrying a finished plan, waiting on the
+judgment that either blesses it into Todo or sends it back. Opening a row
+shows the plan itself — the marker-fenced region <a href="../plan/"><code>wand plan</code></a>
 wrote into the description — not the ticket&rsquo;s original body. See
 <a href="#blessing-a-plan">Blessing a plan</a> below.</p>
 </li>
 <li>
 <p><strong>Needs Input</strong> — runs parked on a question: a plan run that judged the
 ticket&rsquo;s premise wrong, or a run that hands back. It means one thing —
-answer me — never &ldquo;a plan is ready to bless,&rdquo; which is Scoped&rsquo;s job.</p>
+answer me — never &ldquo;a plan is ready to bless,&rdquo; which is Plan Review&rsquo;s job.</p>
 </li>
 <li>
 <p><strong>Ready for human</strong> — every open issue carrying the <code>ready-for-human</code>
@@ -284,7 +284,7 @@ action. A run that is actually stuck this way is <em>also</em> a <code>stuck</co
 says a person has to do something about it, and a run can be both at once
 until sweep reaps it.</p>
 <h2 id="blessing">Blessing</h2>
-<p>Promoting a ticket to <strong>Todo</strong> or <strong>Scoping</strong> is the transition
+<p>Promoting a ticket to <strong>Todo</strong> or <strong>To Plan</strong> is the transition
 <a href="../guard/"><code>wand guard</code></a> refuses everywhere else, because it hands out
 authorization an agent does not have. The cockpit is the one place a person
 grants it — and it is a moment, not a keystroke:</p>
@@ -306,7 +306,7 @@ disposition itself cannot know: an unranked ticket promoted to Todo sorts
 behind everything ranked, so the blessing works and the work still never
 starts.</p>
 <h2 id="blessing-a-plan">Blessing a plan</h2>
-<p>Opening a Scoped row shows the plan <a href="../plan/"><code>wand plan</code></a> wrote — the
+<p>Opening a Plan Review row shows the plan <a href="../plan/"><code>wand plan</code></a> wrote — the
 marker-fenced region of the description, and nothing else. Not the ticket&rsquo;s
 original body, and not the scout&rsquo;s argued-options comment (the approaches it
 weighed, the trade-offs, the estimate): that stays in Linear, one click away
@@ -314,7 +314,7 @@ from a ticket you already have open, and this screen exists to put your
 judgment on the plan itself rather than the argument for it.</p>
 <pre tabindex="0"><code> WND-44  cockpit: a fifth queue for plans awaiting blessing
 
-  status    Scoped
+  status    Plan Review
   priority  Urgent
   assignee  Matt Walters
 
@@ -350,7 +350,7 @@ one did not land instead of guessing:</p>
 <pre tabindex="0"><code>  Backlog, with reason
 
     WND-44  cockpit: a fifth queue for plans awaiting blessing
-    Scoped → Backlog
+    Plan Review → Backlog
 
     Backlog is the pool. The reason is posted as a comment before the status
     moves, because a rejected plan with no reason on it leaves the next plan run
@@ -360,11 +360,11 @@ one did not land instead of guessing:</p>
 
   enter move WND-44 → Backlog • esc back
 </code></pre><h2 id="the-seven-judgments">The seven judgments</h2>
-<p>Triage and Needs Input rows get all six of the first table below. A Scoped
-row gets only two — bless, or reject with a reason — which is <code>t</code> and <code>b</code>
-from the same table, but pointed at a plan rather than a raw ticket. Ready-
-for-human and lane rows offer none, and the screen says why rather than
-leaving a key to do nothing.</p>
+<p>Triage and Needs Input rows get all six of the first table below. A Plan
+Review row gets only two — bless, or reject with a reason — which is <code>t</code>
+and <code>b</code> from the same table, but pointed at a plan rather than a raw
+ticket. Ready-for-human and lane rows offer none, and the screen says why
+rather than leaving a key to do nothing.</p>
 <table>
 	<thead>
 			<tr>
@@ -379,13 +379,13 @@ leaving a key to do nothing.</p>
 			<tr>
 					<td><code>t</code></td>
 					<td>Bless → Todo</td>
-					<td>Triage, Needs Input, Scoped</td>
+					<td>Triage, Needs Input, Plan Review</td>
 					<td>—</td>
 					<td>status</td>
 			</tr>
 			<tr>
 					<td><code>s</code></td>
-					<td>Bless → Scoping</td>
+					<td>Bless → To Plan</td>
 					<td>Triage, Needs Input</td>
 					<td>—</td>
 					<td>status</td>
@@ -421,7 +421,7 @@ leaving a key to do nothing.</p>
 			<tr>
 					<td><code>b</code></td>
 					<td>Backlog, with reason</td>
-					<td>Scoped</td>
+					<td>Plan Review</td>
 					<td>the reason</td>
 					<td>comment, <strong>then</strong> status</td>
 			</tr>
@@ -430,7 +430,7 @@ leaving a key to do nothing.</p>
 <p><code>enter</code> confirms, <code>esc</code> goes back. The unranked Backlog move sends an
 explicit <code>0</code> rather than leaving the field alone: carrying the old rank into
 the pool is the opposite of the judgment &ldquo;worth keeping, not worth ranking&rdquo;.</p>
-<p>Duplicate, Cancel and the Scoped row&rsquo;s Backlog write their evidence <em>before</em>
+<p>Duplicate, Cancel and the Plan Review row&rsquo;s Backlog write their evidence <em>before</em>
 the status moves, for the same reason <a href="../handback/"><code>wand handback</code></a> posts
 its question first. The status write is what ends the ticket&rsquo;s visibility,
 so anything a reader will later need has to already be on it. A crash
@@ -447,11 +447,11 @@ through the only screen that can complete it.</p>
 <p>Every status is named by what it <em>means</em>, so a covenant that renames <code>todo</code>
 to <code>Ready</code> gets a screen that says <code>→ Ready</code>.</p>
 <h2 id="engage-mode">Engage mode</h2>
-<p>Press <code>e</code> to engage. While engaged, the cockpit polls Todo and Scoping on
+<p>Press <code>e</code> to engage. While engaged, the cockpit polls Todo and To Plan on
 <code>--interval</code> (default <code>1m</code>) exactly the way <code>wand dispatch --watch</code> (see
 <a href="../dispatch/"><code>wand dispatch</code></a>) does — because it <em>is</em> that mechanism,
 reused rather than reimplemented: each poll counts lanes, ranks
-and vets Todo and Scoping, and when a winner exists spawns it as a
+and vets Todo and To Plan, and when a winner exists spawns it as a
 <strong>detached child process</strong> through <code>wand run</code> or <code>wand scope</code>, the same way
 <code>--watch</code> does. That child survives the cockpit: closing the UI, or the
 whole terminal it runs in, never kills work already spawned. Press <code>e</code>
