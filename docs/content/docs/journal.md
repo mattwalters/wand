@@ -51,6 +51,8 @@ On a `phase.ended` record, `detail` is a JSON object shaped like this
 | `tokens_out` | number | omitted when the harness reported no usage |
 | `wall_clock` | string | always — a Go duration (`"1m2.5s"`) |
 | `diff_stat` | string | `run` only; omitted when there is no diff yet |
+| `attempt` | number | omitted when `1` — see "A retried phase and review rounds" below |
+| `transient` | bool | omitted when `false`; set on a failing record the harness itself reported as infrastructure rather than the work |
 
 Two rules hold for every reader of this schema:
 
@@ -62,9 +64,26 @@ Two rules hold for every reader of this schema:
   on the outer record: `kind: "run.ended"` carries `outcome`
   (`converged`/`handed_back`/`parked`) and `reason`, and every
   `phase.started`/`phase.ended` pair carries its own `round`. A reader
-  wanting "how many review rounds did this run take" counts `phase.ended`
-  records where `phase == "review"`, rather than looking for a count
-  inside `detail`.
+  wanting "how many review rounds did this run take" counts *distinct
+  rounds* where `phase == "review"` — not `phase.ended` records — for the
+  reason the next section explains.
+
+## A retried phase and review rounds
+
+A phase that fails with an error the harness itself reported as
+infrastructure rather than the work — a provider error, a host that
+suspended mid-response — respawns at the *same* round, up to a capped
+number of retries. Every attempt writes its own `phase.started`/`phase.ended`
+pair, so one round can carry more than one `phase.ended` record, and
+`attempt` (above `1` only after a retry) is what tells them apart.
+
+A reader that counts raw `phase.ended` records where `phase == "review"` as
+the review-round count over-counts: two attempts at round 1 read as two
+rounds instead of one. The correct read groups `phase.ended` records by
+`(phase, round)` first and counts the *groups* — `wand stats`' per-phase
+report does this, summing each group's `tokens_in`/`tokens_out`/`wall_clock`
+across every attempt (a retried attempt still spent real tokens and
+wall-clock) while counting the round once.
 
 ## Why token counts come from the harness, not the worker
 
@@ -78,3 +97,10 @@ not the worker's. Neither shape is a versioned, guaranteed-stable API, so a
 parse miss is designed to degrade to "absent" rather than to error the run
 or to guess: a metrics gap costs a reader a blank cell, where a wrong
 number costs it a wrong conclusion.
+
+## See also
+
+[`wand stats`](../commands/stats/) aggregates this schema natively — token
+velocity, a per-harness x per-phase breakdown, convergence, and per-ticket
+totals. [Query the ledger](../query-the-ledger/) reads the same files
+directly with `jq` and DuckDB, for anything `wand stats` does not report.
