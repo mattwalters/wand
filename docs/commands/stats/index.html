@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wand stats · wand</title>
+  <link rel="stylesheet" href="../../../style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="../../../">wand</a>
+    
+    <a class="nav here" href="../../../docs/">Docs</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/mattwalters/wand">GitHub</a>
+    <span class="version">
+      latest
+      <select id="version-picker" hidden aria-label="Documentation version"></select>
+    </span>
+  </header>
+  
+  <div class="wrap">
+    
+    <nav class="sidenav">
+      
+      
+      <h5>Start</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/">Overview</a>
+      
+      <h5>Doctrine</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/covenant/">The covenant</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/architecture/">No daemon</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/topology/">The single writer</a>
+      
+      <h5>Commands</h5>
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/">All commands</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/init/" class="mono">wand init</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/doctor/" class="mono">wand doctor</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/guard/" class="mono">wand guard</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/queue/" class="mono">wand queue</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/ticket/" class="mono">wand ticket</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/claim/" class="mono">wand claim</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/handback/" class="mono">wand handback</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/abandon/" class="mono">wand abandon</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/file/" class="mono">wand file</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/plan/" class="mono">wand plan</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/run/" class="mono">wand run</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/ui/" class="mono">wand ui</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../../docs/commands/version/" class="mono">wand version</a>
+      
+    </nav>
+    
+    <main>
+      
+
+<h1 class="cmd">wand stats</h1>
+<p><code>stats</code> reads every run in the local journal store and prints four plain-text
+reports. It is read-only, native Go, and reads nothing but the journal: no
+<code>LINEAR_API_KEY</code>, no network, no new dependency. See
+<a href="../../journal/">the run journal</a> for the record schema it reads, and
+<a href="../../query-the-ledger/">query the ledger</a> for reading the same files
+yourself with <code>jq</code> or DuckDB.</p>
+<h2 id="synopsis">Synopsis</h2>
+<pre tabindex="0"><code>wand stats [--since &lt;duration&gt;]
+</code></pre><h2 id="what-it-prints">What it prints</h2>
+<h3 id="token-velocity">Token velocity</h3>
+<p>Tokens summed by UTC calendar day, oldest first — the &ldquo;am I laying down
+tokens consistently?&rdquo; curve. <code>--since</code> limits this report to phase-rounds
+that closed within that duration of now; every other report always reads
+the whole history.</p>
+<h3 id="harness-x-phase">Harness x phase</h3>
+<p>One row per (harness, phase) pair: how many rounds it took, and the tokens
+and wall-clock they cost. Rows are ordered by the phase&rsquo;s place in its
+pipeline, then harness name alphabetically — never by a metric. This is the
+operator&rsquo;s own telemetry, not a leaderboard, and the ordering is deliberate:
+nothing here is meant to be read as &ldquo;harness A beat harness B&rdquo;.</p>
+<p>A round counts once however many attempts it took to close — a phase
+retried after a transient failure still closes at the same round (see
+<a href="../../journal/#a-retried-phase-and-review-rounds">the run journal</a>) — so
+this table is also where review-round counts live: the row where
+<code>phase == review</code> is <code>wand run</code>&rsquo;s review-round count for that harness.</p>
+<h3 id="convergence-harness-x-verb">Convergence (harness x verb)</h3>
+<p>One row per harness, one column per verb (<code>run</code>, <code>plan</code>): how many of that
+harness&rsquo;s ended runs converged, out of how many ended. A run still in
+progress has no verdict yet and is not counted. Alphabetical harness order,
+no ranking, no highlighting — the same not-a-leaderboard rule as the phase
+table.</p>
+<h3 id="per-ticket-totals">Per-ticket totals</h3>
+<p>One row per ticket: tokens and wall-clock summed across every run recorded
+against it (a re-planned or re-run ticket keeps every attempt), and a list
+of each run&rsquo;s id and outcome.</p>
+<h3 id="skipped-runs">Skipped runs</h3>
+<p>A run whose journal fails to read or fails to replay is dropped from every
+report and named in a <code>skipped</code> line at the end, rather than failing the
+whole command.</p>
+<h2 id="flags">Flags</h2>
+<table>
+	<thead>
+			<tr>
+					<th>Flag</th>
+					<th>Description</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>--since &lt;duration&gt;</code></td>
+					<td>A Go duration (<code>168h</code>, <code>72h</code>, <code>30m</code>) bounding the velocity report to phase-rounds that closed within that window of now. Default: the whole history.</td>
+			</tr>
+	</tbody>
+</table>
+<h2 id="exit-codes">Exit codes</h2>
+<table>
+	<thead>
+			<tr>
+					<th>Code</th>
+					<th>Meaning</th>
+			</tr>
+	</thead>
+	<tbody>
+			<tr>
+					<td><code>0</code></td>
+					<td>The reports were printed — including when the store is empty.</td>
+			</tr>
+			<tr>
+					<td><code>1</code></td>
+					<td>The journal store could not be opened, or <code>--since</code> did not parse as a Go duration.</td>
+			</tr>
+	</tbody>
+</table>
+<h2 id="examples">Examples</h2>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">wand stats --since 168h
+</span></span></code></pre></div><pre tabindex="0"><code>token velocity
+day         tokens in  tokens out
+2026-08-18      42100       9800
+2026-08-19      38650       8120
+
+harness x phase
+harness      phase      rounds  tokens in  tokens out  wall clock
+claude-code  implement       6      31200       7400        24m
+claude-code  review          4      12900       2600        11m
+codex        implement       3      14300       3100        13m
+
+convergence (harness x verb)
+harness             run       plan
+claude-code  4/5 (80%)  2/2 (100%)
+codex        1/3 (33%)          —
+
+per-ticket totals
+ticket  tokens in  tokens out  wall clock  runs
+WND-41       9300       2100          8m  run(WND-41-...): converged
+WND-44      12600       2900         11m  plan(WND-44-...): handed_back, run(WND-44-...): converged
+</code></pre><h2 id="see-also">See also</h2>
+<p><a href="../../journal/">The run journal</a> documents the <code>phase.ended</code> record schema
+this command reads. <a href="../../query-the-ledger/">Query the ledger</a> shows the
+same aggregations with <code>jq</code> and DuckDB, for anything this command does not
+report.</p>
+
+
+    </main>
+    
+    
+    
+    <nav class="toc">
+      <h5>On this page</h5>
+      <nav id="TableOfContents">
+  <ul>
+    <li><a href="#synopsis">Synopsis</a></li>
+    <li><a href="#what-it-prints">What it prints</a>
+      <ul>
+        <li><a href="#token-velocity">Token velocity</a></li>
+        <li><a href="#harness-x-phase">Harness x phase</a></li>
+        <li><a href="#convergence-harness-x-verb">Convergence (harness x verb)</a></li>
+        <li><a href="#per-ticket-totals">Per-ticket totals</a></li>
+        <li><a href="#skipped-runs">Skipped runs</a></li>
+      </ul>
+    </li>
+    <li><a href="#flags">Flags</a></li>
+    <li><a href="#exit-codes">Exit codes</a></li>
+    <li><a href="#examples">Examples</a></li>
+    <li><a href="#see-also">See also</a></li>
+  </ul>
+</nav>
+    </nav>
+    
+  </div>
+  <script>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    (function () {
+      var root = new URL("..", document.querySelector('link[rel="stylesheet"]').href);
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          var picker = document.getElementById("version-picker");
+          ["latest"].concat(versions).forEach(function (v) {
+            var option = document.createElement("option");
+            option.value = v;
+            option.textContent = v;
+            option.selected = v === "latest";
+            picker.appendChild(option);
+          });
+          picker.addEventListener("change", function () {
+            window.location.href = new URL(picker.value + "/", root);
+          });
+          picker.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>

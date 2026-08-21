@@ -195,7 +195,8 @@ needs one.</p>
 key from the environment, never from a file — a key in a checked-in file is
 a key in the repo forever. Create one in Linear&rsquo;s security settings.
 <code>wand version</code> is the exception, along with <code>wand ui --sample</code> and
-<code>wand ui --dump-screen</code>, which render a built-in board.</p>
+<code>wand ui --dump-screen</code>, which render a built-in board, and
+<a href="../stats/"><code>wand stats</code></a>, which reads only the local journal store.</p>
 <p><strong>The covenant file.</strong> A checked-in <a href="../covenant/"><code>wand.toml</code></a>
 parameterizes the covenant — status names, caps, commands. Absent one, the
 stock covenant applies. <code>init</code>, <code>doctor</code> and <code>queue</code> read it from the
@@ -260,6 +261,9 @@ vocabulary — a scheduler&rsquo;s whole view of a pass is a status and a log.</
   
   <dt><a href="../../docs/commands/sweep/"><code>wand sweep</code></a></dt>
   <dd>Act on one thing left over after a run ended — everything dispatch&#39;s loop does not see.</dd>
+  
+  <dt><a href="../../docs/commands/stats/"><code>wand stats</code></a></dt>
+  <dd>Aggregate reports over the run journal — token velocity, per-harness x per-phase, convergence, and per-ticket totals.</dd>
   
   <dt><a href="../../docs/commands/ui/"><code>wand ui</code></a></dt>
   <dd>The cockpit — everything waiting on a human, and the one place blessing happens.</dd>

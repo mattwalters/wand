@@ -266,6 +266,16 @@ On a <code>phase.ended</code> record, <code>detail</code> is a JSON object shape
 					<td>string</td>
 					<td><code>run</code> only; omitted when there is no diff yet</td>
 			</tr>
+			<tr>
+					<td><code>attempt</code></td>
+					<td>number</td>
+					<td>omitted when <code>1</code> — see &ldquo;A retried phase and review rounds&rdquo; below</td>
+			</tr>
+			<tr>
+					<td><code>transient</code></td>
+					<td>bool</td>
+					<td>omitted when <code>false</code>; set on a failing record the harness itself reported as infrastructure rather than the work</td>
+			</tr>
 	</tbody>
 </table>
 <p>Two rules hold for every reader of this schema:</p>
@@ -278,10 +288,24 @@ missing field as zero will undercount; it must treat it as unknown.</li>
 on the outer record: <code>kind: &quot;run.ended&quot;</code> carries <code>outcome</code>
 (<code>converged</code>/<code>handed_back</code>/<code>parked</code>) and <code>reason</code>, and every
 <code>phase.started</code>/<code>phase.ended</code> pair carries its own <code>round</code>. A reader
-wanting &ldquo;how many review rounds did this run take&rdquo; counts <code>phase.ended</code>
-records where <code>phase == &quot;review&quot;</code>, rather than looking for a count
-inside <code>detail</code>.</li>
+wanting &ldquo;how many review rounds did this run take&rdquo; counts <em>distinct
+rounds</em> where <code>phase == &quot;review&quot;</code> — not <code>phase.ended</code> records — for the
+reason the next section explains.</li>
 </ul>
+<h2 id="a-retried-phase-and-review-rounds">A retried phase and review rounds</h2>
+<p>A phase that fails with an error the harness itself reported as
+infrastructure rather than the work — a provider error, a host that
+suspended mid-response — respawns at the <em>same</em> round, up to a capped
+number of retries. Every attempt writes its own <code>phase.started</code>/<code>phase.ended</code>
+pair, so one round can carry more than one <code>phase.ended</code> record, and
+<code>attempt</code> (above <code>1</code> only after a retry) is what tells them apart.</p>
+<p>A reader that counts raw <code>phase.ended</code> records where <code>phase == &quot;review&quot;</code> as
+the review-round count over-counts: two attempts at round 1 read as two
+rounds instead of one. The correct read groups <code>phase.ended</code> records by
+<code>(phase, round)</code> first and counts the <em>groups</em> — <code>wand stats</code>&rsquo; per-phase
+report does this, summing each group&rsquo;s <code>tokens_in</code>/<code>tokens_out</code>/<code>wall_clock</code>
+across every attempt (a retried attempt still spent real tokens and
+wall-clock) while counting the round once.</p>
 <h2 id="why-token-counts-come-from-the-harness-not-the-worker">Why token counts come from the harness, not the worker</h2>
 <p>A worker session could self-report tokens in its handoff, but that number
 would be exactly as trustworthy as any other self-report a cold worker
@@ -293,6 +317,11 @@ not the worker&rsquo;s. Neither shape is a versioned, guaranteed-stable API, so 
 parse miss is designed to degrade to &ldquo;absent&rdquo; rather than to error the run
 or to guess: a metrics gap costs a reader a blank cell, where a wrong
 number costs it a wrong conclusion.</p>
+<h2 id="see-also">See also</h2>
+<p><a href="../commands/stats/"><code>wand stats</code></a> aggregates this schema natively — token
+velocity, a per-harness x per-phase breakdown, convergence, and per-ticket
+totals. <a href="../query-the-ledger/">Query the ledger</a> reads the same files
+directly with <code>jq</code> and DuckDB, for anything <code>wand stats</code> does not report.</p>
 
 
     </main>
@@ -305,7 +334,9 @@ number costs it a wrong conclusion.</p>
   <ul>
     <li><a href="#where-the-ledger-lives">Where the ledger lives</a></li>
     <li><a href="#the-phaseended-record">The <code>phase.ended</code> record</a></li>
+    <li><a href="#a-retried-phase-and-review-rounds">A retried phase and review rounds</a></li>
     <li><a href="#why-token-counts-come-from-the-harness-not-the-worker">Why token counts come from the harness, not the worker</a></li>
+    <li><a href="#see-also">See also</a></li>
   </ul>
 </nav>
     </nav>

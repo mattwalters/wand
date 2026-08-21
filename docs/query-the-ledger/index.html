@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Query the ledger yourself · wand</title>
+  <link rel="stylesheet" href="../../style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="../../">wand</a>
+    
+    <a class="nav here" href="../../docs/">Docs</a>
+    <span class="spacer"></span>
+    <a href="https://github.com/mattwalters/wand">GitHub</a>
+    <span class="version">
+      latest
+      <select id="version-picker" hidden aria-label="Documentation version"></select>
+    </span>
+  </header>
+  
+  <div class="wrap">
+    
+    <nav class="sidenav">
+      
+      
+      <h5>Start</h5>
+      
+      
+      
+      
+      
+      <a href="../../docs/">Overview</a>
+      
+      <h5>Doctrine</h5>
+      
+      
+      
+      
+      
+      <a href="../../docs/covenant/">The covenant</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/architecture/">No daemon</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/topology/">The single writer</a>
+      
+      <h5>Commands</h5>
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/">All commands</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/init/" class="mono">wand init</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/doctor/" class="mono">wand doctor</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/guard/" class="mono">wand guard</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/queue/" class="mono">wand queue</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/ticket/" class="mono">wand ticket</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/claim/" class="mono">wand claim</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/handback/" class="mono">wand handback</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/abandon/" class="mono">wand abandon</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/file/" class="mono">wand file</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/plan/" class="mono">wand plan</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/run/" class="mono">wand run</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/ui/" class="mono">wand ui</a>
+      
+      
+      
+      
+      
+      
+      
+      <a href="../../docs/commands/version/" class="mono">wand version</a>
+      
+    </nav>
+    
+    <main>
+      
+
+<h1>Query the ledger yourself</h1>
+<p><a href="../commands/stats/"><code>wand stats</code></a> covers the aggregations most people want:
+token velocity, a per-harness x per-phase breakdown, convergence, and
+per-ticket totals. It is deliberately not the only way to read the
+ledger — the files it reads are plain, newline-delimited JSON, one object
+per line, and pointing your own tools at them is supported and encouraged.</p>
+<p>What is not supported: embedding a query engine inside <code>wand</code> itself.
+<a href="../journal/">The run journal</a> is a set of per-run files on purpose, not a
+database — see that page&rsquo;s &ldquo;Where the ledger lives&rdquo; section for why. <code>jq</code>
+and DuckDB both read newline-delimited JSON natively, so nothing needs
+adding to get a real query language over this data; it just does not run
+inside this binary.</p>
+<h2 id="where-the-files-are">Where the files are</h2>
+<p>One directory per run, under the journal store&rsquo;s root:</p>
+<pre tabindex="0"><code>$WAND_STATE_DIR/runs/&lt;run-id&gt;/journal.jsonl
+</code></pre><p><code>$WAND_STATE_DIR</code> defaults to <code>$XDG_STATE_HOME/wand</code> (<code>~/.local/state/wand</code>
+on a machine with no <code>XDG_STATE_HOME</code> set) on Unix; see
+<code>journal.DefaultRoot</code> in <code>internal/journal/store.go</code> for the exact
+resolution, including Windows. <code>wand stats</code> and <code>wand sweep</code> both print the
+store root&rsquo;s runs they act on if you need to confirm it locally:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl"><span class="nb">echo</span> <span class="s2">&#34;</span><span class="si">${</span><span class="nv">WAND_STATE_DIR</span><span class="k">:-</span><span class="nv">$HOME</span><span class="p">/.local/state/wand</span><span class="si">}</span><span class="s2">/runs&#34;</span>
+</span></span></code></pre></div><p>Every record schema — <code>run.started</code>, <code>phase.started</code>, <code>phase.ended</code>,
+<code>run.ended</code>, and the <code>phase.ended</code> <code>detail</code> object&rsquo;s fields — is documented
+on <a href="../journal/">the run journal</a> page. The examples below assume that page&rsquo;s
+field names.</p>
+<h2 id="jq">jq</h2>
+<p>Total tokens across every run:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">jq -s <span class="s1">&#39;
+</span></span></span><span class="line"><span class="cl"><span class="s1">  [.[] | select(.kind == &#34;phase.ended&#34;) | .detail |
+</span></span></span><span class="line"><span class="cl"><span class="s1">    ((.tokens_in // 0) + (.tokens_out // 0))] | add
+</span></span></span><span class="line"><span class="cl"><span class="s1">&#39;</span> <span class="s2">&#34;</span><span class="nv">$WAND_STATE_DIR</span><span class="s2">&#34;</span>/runs/*/journal.jsonl
+</span></span></code></pre></div><p>Every run&rsquo;s outcome, one line per run:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">jq -c <span class="s1">&#39;select(.kind == &#34;run.ended&#34;) | {outcome, reason}&#39;</span> <span class="se">\
+</span></span></span><span class="line"><span class="cl">  <span class="s2">&#34;</span><span class="nv">$WAND_STATE_DIR</span><span class="s2">&#34;</span>/runs/*/journal.jsonl
+</span></span></code></pre></div><p>Round-deduped review-round counts per run — this is the one place jq needs
+the same care <a href="../journal/#a-retried-phase-and-review-rounds">the run journal</a>
+warns about: a retried phase writes more than one <code>phase.ended</code> record at
+the same round, so group by <code>(phase, round)</code> before counting, don&rsquo;t count
+records:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">jq -s <span class="s1">&#39;
+</span></span></span><span class="line"><span class="cl"><span class="s1">  [.[] | select(.kind == &#34;phase.ended&#34; and .phase == &#34;review&#34;)] |
+</span></span></span><span class="line"><span class="cl"><span class="s1">  group_by([.phase, .round]) | length
+</span></span></span><span class="line"><span class="cl"><span class="s1">&#39;</span> <span class="s2">&#34;</span><span class="nv">$WAND_STATE_DIR</span><span class="s2">&#34;</span>/runs/WND-41-*/journal.jsonl
+</span></span></code></pre></div><p>Tokens by harness, folding retried attempts into their round first so a
+retry is not double-counted:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-bash" data-lang="bash"><span class="line"><span class="cl">jq -s <span class="s1">&#39;
+</span></span></span><span class="line"><span class="cl"><span class="s1">  [.[] | select(.kind == &#34;phase.ended&#34;)] |
+</span></span></span><span class="line"><span class="cl"><span class="s1">  group_by([.phase, .round]) |
+</span></span></span><span class="line"><span class="cl"><span class="s1">  map({
+</span></span></span><span class="line"><span class="cl"><span class="s1">    harness: (.[0].detail.harness),
+</span></span></span><span class="line"><span class="cl"><span class="s1">    tokens_in:  ([.[].detail.tokens_in  // 0] | add),
+</span></span></span><span class="line"><span class="cl"><span class="s1">    tokens_out: ([.[].detail.tokens_out // 0] | add)
+</span></span></span><span class="line"><span class="cl"><span class="s1">  }) |
+</span></span></span><span class="line"><span class="cl"><span class="s1">  group_by(.harness) |
+</span></span></span><span class="line"><span class="cl"><span class="s1">  map({harness: .[0].harness,
+</span></span></span><span class="line"><span class="cl"><span class="s1">       tokens_in: (map(.tokens_in) | add),
+</span></span></span><span class="line"><span class="cl"><span class="s1">       tokens_out: (map(.tokens_out) | add)})
+</span></span></span><span class="line"><span class="cl"><span class="s1">&#39;</span> <span class="s2">&#34;</span><span class="nv">$WAND_STATE_DIR</span><span class="s2">&#34;</span>/runs/*/journal.jsonl
+</span></span></code></pre></div><h2 id="duckdb">DuckDB</h2>
+<p>DuckDB reads newline-delimited JSON directly with <code>read_ndjson_auto</code>, glob
+and all:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">select</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="n">detail</span><span class="p">.</span><span class="n">harness</span><span class="w">       </span><span class="k">as</span><span class="w"> </span><span class="n">harness</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="n">phase</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="n">round</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="n">detail</span><span class="p">.</span><span class="n">tokens_in</span><span class="w">      </span><span class="k">as</span><span class="w"> </span><span class="n">tokens_in</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="n">detail</span><span class="p">.</span><span class="n">tokens_out</span><span class="w">     </span><span class="k">as</span><span class="w"> </span><span class="n">tokens_out</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="n">detail</span><span class="p">.</span><span class="n">wall_clock</span><span class="w">     </span><span class="k">as</span><span class="w"> </span><span class="n">wall_clock</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="n">detail</span><span class="p">.</span><span class="n">attempt</span><span class="w">        </span><span class="k">as</span><span class="w"> </span><span class="n">attempt</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="k">from</span><span class="w"> </span><span class="n">read_ndjson_auto</span><span class="p">(</span><span class="s1">&#39;runs/*/journal.jsonl&#39;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="k">where</span><span class="w"> </span><span class="n">kind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;phase.ended&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="k">order</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="n">harness</span><span class="p">,</span><span class="w"> </span><span class="n">phase</span><span class="p">,</span><span class="w"> </span><span class="n">round</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></div><p>The same round-dedup rule applies here: <code>attempt</code> distinguishes retries at
+one round, so group by <code>(phase, round)</code> before aggregating, not by raw row:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">with</span><span class="w"> </span><span class="n">rounds</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="k">select</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">detail</span><span class="p">.</span><span class="n">harness</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">harness</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">phase</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="n">round</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">sum</span><span class="p">(</span><span class="n">coalesce</span><span class="p">(</span><span class="n">detail</span><span class="p">.</span><span class="n">tokens_in</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">))</span><span class="w">  </span><span class="k">as</span><span class="w"> </span><span class="n">tokens_in</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">    </span><span class="k">sum</span><span class="p">(</span><span class="n">coalesce</span><span class="p">(</span><span class="n">detail</span><span class="p">.</span><span class="n">tokens_out</span><span class="p">,</span><span class="w"> </span><span class="mi">0</span><span class="p">))</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">tokens_out</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="k">from</span><span class="w"> </span><span class="n">read_ndjson_auto</span><span class="p">(</span><span class="s1">&#39;runs/*/journal.jsonl&#39;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="k">where</span><span class="w"> </span><span class="n">kind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;phase.ended&#39;</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="k">group</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="n">detail</span><span class="p">.</span><span class="n">harness</span><span class="p">,</span><span class="w"> </span><span class="n">phase</span><span class="p">,</span><span class="w"> </span><span class="n">round</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="k">select</span><span class="w"> </span><span class="n">harness</span><span class="p">,</span><span class="w"> </span><span class="n">phase</span><span class="p">,</span><span class="w"> </span><span class="k">count</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">rounds</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">       </span><span class="k">sum</span><span class="p">(</span><span class="n">tokens_in</span><span class="p">)</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">tokens_in</span><span class="p">,</span><span class="w"> </span><span class="k">sum</span><span class="p">(</span><span class="n">tokens_out</span><span class="p">)</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">tokens_out</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="k">from</span><span class="w"> </span><span class="n">rounds</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="k">group</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="n">harness</span><span class="p">,</span><span class="w"> </span><span class="n">phase</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="k">order</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="n">harness</span><span class="p">,</span><span class="w"> </span><span class="n">phase</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></div><p>Convergence rate by harness, joining each run&rsquo;s <code>run.started</code> (for its
+harness) against its own <code>run.ended</code> (for its outcome) by the file both
+records live in — a run&rsquo;s whole history is one file, so the join key is
+just <code>filename</code>:</p>
+<div class="highlight"><pre tabindex="0" class="chroma"><code class="language-sql" data-lang="sql"><span class="line"><span class="cl"><span class="k">with</span><span class="w"> </span><span class="n">records</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="p">(</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="k">select</span><span class="w"> </span><span class="n">filename</span><span class="p">,</span><span class="w"> </span><span class="n">kind</span><span class="p">,</span><span class="w"> </span><span class="n">run</span><span class="p">.</span><span class="n">harness</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">harness</span><span class="p">,</span><span class="w"> </span><span class="n">outcome</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">  </span><span class="k">from</span><span class="w"> </span><span class="n">read_ndjson_auto</span><span class="p">(</span><span class="s1">&#39;runs/*/journal.jsonl&#39;</span><span class="p">,</span><span class="w"> </span><span class="n">filename</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">true</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="p">),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="n">started</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="p">(</span><span class="k">select</span><span class="w"> </span><span class="n">filename</span><span class="p">,</span><span class="w"> </span><span class="n">harness</span><span class="w"> </span><span class="k">from</span><span class="w"> </span><span class="n">records</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">kind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;run.started&#39;</span><span class="p">),</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="n">ended</span><span class="w">   </span><span class="k">as</span><span class="w"> </span><span class="p">(</span><span class="k">select</span><span class="w"> </span><span class="n">filename</span><span class="p">,</span><span class="w"> </span><span class="n">outcome</span><span class="w"> </span><span class="k">from</span><span class="w"> </span><span class="n">records</span><span class="w"> </span><span class="k">where</span><span class="w"> </span><span class="n">kind</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;run.ended&#39;</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="k">select</span><span class="w"> </span><span class="n">s</span><span class="p">.</span><span class="n">harness</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">       </span><span class="k">count</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="n">filter</span><span class="w"> </span><span class="p">(</span><span class="k">where</span><span class="w"> </span><span class="n">e</span><span class="p">.</span><span class="n">outcome</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s1">&#39;converged&#39;</span><span class="p">)</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">converged</span><span class="p">,</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="w">       </span><span class="k">count</span><span class="p">(</span><span class="o">*</span><span class="p">)</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="n">total</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="k">from</span><span class="w"> </span><span class="n">started</span><span class="w"> </span><span class="n">s</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="k">join</span><span class="w"> </span><span class="n">ended</span><span class="w"> </span><span class="n">e</span><span class="w"> </span><span class="k">using</span><span class="w"> </span><span class="p">(</span><span class="n">filename</span><span class="p">)</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="k">group</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="n">s</span><span class="p">.</span><span class="n">harness</span><span class="w">
+</span></span></span><span class="line"><span class="cl"><span class="k">order</span><span class="w"> </span><span class="k">by</span><span class="w"> </span><span class="n">s</span><span class="p">.</span><span class="n">harness</span><span class="p">;</span><span class="w">
+</span></span></span></code></pre></div><h2 id="see-also">See also</h2>
+<p><a href="../commands/stats/"><code>wand stats</code></a> runs the same kind of aggregation natively,
+with the round-dedup rule already applied — reach for it first, and reach
+for <code>jq</code>/DuckDB when you want a cut it does not report.</p>
+
+
+    </main>
+    
+    
+    
+    <nav class="toc">
+      <h5>On this page</h5>
+      <nav id="TableOfContents">
+  <ul>
+    <li><a href="#where-the-files-are">Where the files are</a></li>
+    <li><a href="#jq">jq</a></li>
+    <li><a href="#duckdb">DuckDB</a></li>
+    <li><a href="#see-also">See also</a></li>
+  </ul>
+</nav>
+    </nav>
+    
+  </div>
+  <script>
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    (function () {
+      var root = new URL("..", document.querySelector('link[rel="stylesheet"]').href);
+      fetch(new URL("versions.json", root))
+        .then(function (r) { if (!r.ok) { throw r; } return r.json(); })
+        .then(function (versions) {
+          var picker = document.getElementById("version-picker");
+          ["latest"].concat(versions).forEach(function (v) {
+            var option = document.createElement("option");
+            option.value = v;
+            option.textContent = v;
+            option.selected = v === "latest";
+            picker.appendChild(option);
+          });
+          picker.addEventListener("change", function () {
+            window.location.href = new URL(picker.value + "/", root);
+          });
+          picker.hidden = false;
+        })
+        .catch(function () {});
+    })();
+  </script>
+</body>
+</html>
