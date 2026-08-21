@@ -1,9 +1,12 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -117,7 +120,19 @@ func readBrief(cmd *cobra.Command, args []string) (string, error) {
 	if len(args) == 1 {
 		data, err := os.ReadFile(args[0])
 		if err != nil {
-			return "", fmt.Errorf("reading the brief from %s: %w", args[0], err)
+			// Any failure to open a brief-shaped argument supports the same
+			// conclusion, not just os.IsNotExist: a long pasted brief just
+			// as often trips the filesystem's own name-too-long error
+			// before existence is ever checked.
+			if looksLikeBrief(args[0]) {
+				return "", fmt.Errorf("%q looks like brief text, not a path: pipe it on stdin instead (`echo \"...\" | wand pm`)", truncate(args[0], briefEchoLimit))
+			}
+			msg := err.Error()
+			var pathErr *fs.PathError
+			if errors.As(err, &pathErr) {
+				msg = pathErr.Err.Error()
+			}
+			return "", fmt.Errorf("reading the brief from %s: %s", truncate(args[0], briefEchoLimit), msg)
 		}
 		return string(data), nil
 	}
@@ -131,6 +146,33 @@ func readBrief(cmd *cobra.Command, args []string) (string, error) {
 		return "", fmt.Errorf("reading the brief from stdin: %w", err)
 	}
 	return string(data), nil
+}
+
+// briefLikeLength is well past any plausible real file path, but well short
+// of a brief worth writing: an argument this long that also fails to open
+// as a file is prose pasted where a path belongs, not a mistyped path.
+const briefLikeLength = 200
+
+// briefEchoLimit bounds how much of a bad argument an error line ever
+// echoes, so a brief pasted by mistake can't flood the terminal.
+const briefEchoLimit = 80
+
+// looksLikeBrief reports whether s reads as brief prose rather than a
+// mistyped path: a newline can never appear in a path a shell would pass as
+// a single argument's intent, and length past briefLikeLength is far beyond
+// any real filename.
+func looksLikeBrief(s string) bool {
+	return strings.Contains(s, "\n") || len(s) > briefLikeLength
+}
+
+// truncate shortens s to at most n runes, marking the cut with an ellipsis
+// so a truncated echo still reads as partial rather than complete.
+func truncate(s string, n int) string {
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n]) + "…"
 }
 
 func newPMBlessCmd() *cobra.Command {
