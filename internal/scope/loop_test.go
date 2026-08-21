@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -939,5 +941,46 @@ func TestAParkThatCannotReachLinearIsStillOnePark(t *testing.T) {
 	}
 	if len(h.board.labels) != 0 {
 		t.Errorf("the label went on without an explanation beside it: %v", h.board.labels)
+	}
+}
+
+// A rejected handoff survives the park. The worker's own copy is gone by
+// the time validation runs — worker.collect deletes it immediately after
+// reading — so before this the bytes a validator refused existed nowhere:
+// six minutes and 1.7M tokens of research, unrecoverable, with only the
+// validator's one-line complaint left to explain it.
+//
+// Keeping them is what makes a park diagnosable rather than merely
+// reported. The reason names what was wrong; only the bytes let anyone
+// judge whether the validator or the scout was.
+func TestARejectedHandoffIsKeptForTheHuman(t *testing.T) {
+	bad := goodDraft()
+	delete(bad, "approaches") // structural: still fatal, still discarded
+	h := newHarness(t, workerResult{handoff: bad})
+
+	out, err := h.run(t)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if out.Kind != journal.Parked {
+		t.Fatalf("outcome = %s (%s), want parked", out.Kind, out.Reason)
+	}
+
+	path := filepath.Join(h.store.Dir(out.RunID), "scratch", "scout-1.rejected.json")
+	kept, rerr := os.ReadFile(path)
+	if rerr != nil {
+		t.Fatalf("the rejected handoff was not kept: %v", rerr)
+	}
+	// The bytes, not a summary of them: a re-render loses whatever made
+	// the validator refuse it.
+	var got map[string]any
+	if jerr := json.Unmarshal(kept, &got); jerr != nil {
+		t.Fatalf("what was kept is not the handoff's own JSON: %v", jerr)
+	}
+	if got["understanding"] != bad["understanding"] {
+		t.Errorf("the kept handoff is not the one the worker wrote:\n%s", kept)
+	}
+	if _, ok := got["approaches"]; ok {
+		t.Errorf("the kept handoff was repaired on the way to disk:\n%s", kept)
 	}
 }

@@ -37,6 +37,19 @@ func PlanMarkdown(d Draft) string {
 	for _, f := range d.Files {
 		fmt.Fprintf(&b, "- `%s` — %s\n", strings.TrimSpace(f.Location), strings.TrimSpace(f.Note))
 	}
+	// A dropped citation is said out loud. The scout found that file and
+	// this plan no longer mentions it, and the only other way to notice
+	// would be to diff against a handoff nobody kept.
+	if len(d.Dropped) > 0 {
+		b.WriteString("\n> Citations dropped for carrying no line number, and so not listed above: ")
+		for i, loc := range d.Dropped {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			fmt.Fprintf(&b, "`%s`", strings.TrimSpace(loc))
+		}
+		b.WriteString(". The scout cited them; the file map takes only citations a reader can jump to.\n")
+	}
 	b.WriteString("\nThe next scope of this ticket rewrites this region whole; notes of your own " +
 		"live outside it, where nothing machine-written touches them.\n")
 	return b.String()

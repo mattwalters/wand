@@ -54,6 +54,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -321,10 +322,24 @@ func (s *scoping) draft(ctx context.Context) (Draft, *Outcome) {
 // told not to touch — in that order, so the research survives in the
 // journal even when the run then parks on what the worker did to the
 // checkout.
+//
+// A ParseDraft failure is persisted to the run's scratch directory before
+// the park: the worker's own copy is already gone by the time this runs
+// (worker.collect deletes it right after reading), so this is the only
+// remaining chance to keep the rejected handoff recoverable rather than a
+// total loss.
 func (s *scoping) parse(ctx context.Context, raw json.RawMessage, phase string) (Draft, *Outcome) {
 	draft, err := ParseDraft(raw, s.d.Cov)
 	if err != nil {
+		// Persist before parking: the reason names what was wrong, but only
+		// the bytes let anyone judge whether the validator or the scout was.
+		if werr := os.WriteFile(s.r.RejectedHandoffPath(), raw, 0o644); werr != nil {
+			fmt.Fprintf(s.d.Out, "could not persist the rejected %s handoff: %v\n", phase, werr)
+		}
 		return Draft{}, s.park(ctx, fmt.Sprintf("the %s's handoff is unusable, so nothing was written to the ticket: %v", phase, err))
+	}
+	if len(draft.Dropped) > 0 {
+		s.note(phase+" citations dropped for carrying no line", draft.Dropped)
 	}
 	s.note(phase+" handoff", draft)
 	if out := s.requireUntouched(ctx, phase); out != nil {

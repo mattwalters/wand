@@ -178,3 +178,35 @@ func TestARecommendationIsMatchedTheWayValidationMatchedIt(t *testing.T) {
 		}
 	}
 }
+
+// A citation the validator trimmed is named in the plan. The file map is
+// the half of a scope a cold reader actually navigates by, so a citation
+// vanishing from it without a word makes the plan quietly narrower than
+// the research behind it — and the only other way to notice would be to
+// diff against a handoff nobody kept.
+func TestPlanMarkdownNamesDroppedCitations(t *testing.T) {
+	d := goodDraft()
+	d["files"] = []any{
+		map[string]any{"location": "docs/content/docs/covenant.md", "note": "the whole file is the thing"},
+		map[string]any{"location": "internal/scope/handoff.go:271", "note": "the gate itself"},
+	}
+	parsed, err := scope.ParseDraft(raw(t, d), covenant.Default())
+	if err != nil {
+		t.Fatalf("ParseDraft: %v", err)
+	}
+
+	got := scope.PlanMarkdown(parsed)
+	if !strings.Contains(got, "docs/content/docs/covenant.md") {
+		t.Errorf("the plan does not say which citation was dropped:\n%s", got)
+	}
+	if !strings.Contains(got, "no line number") {
+		t.Errorf("the plan does not say why it was dropped:\n%s", got)
+	}
+}
+
+// The clean case stays clean: nothing dropped, nothing said.
+func TestPlanMarkdownSaysNothingWhenNothingWasDropped(t *testing.T) {
+	if got := scope.PlanMarkdown(parsedDraft(t)); strings.Contains(got, "dropped") {
+		t.Errorf("a plan with every citation intact still mentions dropping:\n%s", got)
+	}
+}
