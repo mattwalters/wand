@@ -514,12 +514,15 @@ whether this repo&rsquo;s lifecycle has an interview at all, the flag says
 whether this invocation has a human to hold one with — so passing the flag
 against a covenant that turned the stage off is refused rather than
 quietly resolved.</li>
-<li><code>toggles.plan_critic</code> (off by default) inserts a cold critic between the
+<li><code>toggles.plan_critic</code> (on by default) inserts a cold critic between the
 draft and the interview: a fresh session prompted to attack the draft,
-whose objections are validated like any other handoff. It is off by
-default because it spends a whole extra model call per plan run and, unlike
-the rest of this covenant, is not yet a rule the reference system has
-finished paying for.</li>
+whose objections are validated like any other handoff and handed to a
+cold reviser. It spends a whole extra model call per plan run — the
+cheapest place in the lifecycle to spend one, since a plan is a decision
+paid for over the whole life of the work it describes. What the reviser
+resolves is recorded in the options comment as what was challenged and
+what changed; what it cannot resolve is promoted to an open question on
+that same comment, for a human to judge at Plan Review.</li>
 </ul>
 <p>Both stages are separate cold processes for the same reason the reviser is:
 a session that has just argued for a plan defends it.</p>
