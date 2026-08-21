@@ -557,6 +557,104 @@ func TestASecondScopeOfOneTicketRefuses(t *testing.T) {
 	}
 }
 
+// A re-scope is a legitimate, deliberate human act — moving a Scoped ticket
+// back to Scoping asks for a fresh look, and that has to keep working. What
+// it must not do is destroy the plan already there: render.go says every
+// scope rewrites the plan region whole, so the previous plan is posted as a
+// comment — before the region that held it is overwritten — or it survives
+// nowhere but a closed PR.
+func TestARescopePreservesThePriorPlanAsACommentBeforeReplacingIt(t *testing.T) {
+	h := newHarness(t, workerResult{handoff: draftHandoff()})
+	priorPlan := "## Implementation plan\n\n**Exempt the scope verb.** This is the plan an earlier scope wrote and a human already read.\n"
+	desc, err := linear.WithSection(h.board.issue.Description, scope.PlanSectionID, priorPlan)
+	if err != nil {
+		t.Fatalf("WithSection: %v", err)
+	}
+	h.board.issue.Description = desc
+
+	out, err := h.run(t)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if out.Kind != journal.Converged {
+		t.Fatalf("outcome = %s (%s), want converged", out.Kind, out.Reason)
+	}
+
+	// The prior plan is safe on the ticket before the write that would
+	// destroy it runs, not after.
+	want := []string{"comment", "section=plan", "comment", "estimate", "state=state-scoped"}
+	if strings.Join(h.board.calls, ",") != strings.Join(want, ",") {
+		t.Fatalf("writes = %v\nwant  %v", h.board.calls, want)
+	}
+
+	if len(h.board.comments) != 2 {
+		t.Fatalf("comments = %v, want the supersede comment and the options comment", h.board.comments)
+	}
+	supersede := h.board.comments[0]
+	for _, want := range []string{"superseded", "Exempt the scope verb", "already read"} {
+		if !strings.Contains(supersede, want) {
+			t.Errorf("the supersede comment does not carry %q:\n%s", want, supersede)
+		}
+	}
+	if !strings.Contains(h.board.comments[1], "Filter in Vet") {
+		t.Errorf("the second comment is not the new options comment:\n%s", h.board.comments[1])
+	}
+
+	if !strings.Contains(h.board.description, "Add the blocker check to Vet.") {
+		t.Error("the new plan is not in the description")
+	}
+	if strings.Contains(h.board.description, "Exempt the scope verb") {
+		t.Error("the old plan was left in the description instead of being replaced")
+	}
+}
+
+// A ticket scoped for the first time has no prior plan to lose, so nothing
+// is posted about one — the comment that follows the plan is the options
+// comment alone, the same shape [TestScopeWritesInTheFixedOrder] already
+// asserts.
+func TestAFirstScopePostsNoSupersedeComment(t *testing.T) {
+	h := newHarness(t, workerResult{handoff: draftHandoff()})
+
+	if _, err := h.run(t); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+
+	if len(h.board.comments) != 1 {
+		t.Fatalf("comments = %v, want exactly the options comment", h.board.comments)
+	}
+	if strings.Contains(h.board.comments[0], "superseded") {
+		t.Errorf("a ticket with no prior plan still posted a supersede comment:\n%s", h.board.comments[0])
+	}
+}
+
+// A comment failure while preserving the prior plan must leave the
+// description untouched: the whole point is that the old plan is safe
+// before the new one can overwrite it, so a failure here must stop before
+// the overwrite, not after it.
+func TestAFailedPriorPlanCommentParksBeforeTheDescriptionIsTouched(t *testing.T) {
+	h := newHarness(t, workerResult{handoff: draftHandoff()})
+	desc, err := linear.WithSection(h.board.issue.Description, scope.PlanSectionID, "## Implementation plan\n\nAn earlier plan.\n")
+	if err != nil {
+		t.Fatalf("WithSection: %v", err)
+	}
+	h.board.issue.Description = desc
+	h.board.failComment = true
+
+	out, err := h.run(t)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if out.Kind != journal.Parked {
+		t.Fatalf("outcome = %s, want parked", out.Kind)
+	}
+	if len(h.board.calls) != 0 {
+		t.Errorf("the ticket was written to before the prior plan could be preserved: %v", h.board.calls)
+	}
+	if h.board.description != "" {
+		t.Errorf("the description was overwritten despite the preserving comment failing: %q", h.board.description)
+	}
+}
+
 // The plan landed and the argument for it did not. The ticket stays in
 // Scoping — nothing advertises a scope that is not there — and the park
 // says exactly what a human will find.

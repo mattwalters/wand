@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 )
 
 // The two deliverables, composed pure.
@@ -181,6 +182,24 @@ func premiseComment(reason string, prov Provenance) string {
 		"If the premise holds after all, say so here and scope it again; if it does not, " +
 		"the ticket needs rewriting or closing, and both are yours.\n\n")
 	b.WriteString(prov.line())
+	return b.String()
+}
+
+// supersededComment is posted before a scope overwrites a plan region that
+// already carries one. Every scope of a ticket rewrites [PlanSectionID]
+// whole — the next paragraph in this file's package doc says so — which
+// means the plan a human read and blessed otherwise vanishes the moment a
+// later scope runs, surviving only in whatever PR was already merged from
+// it. Dated and marked superseded, quoted verbatim, so the ticket keeps its
+// own history instead of only its newest answer.
+func supersededComment(prior string, prov Provenance) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "## Plan superseded, %s\n\n", time.Now().UTC().Format(time.RFC3339))
+	b.WriteString("This ticket is being scoped again, and the plan below is about to be replaced " +
+		"in the description — every scope rewrites that region whole. It is kept here, verbatim, " +
+		"so the ticket does not disagree with its own history:\n\n")
+	b.WriteString(blockquote(prior))
+	fmt.Fprintf(&b, "\n\nSuperseded by run `%s`.\n", prov.RunID)
 	return b.String()
 }
 
