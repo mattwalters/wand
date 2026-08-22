@@ -283,6 +283,10 @@ type fakeRuns struct {
 	ids     []string
 	reports map[string]journal.Report
 	errs    map[string]error
+	// records backs Records — kept separate from reports because
+	// BuildUsage's tests need real journal.Record streams to walk, while
+	// every other fakeRuns test only ever exercises List/Inspect.
+	records map[string][]journal.Record
 }
 
 func (f *fakeRuns) List() ([]string, error) { return f.ids, nil }
@@ -292,6 +296,10 @@ func (f *fakeRuns) Inspect(id string) (journal.Report, error) {
 		return journal.Report{}, err
 	}
 	return f.reports[id], nil
+}
+
+func (f *fakeRuns) Records(id string) ([]journal.Record, error) {
+	return f.records[id], nil
 }
 
 // A repository with no runs yet has no store on disk, and a home screen

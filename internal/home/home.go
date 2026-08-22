@@ -75,6 +75,11 @@ type Snapshot struct {
 	// answer to "what is the machine doing?" rather than "what is waiting
 	// on a human?". See [Active] and [Board.Running].
 	Active []Active
+	// Usage is the landing screen's answer to "how is the machine doing?" —
+	// recent token velocity, outcome counts and per-harness share, folded
+	// from the same journal Active and Stalled read. See [Usage] and
+	// [BuildUsage].
+	Usage Usage
 }
 
 // Kind names one queue on the board.

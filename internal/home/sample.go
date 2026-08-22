@@ -3,6 +3,7 @@ package home
 import (
 	"time"
 
+	"github.com/mattwalters/wand/internal/ledger"
 	"github.com/mattwalters/wand/internal/linear"
 	"github.com/mattwalters/wand/internal/plan"
 )
@@ -20,6 +21,9 @@ import (
 func Sample() Snapshot {
 	at := func(day int) time.Time {
 		return time.Date(2026, 3, day, 9, 0, 0, 0, time.UTC)
+	}
+	day := func(d int) time.Time {
+		return time.Date(2026, 3, d, 0, 0, 0, 0, time.UTC)
 	}
 	return Snapshot{
 		Team: "WND",
@@ -76,8 +80,27 @@ func Sample() Snapshot {
 				Reason: "the worktree was dirty at handoff; refusing to park noise into the ticket",
 			},
 		},
+		Usage: Usage{
+			Since: day(1).Add(-6 * 24 * time.Hour),
+			Velocity: []ledger.VelocityBucket{
+				{Day: day(1), TokensIn: sampleTokens(1200), TokensOut: sampleTokens(900)},
+				{Day: day(2), TokensIn: sampleTokens(4000), TokensOut: sampleTokens(2600)},
+				{Day: day(3), TokensIn: sampleTokens(2200), TokensOut: sampleTokens(1500)},
+				{Day: day(4), TokensIn: sampleTokens(6100), TokensOut: sampleTokens(3900)},
+			},
+			Outcomes: ledger.OutcomeCounts{Converged: 5, Parked: 2, HandedBack: 1},
+			Harness: []ledger.HarnessTotal{
+				{Harness: "claude-code", TokensIn: sampleTokens(9500), TokensOut: sampleTokens(6200)},
+				{Harness: "codex", TokensIn: sampleTokens(4000), TokensOut: sampleTokens(2700)},
+			},
+		},
 	}
 }
+
+// sampleTokens is a token count fixture as the *int64 the ledger types
+// carry, so an absent count and a reported zero stay distinguishable here
+// the same way they do in real journal data.
+func sampleTokens(v int64) *int64 { return &v }
 
 // samplePlanDescription builds a description shaped exactly like one plan
 // run leaves behind: a human's own text, then the marker-fenced plan region. The

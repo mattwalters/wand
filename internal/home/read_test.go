@@ -50,7 +50,7 @@ func TestReadFollowsTheCovenantsNames(t *testing.T) {
 	}
 
 	cl := &readFake{}
-	snap, err := Read(context.Background(), cl, nil, cov, "WND")
+	snap, err := Read(context.Background(), cl, nil, cov, "WND", time.Time{})
 	if err != nil {
 		t.Fatalf("Read: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestReadFillsActiveAlongsideStalled(t *testing.T) {
 		},
 	}
 	cl := &readFake{}
-	snap, err := Read(context.Background(), cl, runs, covenant.Default(), "WND")
+	snap, err := Read(context.Background(), cl, runs, covenant.Default(), "WND", time.Time{})
 	if err != nil {
 		t.Fatalf("Read: %v", err)
 	}

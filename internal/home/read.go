@@ -3,6 +3,7 @@ package home
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/mattwalters/wand/internal/covenant"
 	"github.com/mattwalters/wand/internal/journal"
@@ -31,9 +32,14 @@ type Linear interface {
 // Optional: a repository with no runs yet has no store on disk, and a home
 // screen that refused to draw for want of one would be useless until the
 // first orchestrator shipped. [Read] treats a nil Runs as "nothing stalled".
+//
+// Records matches internal/ledger.Runs exactly, so a Runs value here is
+// also a ledger.Runs — [BuildUsage] hands it straight to [ledger.Walk]
+// rather than home re-deriving its own copy of what ledger already reads.
 type Runs interface {
 	List() ([]string, error)
 	Inspect(id string) (journal.Report, error)
+	Records(id string) ([]journal.Record, error)
 }
 
 // Read fetches the whole board. Five reads and a walk of the run store, in
@@ -44,7 +50,12 @@ type Runs interface {
 // It is a read of the board rather than a per-run lookup because one query
 // answers it for every run at once, and because a run whose ticket has been
 // deleted then reads as orphaned, which is exactly right.
-func Read(ctx context.Context, cl Linear, runs Runs, cov covenant.Covenant, teamKey string) (Snapshot, error) {
+//
+// since is the usage panel's window cutoff — a caller-supplied value rather
+// than one Read computes itself, so Read stays a pure sequence of reads plus
+// one fold and the one clock read a refresh needs stays where every other
+// clock read in this codebase lives: in the caller's tea.Cmd, not here.
+func Read(ctx context.Context, cl Linear, runs Runs, cov covenant.Covenant, teamKey string, since time.Time) (Snapshot, error) {
 	snap := Snapshot{Team: teamKey}
 
 	triage, err := cl.TeamIssuesByState(ctx, teamKey, cov.StatusName("triage"))
@@ -92,6 +103,12 @@ func Read(ctx context.Context, cl Linear, runs Runs, cov covenant.Covenant, team
 		return Snapshot{}, err
 	}
 	snap.Active = active
+
+	usage, err := BuildUsage(runs, since)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	snap.Usage = usage
 	return snap, nil
 }
 
