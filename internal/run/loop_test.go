@@ -1,6 +1,7 @@
 package run
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -127,8 +128,13 @@ type fakeGit struct {
 	aheadBase    string
 
 	// diffStat is what DiffStat returns every call; diffStatCalls counts
-	// how many times the loop asked for one.
-	diffStat      string
+	// how many times the loop asked for one. Both halves are modelled
+	// separately because they are separately reachable states: a worker
+	// killed before it could commit leaves an empty committed figure and
+	// an uncommitted one holding everything it did, and a fake that could
+	// not express that would let the journal go blind on exactly that case
+	// while the tests stayed green.
+	diffStat      TreeStat
 	diffStatCalls int
 }
 
@@ -162,7 +168,7 @@ func (g *fakeGit) Push(context.Context, string, string) error {
 	g.pushes++
 	return nil
 }
-func (g *fakeGit) DiffStat(context.Context, string, string) (string, error) {
+func (g *fakeGit) DiffStat(context.Context, string, string) (TreeStat, error) {
 	g.diffStatCalls++
 	return g.diffStat, nil
 }
@@ -223,6 +229,11 @@ type workerStep struct {
 	// false would make the retry path untestable and, worse, make a test
 	// of the park path pass for the wrong reason.
 	transient bool
+	// timedOut is the kill at the cap, which is a different failure from
+	// an exit: the process never got to print a result line, so exit code
+	// -1 and no usage are part of the shape a test of the timeout path has
+	// to reproduce.
+	timedOut bool
 }
 
 type fakeWorkers struct {
@@ -239,7 +250,11 @@ func (w *fakeWorkers) Run(_ context.Context, spec worker.Spec) (worker.Result, e
 	step := w.steps[0]
 	w.steps = w.steps[1:]
 	if step.err != nil {
-		return worker.Result{ExitCode: 1, Output: "worker noise", Transient: step.transient}, step.err
+		res := worker.Result{ExitCode: 1, Output: "worker noise", Transient: step.transient}
+		if step.timedOut {
+			res.ExitCode, res.TimedOut = -1, true
+		}
+		return res, step.err
 	}
 	return worker.Result{Handoff: json.RawMessage(step.handoff), ExitCode: 0, Usage: step.usage}, nil
 }
@@ -967,6 +982,92 @@ func TestCorrectionsUseTheFreshDescriptionAndRefreshThePrompt(t *testing.T) {
 	}
 }
 
+// WND-83, and the run it is named for. A worker killed at the timeout cap
+// has committed nothing — it never reached the commit — so the committed
+// figure is empty however much of the ticket it finished. WND-78 spent
+// thirty minutes, changed 73 files, and journaled a record indistinguishable
+// from a worker that hung on its first tool call; the only reason anyone
+// knew otherwise is that a human went and ran `git status` in the preserved
+// worktree. The uncommitted figure is what puts that in the record.
+func TestAKilledPhaseJournalsTheWorkNoCommitHolds(t *testing.T) {
+	f := newFixture(t)
+	f.workers.steps = []workerStep{
+		{err: errors.New("worker: claude-code timed out after 1m0s"), timedOut: true},
+	}
+	stillEditing := 900 * time.Millisecond
+	f.git.diffStat = TreeStat{
+		Uncommitted:   "73 files changed, 593 insertions(+), 561 deletions(-)",
+		SinceLastEdit: &stillEditing,
+	}
+
+	out := f.execute(t)
+	if out.Kind != journal.Parked {
+		t.Fatalf("outcome %+v, want parked", out)
+	}
+
+	details := phaseDetails(t, f, out.RunID)
+	if len(details) != 1 {
+		t.Fatalf("got %d phase.ended records, want 1", len(details))
+	}
+	killed := details[0]
+	if !killed.TimedOut {
+		t.Error("TimedOut is false on a phase that was killed at the cap")
+	}
+	if killed.DiffStat != "" {
+		t.Errorf("DiffStat = %q, want empty: the worker committed nothing", killed.DiffStat)
+	}
+	if killed.Uncommitted != "73 files changed, 593 insertions(+), 561 deletions(-)" {
+		t.Errorf("Uncommitted = %q, want the work the killed worker left in the tree", killed.Uncommitted)
+	}
+	// The kill landed on a worker that was still writing files, which is
+	// the other half of the diagnosis: 73 files changed reads the same
+	// whether the last of them was written a second or an hour ago.
+	if killed.SinceLastEdit != "900ms" {
+		t.Errorf("SinceLastEdit = %q, want 900ms", killed.SinceLastEdit)
+	}
+}
+
+// The other half of the same rule: a phase that leaves nothing behind says
+// so by omission. An uncommitted figure invented for a clean tree would
+// make the field useless for telling the two apart, which is the only thing
+// it is for.
+func TestACleanTreeJournalsNoUncommittedStat(t *testing.T) {
+	f := newFixture(t)
+	f.workers.steps = []workerStep{
+		{err: errors.New("worker: claude-code timed out after 1m0s"), timedOut: true},
+	}
+
+	out := f.execute(t)
+	if out.Kind != journal.Parked {
+		t.Fatalf("outcome %+v, want parked", out)
+	}
+
+	details := phaseDetails(t, f, out.RunID)
+	if len(details) != 1 {
+		t.Fatalf("got %d phase.ended records, want 1", len(details))
+	}
+	// Omitted from the JSON entirely, not merely empty in the struct: a
+	// reader of the ledger sees no field at all.
+	records, err := f.store.Records(out.RunID)
+	if err != nil {
+		t.Fatalf("reading records: %v", err)
+	}
+	for _, r := range records {
+		if r.Kind != journal.KindPhaseEnded {
+			continue
+		}
+		if bytes.Contains(r.Detail, []byte("uncommitted_diff_stat")) {
+			t.Errorf("a clean tree journaled an uncommitted stat: %s", r.Detail)
+		}
+		// Nor a last-edit marker: nil there means "nothing to read it
+		// from", and a "0s" written for that would say the opposite —
+		// that the worker was editing when it died.
+		if bytes.Contains(r.Detail, []byte("since_last_edit")) {
+			t.Errorf("a clean tree journaled a last-edit marker: %s", r.Detail)
+		}
+	}
+}
+
 // phaseDetails replays the run's journal and returns the phaseDetail
 // carried on every phase.ended record, in order.
 func phaseDetails(t *testing.T, f *fixture, runID string) []phaseDetail {
@@ -1000,7 +1101,7 @@ func TestPhaseDetailCarriesOperationalMetrics(t *testing.T) {
 		{handoff: approveHandoff}, // the reviewer's adapter reports no usage
 	}
 	f.shell.steps = []shellStep{{ok: true}}
-	f.git.diffStat = "1 file changed, 2 insertions(+)"
+	f.git.diffStat = TreeStat{Committed: "1 file changed, 2 insertions(+)"}
 
 	out2 := f.execute(t)
 	if out2.Kind != journal.Converged {

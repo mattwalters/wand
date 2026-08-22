@@ -35,8 +35,8 @@ ticket has yet.
 Every `journal.Record` carries `kind`, `seq`, `at`, `phase` and `round` (see
 `internal/journal`'s package doc for the record stream's own guarantees).
 On a `phase.ended` record, `detail` is a JSON object shaped like this
-(`run`-verb fields on the left; `plan` carries every field except
-`diff_stat`, since a plan run has no worktree):
+(`run`-verb fields on the left; `plan` carries every field except the two
+diff stats, since a plan run has no worktree):
 
 | field | type | present when |
 |---|---|---|
@@ -50,11 +50,13 @@ On a `phase.ended` record, `detail` is a JSON object shaped like this
 | `tokens_in` | number | omitted when the harness reported no usage |
 | `tokens_out` | number | omitted when the harness reported no usage |
 | `wall_clock` | string | always — a Go duration (`"1m2.5s"`) |
-| `diff_stat` | string | `run` only; omitted when there is no diff yet |
+| `diff_stat` | string | `run` only; omitted when there is no diff yet — committed work, `base...HEAD` |
+| `uncommitted_diff_stat` | string | `run` only; omitted when the worktree is clean — what the tree holds and no commit does |
+| `since_last_edit` | string | `run` only; omitted when the worktree is clean — a Go duration, how long before the phase ended the newest uncommitted file was written |
 | `attempt` | number | omitted when `1` — see "A retried phase and review rounds" below |
 | `transient` | bool | omitted when `false`; set on a failing record the harness itself reported as infrastructure rather than the work |
 
-Two rules hold for every reader of this schema:
+Three rules hold for every reader of this schema:
 
 - **Absent, never estimated.** A harness that cannot report tokens, or
   whose output a parser could not read, leaves `tokens_in`/`tokens_out`
@@ -67,6 +69,26 @@ Two rules hold for every reader of this schema:
   wanting "how many review rounds did this run take" counts *distinct
   rounds* where `phase == "review"` — not `phase.ended` records — for the
   reason the next section explains.
+- **The two diff stats answer different questions.** `diff_stat` is what
+  would survive the worktree being removed, and what a PR would show.
+  `uncommitted_diff_stat` is what the worker has touched but not committed
+  — staged, unstaged, and a count of untracked files on the end
+  (`"4 files changed, 91 insertions(+), 2 deletions(-), 3 files untracked"`).
+  A worker killed at the timeout cap never reaches a commit, so `diff_stat`
+  is empty for a run that did the whole ticket, and the uncommitted figure
+  is the only record that it happened. Untracked files are counted rather
+  than measured: producing insertion counts for them would mean staging
+  them, and a diagnostic must not edit the worktree a park is preserving
+  for a human to read.
+
+  `since_last_edit` dates that work: `"0s"` is a worker killed mid-edit,
+  `"22m14s"` one that did everything in the first ten minutes and then
+  stopped changing files. It is the newest mtime among the same uncommitted
+  paths — the last *edit*, not the last sign of life, since a worker whose
+  final half-hour went on reading code and running builds wrote nothing.
+  Like the token counts, it is absent rather than zero when there was
+  nothing to read it from: `"0s"` is a real reading and the most
+  interesting one there is.
 
 ## A retried phase and review rounds
 

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // The exec adapters are the one layer whose correctness lives in git's real
@@ -119,8 +120,8 @@ func TestDiffStat(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DiffStat before any change: %v", err)
 	}
-	if stat != "" {
-		t.Errorf("stat = %q, want empty before any commit diverges from base", stat)
+	if stat.Committed != "" {
+		t.Errorf("Committed = %q, want empty before any commit diverges from base", stat.Committed)
 	}
 
 	if err := os.WriteFile(filepath.Join(repo, "new.txt"), []byte("a line\n"), 0o644); err != nil {
@@ -133,8 +134,206 @@ func TestDiffStat(t *testing.T) {
 	if err != nil {
 		t.Fatalf("DiffStat after a commit: %v", err)
 	}
-	if !strings.Contains(stat, "1 file changed") || !strings.Contains(stat, "insertion") {
-		t.Errorf("stat = %q, want a shortstat naming the changed file", stat)
+	if !strings.Contains(stat.Committed, "1 file changed") || !strings.Contains(stat.Committed, "insertion") {
+		t.Errorf("Committed = %q, want a shortstat naming the changed file", stat.Committed)
+	}
+	if stat.Uncommitted != "" {
+		t.Errorf("Uncommitted = %q, want empty for a clean tree", stat.Uncommitted)
+	}
+}
+
+// The WND-78 shape: a worker does the whole ticket and is killed before it
+// can commit any of it. Every edit is in the worktree and none of it is in
+// a commit, so the committed figure is empty — and that is exactly the run
+// whose journal has to say the work happened.
+func TestDiffStatCountsWorkNoCommitHolds(t *testing.T) {
+	repo := testRepo(t)
+	mustGit(t, repo, "checkout", "-q", "-b", "feature")
+	write(t, repo, "tracked.txt", "one\ntwo\nthree\n")
+	mustGit(t, repo, "add", "tracked.txt")
+	mustGit(t, repo, "commit", "-q", "-m", "a file to edit")
+
+	// An unstaged edit, a staged one, and a file git has never seen —
+	// the three ways a killed worker's work can be sitting in a tree.
+	write(t, repo, "tracked.txt", "one\ntwo\nthree\nfour\n")
+	write(t, repo, "staged.txt", "staged\n")
+	mustGit(t, repo, "add", "staged.txt")
+	write(t, repo, "untracked.txt", "brand new\n")
+
+	stat, err := ExecGit{}.DiffStat(context.Background(), repo, "trunk")
+	if err != nil {
+		t.Fatalf("DiffStat over a dirty tree: %v", err)
+	}
+	if !strings.Contains(stat.Uncommitted, "2 files changed") {
+		t.Errorf("Uncommitted = %q, want the staged and unstaged edits both counted", stat.Uncommitted)
+	}
+	if !strings.Contains(stat.Uncommitted, "1 file untracked") {
+		t.Errorf("Uncommitted = %q, want the untracked file counted", stat.Uncommitted)
+	}
+
+	// The diagnostic must not edit what it is diagnosing: the untracked
+	// file is still untracked, and nothing new is staged.
+	if got := mustGit(t, repo, "status", "--porcelain"); !strings.Contains(got, "?? untracked.txt") {
+		t.Errorf("git status after DiffStat:\n%s\nwant untracked.txt still untracked", got)
+	}
+
+	// Every one of those files was written a moment ago, so the tree reads
+	// as one a worker was still editing when the stat was taken.
+	if stat.SinceLastEdit == nil {
+		t.Fatal("SinceLastEdit is nil for a tree full of files written seconds ago")
+	}
+	if *stat.SinceLastEdit > time.Minute {
+		t.Errorf("SinceLastEdit = %v, want a reading of just now", *stat.SinceLastEdit)
+	}
+}
+
+// The marker separates the two runs whose uncommitted figures are
+// identical: the worker killed mid-edit, and the one that did its work
+// early and then wedged. An old mtime is the second of those.
+func TestDiffStatDatesTheLastEdit(t *testing.T) {
+	repo := testRepo(t)
+	write(t, repo, "stale.txt", "written long ago\n")
+	long := time.Now().Add(-90 * time.Minute)
+	if err := os.Chtimes(filepath.Join(repo, "stale.txt"), long, long); err != nil {
+		t.Fatal(err)
+	}
+
+	stat, err := ExecGit{}.DiffStat(context.Background(), repo, "trunk")
+	if err != nil {
+		t.Fatalf("DiffStat: %v", err)
+	}
+	if stat.SinceLastEdit == nil {
+		t.Fatal("SinceLastEdit is nil for a tree holding an edited file")
+	}
+	if *stat.SinceLastEdit < time.Hour {
+		t.Errorf("SinceLastEdit = %v, want the file's real age — a worker that stopped an hour ago must not read as one still working",
+			*stat.SinceLastEdit)
+	}
+}
+
+// Absent, never estimated: a clean tree has no path to read an mtime from,
+// and a zero here is a real reading ("killed mid-edit"), so the two must
+// not be spelled the same way.
+func TestDiffStatReportsNoLastEditForACleanTree(t *testing.T) {
+	repo := testRepo(t)
+
+	stat, err := ExecGit{}.DiffStat(context.Background(), repo, "trunk")
+	if err != nil {
+		t.Fatalf("DiffStat: %v", err)
+	}
+	if stat.SinceLastEdit != nil {
+		t.Errorf("SinceLastEdit = %v, want nil: a clean tree has nothing to date", *stat.SinceLastEdit)
+	}
+}
+
+// git escapes non-ASCII paths by default, and an escaped name is one
+// os.Stat cannot open — so a worker whose last edit landed in a file with
+// an accent in its name would have read as a worker that stopped editing.
+func TestDiffStatDatesANonASCIIPath(t *testing.T) {
+	repo := testRepo(t)
+	write(t, repo, "caf\u00e9.txt", "written just now\n")
+
+	stat, err := ExecGit{}.DiffStat(context.Background(), repo, "trunk")
+	if err != nil {
+		t.Fatalf("DiffStat: %v", err)
+	}
+	if stat.SinceLastEdit == nil {
+		t.Fatal("SinceLastEdit is nil: an escaped path dropped out of the reading")
+	}
+	if *stat.SinceLastEdit > time.Minute {
+		t.Errorf("SinceLastEdit = %v, want a reading of just now", *stat.SinceLastEdit)
+	}
+}
+
+// A deleted file is a path git names and the filesystem cannot stat. It
+// must not cost the reading — deleting files is ordinary work.
+func TestDiffStatSurvivesADeletedPath(t *testing.T) {
+	repo := testRepo(t)
+	write(t, repo, "doomed.txt", "here\n")
+	write(t, repo, "kept.txt", "here\n")
+	mustGit(t, repo, "add", ".")
+	mustGit(t, repo, "commit", "-q", "-m", "two files")
+	if err := os.Remove(filepath.Join(repo, "doomed.txt")); err != nil {
+		t.Fatal(err)
+	}
+	write(t, repo, "kept.txt", "edited\n")
+
+	stat, err := ExecGit{}.DiffStat(context.Background(), repo, "trunk")
+	if err != nil {
+		t.Fatalf("DiffStat over a deleted path: %v", err)
+	}
+	if !strings.Contains(stat.Uncommitted, "2 files changed") {
+		t.Errorf("Uncommitted = %q, want the deletion and the edit both counted", stat.Uncommitted)
+	}
+	if stat.SinceLastEdit == nil {
+		t.Error("SinceLastEdit is nil: one unstattable path took the whole reading with it")
+	}
+}
+
+// A tree holding nothing but files git has never seen still has to report
+// them: --shortstat alone says "clean" for a worker whose whole output is
+// new files, which is the ordinary shape of a scaffolding phase.
+func TestDiffStatCountsAnUntrackedOnlyTree(t *testing.T) {
+	repo := testRepo(t)
+	write(t, repo, "a.txt", "a\n")
+	write(t, repo, "b.txt", "b\n")
+
+	stat, err := ExecGit{}.DiffStat(context.Background(), repo, "trunk")
+	if err != nil {
+		t.Fatalf("DiffStat over an untracked-only tree: %v", err)
+	}
+	if stat.Uncommitted != "2 files untracked" {
+		t.Errorf("Uncommitted = %q, want the two untracked files and nothing else", stat.Uncommitted)
+	}
+}
+
+// Ignored files are not work: a node_modules or a build cache under the
+// worktree must not read as a worker that touched thousands of files.
+func TestDiffStatIgnoresIgnoredFiles(t *testing.T) {
+	repo := testRepo(t)
+	write(t, repo, ".gitignore", "junk/\n")
+	mustGit(t, repo, "add", ".gitignore")
+	mustGit(t, repo, "commit", "-q", "-m", "ignore junk")
+	write(t, repo, "junk/cache.bin", "noise\n")
+
+	stat, err := ExecGit{}.DiffStat(context.Background(), repo, "trunk")
+	if err != nil {
+		t.Fatalf("DiffStat over an ignored file: %v", err)
+	}
+	if stat.Uncommitted != "" {
+		t.Errorf("Uncommitted = %q, want empty: an ignored file is not work", stat.Uncommitted)
+	}
+}
+
+// The two halves do not fail together, and neither may take the other with
+// it. A base ref that does not resolve is the reachable case — a remote
+// that was renamed, a fetch that never ran — and it must not cost the
+// number that says what the worker actually touched.
+func TestDiffStatKeepsTheUncommittedHalfWhenTheBaseIsGone(t *testing.T) {
+	repo := testRepo(t)
+	write(t, repo, "half-done.txt", "work\n")
+
+	stat, err := ExecGit{}.DiffStat(context.Background(), repo, "origin/nonexistent")
+	if err != nil {
+		t.Fatalf("DiffStat against a missing base: %v", err)
+	}
+	if stat.Committed != "" {
+		t.Errorf("Committed = %q, want empty when the base could not be read", stat.Committed)
+	}
+	if stat.Uncommitted != "1 file untracked" {
+		t.Errorf("Uncommitted = %q, want the work counted despite the missing base", stat.Uncommitted)
+	}
+}
+
+// write creates a file (and any parent directory) under dir.
+func write(t *testing.T, dir, name, content string) {
+	t.Helper()
+	path := filepath.Join(dir, name)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
 	}
 }
 

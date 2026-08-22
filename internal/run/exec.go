@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mattwalters/wand/internal/worker"
 )
@@ -193,14 +195,136 @@ func (ExecGit) Push(ctx context.Context, dir, branch string) error {
 	return err
 }
 
-// DiffStat summarizes the lines changed between base and HEAD in git's own
-// --shortstat form ("2 files changed, 34 insertions(+), 5 deletions(-)") —
-// human-readable, the same shape a PR page shows, so a journal reader does
-// not need a second format to recognize it. Empty when there is no diff yet
-// (a phase that ran before the first commit landed), never an error for
-// that case.
-func (ExecGit) DiffStat(ctx context.Context, dir, base string) (string, error) {
-	return git(ctx, dir, "diff", "--shortstat", base+"...HEAD")
+// DiffStat summarizes the phase's work in git's own --shortstat form
+// ("2 files changed, 34 insertions(+), 5 deletions(-)") — human-readable,
+// the same shape a PR page shows, so a journal reader does not need a
+// second format to recognize it. Either half is empty rather than an error
+// when there is simply nothing there: a phase that ran before the first
+// commit landed, or one that left a clean tree.
+//
+// The two halves are gathered independently, and one that cannot be read
+// does not take the other with it. They do not fail together: the
+// committed figure needs the base ref to resolve and the uncommitted one
+// needs only HEAD, so a remote-tracking ref that has gone missing must not
+// also cost the number that says what the worker actually touched. Only a
+// tree where neither could be read is an error.
+func (ExecGit) DiffStat(ctx context.Context, dir, base string) (TreeStat, error) {
+	committed, cerr := git(ctx, dir, "diff", "--shortstat", base+"...HEAD")
+	uncommitted, uerr := uncommittedWork(ctx, dir)
+	if cerr != nil && uerr != nil {
+		return TreeStat{}, cerr
+	}
+	return TreeStat{
+		Committed:     committed,
+		Uncommitted:   uncommitted.stat,
+		SinceLastEdit: sinceLastEdit(dir, uncommitted.paths),
+	}, nil
+}
+
+// work is what the worktree holds that no commit does: the shortstat, and
+// the paths it was computed over — kept because the mtimes of those paths
+// are the cheapest available answer to "was it still working?", and they
+// are already enumerated by the time the stat exists.
+type work struct {
+	stat  string
+	paths []string
+}
+
+// uncommittedWork reads what no commit holds: --shortstat of the worktree
+// against HEAD, staged and unstaged together, with untracked files counted
+// on the end, plus every path that went into it.
+//
+// Untracked files are counted rather than measured, deliberately. git can
+// only produce insertion counts for a path it has hashed, so a stat that
+// included their lines would mean staging them — writing blobs into the
+// object store of a tree a park preserves for a human to inspect. A
+// diagnostic must not edit what it is diagnosing, and "12 untracked files"
+// already answers the question the number is asked for.
+func uncommittedWork(ctx context.Context, dir string) (work, error) {
+	stat, err := git(ctx, dir, "diff", "--shortstat", "HEAD")
+	if err != nil {
+		return work{}, err
+	}
+	// quotePath off on both listings: git escapes non-ASCII names by
+	// default ("caf\303\251.go"), and a name in that form is one os.Stat
+	// cannot open, so the file would drop out of the mtime reading for no
+	// reason but its spelling.
+	changed, err := git(ctx, dir, "-c", "core.quotePath=false", "diff", "--name-only", "HEAD")
+	if err != nil {
+		return work{}, err
+	}
+	others, err := git(ctx, dir, "-c", "core.quotePath=false", "ls-files", "--others", "--exclude-standard")
+	if err != nil {
+		return work{}, err
+	}
+	untracked := lines(others)
+	switch {
+	case len(untracked) == 0:
+		// Nothing to add; stat stands, empty and all, since an empty
+		// shortstat over a clean tree is the honest answer.
+	case stat == "":
+		stat = fmt.Sprintf("%s untracked", plural(len(untracked), "file"))
+	default:
+		stat = fmt.Sprintf("%s, %s untracked", stat, plural(len(untracked), "file"))
+	}
+	return work{stat: stat, paths: append(lines(changed), untracked...)}, nil
+}
+
+// lines splits git's output into non-empty lines.
+func lines(out string) []string {
+	var ls []string
+	for _, line := range strings.Split(out, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			ls = append(ls, line)
+		}
+	}
+	return ls
+}
+
+// sinceLastEdit is how long ago the newest of paths was written, or nil
+// when nothing can be read.
+//
+// Only the paths git already reported as changed are stat'd — never a walk
+// of the worktree, which on a provisioned tree means node_modules and build
+// caches, thousands of files that say nothing about the worker. That bound
+// is also the measure's limit, and worth stating: a worker whose last
+// half-hour was reading files and running builds wrote nothing, so this
+// reports the last *edit*, not the last sign of life. It answers "was it
+// still changing the code?" and no more than that.
+//
+// A path git names and the filesystem cannot stat is skipped rather than
+// failing the reading: a deletion is exactly that case, and it is ordinary.
+func sinceLastEdit(dir string, paths []string) *time.Duration {
+	var newest time.Time
+	for _, p := range paths {
+		info, err := os.Stat(filepath.Join(dir, p))
+		if err != nil {
+			continue
+		}
+		if info.ModTime().After(newest) {
+			newest = info.ModTime()
+		}
+	}
+	if newest.IsZero() {
+		return nil
+	}
+	// Clamped: a file written a moment in the future (a clock that
+	// stepped, a network filesystem) is a reading of "just now", not a
+	// negative duration nobody can read.
+	d := time.Since(newest)
+	if d < 0 {
+		d = 0
+	}
+	return &d
+}
+
+// plural renders a count with its noun ("1 file", "12 files"), matching
+// git's own --shortstat wording rather than inventing a second style.
+func plural(n int, noun string) string {
+	if n == 1 {
+		return "1 " + noun
+	}
+	return fmt.Sprintf("%d %ss", n, noun)
 }
 
 // ExecHub is Hub over the gh CLI, which carries the operator's GitHub

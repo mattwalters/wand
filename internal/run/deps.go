@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/mattwalters/wand/internal/covenant"
 	"github.com/mattwalters/wand/internal/linear"
@@ -58,10 +59,47 @@ type Git interface {
 	CommitsAhead(ctx context.Context, dir, base string) (int, error)
 	// Push pushes the branch to origin, setting upstream.
 	Push(ctx context.Context, dir, branch string) error
-	// DiffStat summarizes lines changed between base and HEAD, in git's own
-	// --shortstat form. Journaled at the end of every phase, alongside
-	// harness, model, tokens and wall-clock.
-	DiffStat(ctx context.Context, dir, base string) (string, error)
+	// DiffStat summarizes what the worktree has to show for itself, in
+	// git's own --shortstat form. Journaled at the end of every phase,
+	// alongside harness, model, tokens and wall-clock.
+	DiffStat(ctx context.Context, dir, base string) (TreeStat, error)
+}
+
+// TreeStat is what a phase has to show for itself: the work in each of the
+// two states it can be in, and how recently the second state was written
+// to. Both figures are carried because a killed worker leaves all of its
+// work in the second one — a run that hits the timeout cap mid-ticket has
+// committed nothing, so the committed figure is empty for a tree holding
+// hours of edits, and a journal that recorded only that number said the run
+// had done no work at all (the WND-78 park, where the only way anyone
+// learned otherwise was a human running `git status` in the preserved
+// worktree).
+//
+// The committed figure is not thereby redundant: it is the one that says
+// what would survive the worktree being removed, and what a PR would show.
+// Neither answers the other's question, so neither is derived from the
+// other and neither is dropped.
+type TreeStat struct {
+	// Committed is --shortstat of base...HEAD: the work that has reached a
+	// commit. Empty when the branch has not diverged from base yet.
+	Committed string
+	// Uncommitted is what the worktree holds that no commit does —
+	// --shortstat against HEAD, staged and unstaged alike, plus a count of
+	// untracked files, which carry no line counts git can report without
+	// writing to the object store. Empty when the tree is clean.
+	Uncommitted string
+	// SinceLastEdit is how long before the stat was taken the most
+	// recently written of those uncommitted paths was written. It is the
+	// difference between a worker killed mid-edit and one that did its
+	// work in the first ten minutes and then wedged for twenty — two runs
+	// whose Uncommitted figures are identical and whose diagnoses are not.
+	//
+	// Nil when there is nothing to read it from: a clean tree, or one
+	// whose files git reports as changed cannot be stat'd. Never zero
+	// standing in for unknown — a zero here is a real reading, and the
+	// most interesting one there is (see phaseDetail's TokensIn for the
+	// same rule and the same reason).
+	SinceLastEdit *time.Duration
 }
 
 // PR is one open pull request, as much of it as the loop reads.
