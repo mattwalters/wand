@@ -25,7 +25,7 @@ func TestBuildAlwaysHasFiveSections(t *testing.T) {
 	if len(b.Sections) != 5 {
 		t.Fatalf("sections = %d, want 5", len(b.Sections))
 	}
-	want := []Kind{KindTriage, KindPlanReview, KindNeedsInput, KindReadyForHuman, KindStalled}
+	want := []Kind{KindTriage, KindPlanReview, KindNeedsInput, KindInReview, KindStalled}
 	for i, k := range want {
 		if b.Sections[i].Kind != k {
 			t.Errorf("section %d = %q, want %q", i, b.Sections[i].Kind, k)
@@ -53,7 +53,7 @@ func TestSectionsForCoversEveryKindExactlyOnce(t *testing.T) {
 			seen[s.Kind] = true
 		}
 	}
-	for _, k := range []Kind{KindTriage, KindPlanReview, KindNeedsInput, KindReadyForHuman, KindStalled} {
+	for _, k := range []Kind{KindTriage, KindPlanReview, KindNeedsInput, KindInReview, KindStalled} {
 		if !seen[k] {
 			t.Errorf("Kind %q is not covered by any view", k)
 		}
@@ -67,7 +67,7 @@ func TestSectionsForGroupsByJob(t *testing.T) {
 		kinds []Kind
 	}{
 		{ViewDecide, []Kind{KindTriage}},
-		{ViewReview, []Kind{KindPlanReview, KindNeedsInput, KindReadyForHuman}},
+		{ViewReview, []Kind{KindPlanReview, KindNeedsInput, KindInReview}},
 		{ViewUnblock, []Kind{KindStalled}},
 	}
 	for _, tt := range tests {
@@ -162,20 +162,25 @@ func TestVettedIssuesStayOnTheBoard(t *testing.T) {
 	}
 }
 
-// The ready-for-human label outlives the merge that answered it, so a board
-// that showed every labeled issue would fill up with finished work.
-func TestReadyForHumanDropsClosedWork(t *testing.T) {
-	open := issue("WND-6", 2, 1)
-	open.State = linear.IssueState{Name: "In Review", Type: "started"}
-	done := issue("WND-7", 2, 1)
-	done.State = linear.IssueState{Name: "Done", Type: "completed"}
-	canceled := issue("WND-8", 2, 1)
-	canceled.State = linear.IssueState{Name: "Canceled", Type: "canceled"}
+// In Review is status-driven, label-sorted: every In Review issue is a row
+// — the case an unlabeled one proves — but a run that deliberately flagged
+// one with ready-for-human floats it to the top of the section.
+func TestInReviewFloatsTheLabeledIssues(t *testing.T) {
+	unlabeled := issue("WND-6", 2, 1)
+	unlabeled.State = linear.IssueState{Name: "In Review", Type: "started"}
+	labeled := issue("WND-7", 1, 2)
+	labeled.State = linear.IssueState{Name: "In Review", Type: "started"}
+	labeled.Labels = []string{ReadyForHumanLabel}
 
-	b := Build(Snapshot{ReadyForHuman: []linear.Issue{open, done, canceled}})
+	// Unlabeled built first and ranked ahead by priority, to prove the sort
+	// is label-first rather than merely queue.Less carrying it.
+	b := Build(Snapshot{InReview: []linear.Issue{unlabeled, labeled}})
 	rows := b.Sections[3].Rows
-	if len(rows) != 1 || rows[0].Issue.Identifier != "WND-6" {
-		t.Errorf("ready-for-human rows = %v, want only the open one", rows)
+	if len(rows) != 2 {
+		t.Fatalf("in review rows = %v, want both issues", rows)
+	}
+	if rows[0].Issue.Identifier != "WND-7" || rows[1].Issue.Identifier != "WND-6" {
+		t.Errorf("in review order = %v, want the labeled issue first", rows)
 	}
 }
 
@@ -187,7 +192,7 @@ func TestDispositions(t *testing.T) {
 		{kind: KindTriage, want: 6},
 		{kind: KindNeedsInput, want: 6},
 		{kind: KindPlanReview, want: 2},
-		{kind: KindReadyForHuman, want: 0},
+		{kind: KindInReview, want: 0},
 		{kind: KindStalled, want: 0},
 	}
 	for _, tt := range tests {

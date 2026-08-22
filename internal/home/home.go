@@ -2,13 +2,15 @@
 // as one flat list. The five queues are not one job; they are three, and a
 // person sitting down at wand has come to do exactly one of them: [Decide]
 // what to start (Triage), [Review] what came back (Plan Review, Needs
-// Input, Ready for human), or [Unblock] the machine (Stalled). A landing
+// Input, In Review), or [Unblock] the machine (Stalled). A landing
 // screen names the three and how much is waiting in each; picking one
 // scopes the screen to that job alone. See [View] and [Board.SectionsFor].
 //
 // Five queues still, and nothing else besides them. Triage to judge, Plan
-// Review to bless a plan, Needs Input to answer, ready-for-human work to
-// look at, and stalled runs no process is driving any more. Each is a queue
+// Review to bless a plan, Needs Input to answer, and In Review to see what
+// is moving — the ready-for-human label floats what a run deliberately
+// flagged to the top, but every In Review issue is a row — and stalled runs
+// no process is driving any more. Each is a queue
 // that nothing drains on its own — the failure mode PLAN.md names "queues
 // nothing drains" — and each is invisible until something puts it on
 // screen. [Build] always returns all five; a [View] is a lens over that one
@@ -51,9 +53,10 @@ import (
 	"github.com/mattwalters/wand/internal/queue"
 )
 
-// ReadyForHumanLabel marks work a person has to look at — a PR to review, a
-// merge to press. Covenant topology like the other two labels, not a
-// parameter (see covenant.Default).
+// ReadyForHumanLabel names the label a run sets deliberately at
+// convergence — "a human specifically needs to look at this" — used here
+// only to sort In Review's rows, the labeled ones first. Covenant topology
+// like the other labels, not a parameter (see covenant.Default).
 const ReadyForHumanLabel = "ready-for-human"
 
 // Snapshot is everything home reads, already fetched. Pure input:
@@ -67,8 +70,10 @@ type Snapshot struct {
 	// PlanReview is every issue carrying a finished plan, awaiting the human
 	// judgment that either blesses it into Todo or sends it back.
 	PlanReview []linear.Issue
-	// ReadyForHuman is every open issue carrying the ready-for-human label.
-	ReadyForHuman []linear.Issue
+	// InReview is every issue in the In Review status. [Build] floats the
+	// ones also carrying the ready-for-human label to the top of the
+	// section, so a status-true heading loses nothing of the label's signal.
+	InReview []linear.Issue
 	// Stalled are runs the journal says a person has to resolve.
 	Stalled []StalledRun
 	// Active are runs a live process is presently driving — WND-41's
@@ -81,11 +86,11 @@ type Snapshot struct {
 type Kind string
 
 const (
-	KindTriage        Kind = "triage"
-	KindPlanReview    Kind = "plan_review"
-	KindNeedsInput    Kind = "needs_input"
-	KindReadyForHuman Kind = "ready_for_human"
-	KindStalled       Kind = "stalled"
+	KindTriage     Kind = "triage"
+	KindPlanReview Kind = "plan_review"
+	KindNeedsInput Kind = "needs_input"
+	KindInReview   Kind = "in_review"
+	KindStalled    Kind = "stalled"
 )
 
 // View is one of the three jobs a person comes to home to do. It groups
@@ -109,11 +114,11 @@ const (
 // Kind to a view — a ranked Backlog slice into ViewDecide, say — is the one
 // line this map needs; nothing else in this file changes shape.
 var kindView = map[Kind]View{
-	KindTriage:        ViewDecide,
-	KindPlanReview:    ViewReview,
-	KindNeedsInput:    ViewReview,
-	KindReadyForHuman: ViewReview,
-	KindStalled:       ViewUnblock,
+	KindTriage:     ViewDecide,
+	KindPlanReview: ViewReview,
+	KindNeedsInput: ViewReview,
+	KindInReview:   ViewReview,
+	KindStalled:    ViewUnblock,
 }
 
 // ViewInfo names one view for the landing screen and the docs: the key that
@@ -255,11 +260,11 @@ func Build(s Snapshot) Board {
 				Rows:  issueRows(KindNeedsInput, s.NeedsInput),
 			},
 			{
-				Kind:  KindReadyForHuman,
-				Title: "Ready for human",
-				Verb:  "to look at",
-				Empty: "nothing is labeled " + ReadyForHumanLabel + ".",
-				Rows:  issueRows(KindReadyForHuman, openIssues(s.ReadyForHuman)),
+				Kind:  KindInReview,
+				Title: "In Review",
+				Verb:  "in review",
+				Empty: "nothing is in review.",
+				Rows:  inReviewRows(s.InReview),
 			},
 			{
 				Kind:  KindStalled,
@@ -270,21 +275,6 @@ func Build(s Snapshot) Board {
 			},
 		},
 	}
-}
-
-// openIssues drops closed work. The ready-for-human label outlives the merge
-// that answered it — Linear does not strip labels on close — so a board that
-// showed every labeled issue would fill with work already done.
-func openIssues(issues []linear.Issue) []linear.Issue {
-	var open []linear.Issue
-	for _, issue := range issues {
-		switch issue.State.Type {
-		case "completed", "canceled":
-		default:
-			open = append(open, issue)
-		}
-	}
-	return open
 }
 
 // PlanSection returns the plan region `wand plan` wrote onto issue's
@@ -315,6 +305,34 @@ func issueRows(kind Kind, issues []linear.Issue) []Row {
 		rows = append(rows, Row{Kind: kind, Issue: issue})
 	}
 	return rows
+}
+
+// inReviewRows orders In Review status-driven, label-sorted: issues a run
+// deliberately flagged with ready-for-human first, the rest after — each
+// group internally in the same queue order [issueRows] gives every other
+// section. A status-true heading loses nothing of the label's signal this
+// way; it just stops being the only thing the section can show.
+func inReviewRows(issues []linear.Issue) []Row {
+	var flagged, rest []linear.Issue
+	for _, issue := range issues {
+		if hasLabel(issue, ReadyForHumanLabel) {
+			flagged = append(flagged, issue)
+		} else {
+			rest = append(rest, issue)
+		}
+	}
+	rows := issueRows(KindInReview, flagged)
+	return append(rows, issueRows(KindInReview, rest)...)
+}
+
+// hasLabel reports whether issue carries label.
+func hasLabel(issue linear.Issue, label string) bool {
+	for _, l := range issue.Labels {
+		if l == label {
+			return true
+		}
+	}
+	return false
 }
 
 // Field is the extra input a disposition needs before it can be applied.
@@ -442,11 +460,13 @@ var stalledJudgments = []Disposition{ClearParked}
 // Dispositions returns what a human may do to this row.
 //
 // Triage and Needs Input get all six. Plan Review gets the narrower pair:
-// bless the plan, or reject it. Ready-for-human gets none, and that is the
-// honest answer rather than a gap: the act that row is asking for is a
+// bless the plan, or reject it. In Review gets none, and that is the
+// honest answer rather than a gap: the act a flagged row is asking for is a
 // review or a merge, which happens on the pull request — and the covenant's
 // on-merge automation closes the ticket seconds later. A status write from
-// here would be racing that automation to say the same thing.
+// here would be racing that automation to say the same thing. An unflagged
+// row is further still from a judgment of this screen's: it is mid-review,
+// with nobody yet asking for anything.
 //
 // Stalled rows get none, with one exception: a parked run offers
 // ClearParked. A stalled run is otherwise not a ticket, and resolving one

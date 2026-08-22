@@ -156,8 +156,9 @@ func TestCursorMovesInReviewView(t *testing.T) {
 	}{
 		{name: "starts on Plan Review", script: "2", want: 0, wantRow: "WND-44"},
 		{name: "crosses into Needs Input", script: "2,j", want: 1, wantRow: "WND-38"},
-		{name: "crosses into Ready for human", script: "2,j,j", want: 2, wantRow: "WND-35"},
-		{name: "stops at the last row", script: "2,j,j,j", want: 2, wantRow: "WND-35"},
+		{name: "crosses into In Review", script: "2,j,j", want: 2, wantRow: "WND-35"},
+		{name: "moves within In Review", script: "2,j,j,j", want: 3, wantRow: "WND-46"},
+		{name: "stops at the last row", script: "2,j,j,j,j", want: 3, wantRow: "WND-46"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -284,10 +285,10 @@ func TestDispositionKeysOpenTheConfirmation(t *testing.T) {
 	}
 }
 
-// Ready-for-human rows are read-only by design: the act that row is asking
+// In Review rows are read-only by design: the act a flagged row is asking
 // for happens on the pull request, not on a status field.
-func TestReadyForHumanRowsOfferNoDisposition(t *testing.T) {
-	// Review view: Plan Review, Needs Input, then Ready for human (WND-35).
+func TestInReviewRowsOfferNoDisposition(t *testing.T) {
+	// Review view: Plan Review, Needs Input, then In Review (WND-35 first, flagged).
 	m, _ := apply(t, board(t, &fakeBackend{}), "2,j,j,t")
 	if m.state != stateBoard {
 		t.Errorf("state = %v, want stateBoard: this row offers no judgments", m.state)
@@ -679,7 +680,7 @@ func TestEmptyViews(t *testing.T) {
 		}, script: "1"},
 		{golden: "review-empty", snap: func() home.Snapshot {
 			s := home.Sample()
-			s.PlanReview, s.NeedsInput, s.ReadyForHuman = nil, nil, nil
+			s.PlanReview, s.NeedsInput, s.InReview = nil, nil, nil
 			return s
 		}, script: "2"},
 		{golden: "unblock-empty", snap: func() home.Snapshot {

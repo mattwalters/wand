@@ -1,7 +1,7 @@
  wand · WND · Review                                      nothing waiting on you
 
   nothing to review right now — plans awaiting a blessing, parked questions and
-  ready-for-human work will land here.
+  work still in review will land here.
 
   Plan Review
     no plan is waiting on a blessing.
@@ -9,7 +9,7 @@
   Needs Input
     no run is parked on a question.
 
-  Ready for human
-    nothing is labeled ready-for-human.
+  In Review
+    nothing is in review.
 
   ↑/k ↓/j move • enter open • r refresh • q quit

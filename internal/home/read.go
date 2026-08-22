@@ -65,11 +65,11 @@ func Read(ctx context.Context, cl Linear, runs Runs, cov covenant.Covenant, team
 	}
 	snap.NeedsInput = needsInput
 
-	ready, err := cl.TeamIssuesByLabel(ctx, teamKey, ReadyForHumanLabel)
+	inReview, err := cl.TeamIssuesByState(ctx, teamKey, cov.StatusName("in_review"))
 	if err != nil {
-		return Snapshot{}, fmt.Errorf("reading %s: %w", ReadyForHumanLabel, err)
+		return Snapshot{}, fmt.Errorf("reading In Review: %w", err)
 	}
-	snap.ReadyForHuman = ready
+	snap.InReview = inReview
 
 	started, err := cl.TeamIssuesByStateType(ctx, teamKey, "started")
 	if err != nil {

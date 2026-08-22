@@ -1,11 +1,11 @@
- wand · WND                                                     7 waiting on you
+ wand · WND                                                     8 waiting on you
 
   Running  2 in flight
   WND-12  implement (round 1)  claude-code · up 18m · hb 8s ago
   WND-7   scout                possibly dead, sweep will confirm · — · up 42m ·…
 
   1  Decide   2 waiting  judge the pool, rank it, promote it
-  2  Review   3 waiting  bless plans, answer questions, merge PRs
+  2  Review   4 waiting  bless plans, answer questions, merge PRs
   3  Unblock  2 waiting  clear parks, resolve stuck lanes
 
   1 Decide • 2 Review • 3 Unblock • r refresh • q quit

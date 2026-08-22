@@ -59,9 +59,12 @@ the active view once you are inside one.
     ticket's premise wrong, or a run that hands back. It means one thing —
     answer me — never "a plan is ready to bless," which is Plan Review's
     job.
-  * **Ready for human** — every open issue carrying the `ready-for-human`
-    label: a pull request to review, a merge to press. Closed issues are
-    dropped, because the label outlives the merge that answered it.
+  * **In Review** — every issue in the In Review status, the ones a run
+    deliberately flagged with the `ready-for-human` label — a pull request
+    to review, a merge to press — floated to the top, the rest of the
+    status after them. Status-driven, label-sorted: the heading names a
+    real state on the board, and the label's own signal survives as the
+    row order rather than as a second, unnamed queue.
 * **Unblock** (`3`) — clear parks, resolve stuck lanes: a repair of the
   tooling, not a judgment about the work. Sourced from **Stalled** — runs
   the crash-only run journal says a person has to resolve. Four kinds,

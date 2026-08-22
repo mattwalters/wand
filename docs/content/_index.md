@@ -30,8 +30,8 @@ $ wand ui --sample
   Needs Input  1 to answer
   WND-38  High       Second harness adapter: which one?
 
-  Ready for human  1 to look at
-  WND-35  In Review  Run journal and lease store
+  In Review  1 in review
+  WND-35  ready for human  Run journal and lease store
 
   Stalled  2 to resolve
   WND-36  stuck      held by pid 48213 on studio.local, which is gone; the run …

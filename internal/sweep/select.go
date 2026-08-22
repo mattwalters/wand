@@ -103,8 +103,7 @@ func deadLeaseReason(runID string, r journal.Report) string {
 }
 
 // ReReviewCandidates turns every issue labeled [ReReviewLabel] into a
-// candidate. Filtering to open, in-review work is the caller's — the same
-// openIssues discipline [home.Build] applies to ready-for-human.
+// candidate. Filtering to open, in-review work is the caller's.
 func ReReviewCandidates(issues []linear.Issue) []Candidate {
 	out := make([]Candidate, 0, len(issues))
 	for _, issue := range issues {
