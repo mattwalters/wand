@@ -2,6 +2,9 @@ package worker
 
 import (
 	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -71,6 +74,48 @@ func (c Codex) Invocation(spec Spec, prompt string, environ []string) (Invocatio
 	}
 
 	return Invocation{Argv: argv, Env: environ, Dir: spec.Dir, Stdin: prompt}, nil
+}
+
+// schemaFileName is where SchemaInvocation writes the shape schema inside
+// spec.ScratchDir, so --output-schema (which takes a file path, unlike
+// Claude Code's inline --json-schema — see ClaudeCode.SchemaInvocation) can
+// read it. Overwritten on every invocation, exactly like the handoff file
+// itself, so a stale schema from an earlier phase can never be read by
+// mistake.
+const schemaFileName = "handoff-schema.json"
+
+// SchemaInvocation is Invocation plus --output-schema and
+// --output-last-message. This is nearly drop-in next to Claude Code's: the
+// handoff stays file-based, at exactly spec.HandoffPath, so collection does
+// not change — CollectHandoff below is the same file read collect does
+// without a schema. Only the schema itself needs a place to live, since
+// codex exec takes it by path rather than inline.
+func (c Codex) SchemaInvocation(spec Spec, prompt string, environ []string, schema json.RawMessage) (Invocation, error) {
+	inv, err := c.Invocation(spec, prompt, environ)
+	if err != nil {
+		return Invocation{}, err
+	}
+	// Run creates spec.ScratchDir before building the Invocation, but that
+	// ordering is Run's own, not a guarantee this method can lean on from
+	// elsewhere it might be called — so it makes the directory itself.
+	if err := os.MkdirAll(spec.ScratchDir, 0o755); err != nil {
+		return Invocation{}, fmt.Errorf("codex: writing schema file: %w", err)
+	}
+	schemaPath := filepath.Join(spec.ScratchDir, schemaFileName)
+	if err := os.WriteFile(schemaPath, schema, 0o644); err != nil {
+		return Invocation{}, fmt.Errorf("codex: writing schema file: %w", err)
+	}
+	// Exec-subcommand flags, like --json above; appending after Invocation's
+	// own argv keeps them after "exec" in argv order.
+	inv.Argv = append(inv.Argv, "--output-schema", schemaPath, "--output-last-message", spec.HandoffPath)
+	return inv, nil
+}
+
+// CollectHandoff is the same file-based read collect does without a schema:
+// codex exec's --output-last-message keeps writing to spec.HandoffPath
+// regardless of --output-schema, so nothing about collection changes.
+func (c Codex) CollectHandoff(spec Spec, res Result) (json.RawMessage, error) {
+	return collect(spec.HandoffPath)
 }
 
 // codexUsage is the shape of the "usage" object on a codex exec --json

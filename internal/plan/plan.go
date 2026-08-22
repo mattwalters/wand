@@ -418,7 +418,7 @@ func (s *planning) wrongPremise(ctx context.Context, draft Draft) *Outcome {
 // parks: a plan nobody validated is not a plan, and there is nothing here
 // to hand a human but a broken handoff.
 func (s *planning) draft(ctx context.Context) (Draft, *Outcome) {
-	res, out := s.work(ctx, "scout", 1, scoutRules(), scoutPrompt(s.ticketText, s.d.Cov))
+	res, out := s.work(ctx, "scout", 1, scoutRules(), scoutPrompt(s.ticketText, s.d.Cov), DraftSchema)
 	if out != nil {
 		return Draft{}, out
 	}
@@ -496,7 +496,7 @@ func (s *planning) parseRevision(ctx context.Context, raw json.RawMessage, objec
 // to see which it was.
 func (s *planning) critique(ctx context.Context, draft Draft) (Draft, *Outcome) {
 	rendered := renderDraft(draft, s.d.Cov)
-	res, out := s.work(ctx, "critic", 1, criticRules(), criticPrompt(s.ticketText, rendered))
+	res, out := s.work(ctx, "critic", 1, criticRules(), criticPrompt(s.ticketText, rendered), CritiqueSchema)
 	if out != nil {
 		return draft, out
 	}
@@ -519,7 +519,7 @@ func (s *planning) critique(ctx context.Context, draft Draft) (Draft, *Outcome) 
 	fmt.Fprintf(s.d.Out, "critic: %d objection(s), revising\n", len(critique.Objections))
 
 	prompt := reviseAfterCritiquePrompt(s.ticketText, rendered, critique, s.d.Cov)
-	res, out = s.work(ctx, "revise", 1, scoutRules(), prompt)
+	res, out = s.work(ctx, "revise", 1, scoutRules(), prompt, RevisionSchema)
 	if out != nil {
 		return draft, out
 	}
@@ -595,7 +595,7 @@ func (s *planning) interview(ctx context.Context, draft Draft) (Draft, *Outcome)
 // have no equivalent of.
 func (s *planning) revise(ctx context.Context, draft Draft, round int, objections, source string) (Draft, *Outcome) {
 	prompt := revisePrompt(s.ticketText, renderDraft(draft, s.d.Cov), objections, s.d.Cov, source)
-	res, out := s.work(ctx, "revise", round, scoutRules(), prompt)
+	res, out := s.work(ctx, "revise", round, scoutRules(), prompt, DraftSchema)
 	if out != nil {
 		return draft, out
 	}
@@ -720,7 +720,7 @@ func (s *planning) runReplan(ctx context.Context, comments []linear.Comment) Out
 	s.prov.RePlan = true
 	s.prov.Comments = len(since)
 
-	res, out := s.work(ctx, "replan", 1, scoutRules(), replanPrompt(s.ticketText, prior, repliesTranscript(since), s.d.Cov))
+	res, out := s.work(ctx, "replan", 1, scoutRules(), replanPrompt(s.ticketText, prior, repliesTranscript(since), s.d.Cov), ReplanSchema)
 	if out != nil {
 		return *out
 	}
@@ -854,7 +854,7 @@ func repliesTranscript(comments []linear.Comment) string {
 // times at the same round. A scout costs a whole model call and produces
 // nothing until it hands off, so a provider error is the most expensive
 // possible thing to treat as a verdict.
-func (s *planning) work(ctx context.Context, phase string, round int, rules []string, prompt string) (worker.Result, *Outcome) {
+func (s *planning) work(ctx context.Context, phase string, round int, rules []string, prompt string, schema json.RawMessage) (worker.Result, *Outcome) {
 	for attempt := 0; ; attempt++ {
 		if attempt == 0 {
 			fmt.Fprintf(s.d.Out, "phase %s: spawning a cold worker (%s)\n", phase, s.d.Harness)
@@ -884,6 +884,7 @@ func (s *planning) work(ctx context.Context, phase string, round int, rules []st
 			Out:            s.d.Out,
 			Label:          fmt.Sprintf("%s round %d", phase, round),
 			OnHeartbeat:    s.heartbeat(phase, round),
+			Schema:         schema,
 		}
 		start := time.Now()
 		res, err := s.d.Workers.Run(ctx, spec)

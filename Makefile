@@ -84,8 +84,8 @@ test-e2e: ## Run the pty smoke test (tier 3)
 	go test -tags e2e ./e2e/...
 
 .PHONY: test-conformance
-test-conformance: ## Prove worker isolation against the real harness (spends a model call)
-	go test -tags conformance -v -run Isolation ./internal/worker/...
+test-conformance: ## Prove worker isolation and schema enforcement against the real harness (spends a model call)
+	go test -tags conformance -v -run 'Isolation|SchemaShape' ./internal/worker/...
 
 .PHONY: update-goldens
 update-goldens: ## Regenerate golden screens, then READ THE DIFF

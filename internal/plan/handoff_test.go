@@ -351,3 +351,115 @@ func TestParseReplanAllowsAWrongPremiseWithNoChangesAccount(t *testing.T) {
 		t.Errorf("premise = %q, want wrong", rev.Premise)
 	}
 }
+
+// schemaNode is a loosely-typed view of a shape-only schema, for asserting
+// what internal/schema generated without re-implementing a JSON Schema
+// parser in the test.
+type schemaNode struct {
+	Type                 string                     `json:"type"`
+	Properties           map[string]json.RawMessage `json:"properties"`
+	Required             []string                   `json:"required"`
+	AdditionalProperties *bool                      `json:"additionalProperties"`
+	Items                json.RawMessage            `json:"items"`
+}
+
+func decodeSchemaNode(t *testing.T, raw json.RawMessage) schemaNode {
+	t.Helper()
+	var n schemaNode
+	if err := json.Unmarshal(raw, &n); err != nil {
+		t.Fatalf("generated schema is not valid JSON: %v\n%s", err, raw)
+	}
+	return n
+}
+
+// TestCritiqueSchemaMatchesTheWorkedExample holds the ticket's own worked
+// example (WND-97): the critic handoff's schema requires only "verdict",
+// and additionalProperties: false is set one layer inside objections[], not
+// only at the top — the WND-45 lesson a top-level-only schema would have
+// missed.
+func TestCritiqueSchemaMatchesTheWorkedExample(t *testing.T) {
+	top := decodeSchemaNode(t, plan.CritiqueSchema)
+	if top.Type != "object" {
+		t.Fatalf("type = %q, want object", top.Type)
+	}
+	if top.AdditionalProperties == nil || *top.AdditionalProperties {
+		t.Error("top-level additionalProperties must be false")
+	}
+	if len(top.Required) != 1 || top.Required[0] != "verdict" {
+		t.Errorf("required = %v, want [verdict]", top.Required)
+	}
+	for _, want := range []string{"verdict", "objections"} {
+		if _, ok := top.Properties[want]; !ok {
+			t.Errorf("missing property %q", want)
+		}
+	}
+
+	objections := decodeSchemaNode(t, top.Properties["objections"])
+	if objections.Type != "array" {
+		t.Fatalf("objections type = %q, want array", objections.Type)
+	}
+	items := decodeSchemaNode(t, objections.Items)
+	if items.Type != "object" {
+		t.Fatalf("objections.items type = %q, want object", items.Type)
+	}
+	if items.AdditionalProperties == nil || *items.AdditionalProperties {
+		t.Error("objections[].additionalProperties must be false — this is what would have caught WND-45's stray field nested inside objections[]")
+	}
+	for _, want := range []string{"target", "summary", "consequence"} {
+		if _, ok := items.Properties[want]; !ok {
+			t.Errorf("objections[] is missing property %q", want)
+		}
+	}
+	if len(items.Required) != 0 {
+		t.Errorf("objections[].required = %v, want none — consequence is deliberately not required, or the model invents filler and ParseCritique's check on it is disabled", items.Required)
+	}
+}
+
+// TestDraftSchemaRequiresOnlyThePremise holds the same reasoning for the
+// scout/reviser handoff: everything past "premise" is conditional on which
+// branch the draft takes, so nothing else may be required.
+func TestDraftSchemaRequiresOnlyThePremise(t *testing.T) {
+	top := decodeSchemaNode(t, plan.DraftSchema)
+	if len(top.Required) != 1 || top.Required[0] != "premise" {
+		t.Errorf("required = %v, want [premise]", top.Required)
+	}
+	if top.AdditionalProperties == nil || *top.AdditionalProperties {
+		t.Error("top-level additionalProperties must be false")
+	}
+	for _, want := range []string{"understanding", "approaches", "recommendation", "files", "estimate", "plan", "assumptions", "open_questions"} {
+		if _, ok := top.Properties[want]; !ok {
+			t.Errorf("missing property %q", want)
+		}
+	}
+	if _, ok := top.Properties["Dropped"]; ok {
+		t.Error(`Draft.Dropped is filled in by validation, never written by a worker, and is tagged json:"-" — it must not appear in the schema`)
+	}
+}
+
+// TestRevisionAndReplanSchemasEmbedTheDraft holds that Revision and Replan
+// (Draft plus one more field) flatten Draft's own fields into their own top
+// level, rather than nesting them under a "draft" property nothing writes.
+func TestRevisionAndReplanSchemasEmbedTheDraft(t *testing.T) {
+	rev := decodeSchemaNode(t, plan.RevisionSchema)
+	if len(rev.Required) != 1 || rev.Required[0] != "premise" {
+		t.Errorf("revision required = %v, want [premise]", rev.Required)
+	}
+	for _, want := range []string{"premise", "plan", "resolutions"} {
+		if _, ok := rev.Properties[want]; !ok {
+			t.Errorf("revision schema is missing %q", want)
+		}
+	}
+	if _, ok := rev.Properties["Draft"]; ok {
+		t.Error("the embedded Draft must not appear as its own nested property")
+	}
+
+	replan := decodeSchemaNode(t, plan.ReplanSchema)
+	if len(replan.Required) != 1 || replan.Required[0] != "premise" {
+		t.Errorf("replan required = %v, want [premise]", replan.Required)
+	}
+	for _, want := range []string{"premise", "plan", "changes"} {
+		if _, ok := replan.Properties[want]; !ok {
+			t.Errorf("replan schema is missing %q", want)
+		}
+	}
+}

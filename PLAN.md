@@ -103,8 +103,8 @@ design. Being honest about which tier a rule occupies is itself a rule.
 
 | Tier | Mechanism | Example |
 |---|---|---|
-| Structural | The violation cannot be expressed | Workers have no credentials; reviewer coldness is a process boundary |
-| Code gate | The attempt is refused with a reason | Status verdicts, queue vetting, handoff validation |
+| Structural | The violation cannot be expressed | Workers have no credentials; reviewer coldness is a process boundary; a handoff's shape, on a harness that takes a schema — a renamed or extra field never becomes a valid handoff |
+| Code gate | The attempt is refused with a reason | Status verdicts, queue vetting, handoff value validation (and handoff shape itself, on a harness with no schema support — the guarantee fails soft, never hard) |
 | Harness hook | The agent's tool call is intercepted | `wand guard` behind a generated PreToolUse shim |
 | Prose | Written down, hoped for, audited | Description-pairing doctrine, reference glosses |
 

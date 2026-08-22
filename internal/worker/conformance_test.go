@@ -33,3 +33,25 @@ func TestCodexIsolation(t *testing.T) {
 	}
 	workertest.Isolation(t, worker.Codex{})
 }
+
+// TestClaudeCodeSchemaShape is the live proof that ClaudeCode's
+// SchemaAdapter actually gets additionalProperties: false enforced by the
+// harness (WND-97), not just wired to a flag that turned out to be ignored.
+func TestClaudeCodeSchemaShape(t *testing.T) {
+	if _, err := exec.LookPath("claude"); err != nil {
+		t.Fatal("claude is not on PATH; the conformance run proves the real harness or it proves nothing")
+	}
+	workertest.SchemaShape(t, worker.ClaudeCode{})
+}
+
+// TestCodexSchemaShape is the equivalent live proof for codex exec. The two
+// harnesses are known to enforce different subsets of JSON Schema under
+// pressure (WND-97's minLength/maxLength probe) — additionalProperties is
+// the one keyword this package's schemas actually depend on, so this is the
+// row that must never silently regress.
+func TestCodexSchemaShape(t *testing.T) {
+	if _, err := exec.LookPath("codex"); err != nil {
+		t.Fatal("codex is not on PATH; the conformance run proves the real harness or it proves nothing")
+	}
+	workertest.SchemaShape(t, worker.Codex{})
+}

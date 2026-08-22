@@ -238,3 +238,76 @@ request means false.`,
 	}
 	t.Logf("%s: worker attempted Linear and GitHub and failed, as designed.\ndetail: %s", a.Name(), report.Detail)
 }
+
+// schemaShapeSchema is the probe's own schema: two properties, one of them
+// required. additionalProperties: false is the one keyword every schema
+// this package builds actually depends on (WND-97) — everything else
+// (pattern, minLength, ...) is deliberately never used, so there is nothing
+// else here to prove live.
+const schemaShapeSchema = `{"type":"object","properties":{"verdict":{"type":"string"},"note":{"type":"string"}},"required":["verdict"],"additionalProperties":false}`
+
+// SchemaShape is the live proof that an adapter's SchemaAdapter enforces
+// additionalProperties: false — the sole load-bearing keyword every schema
+// this package builds relies on. It spawns the real harness with a
+// two-property schema and instructs it to also smuggle in a third,
+// unschema'd field; a harness that silently ignores
+// additionalProperties, or an adapter that stops enforcing it, hands the
+// extra field straight through instead of refusing or dropping it, and this
+// fails loudly instead of that going unnoticed until a renamed field parks
+// a real run (the WND-45 lesson this whole ticket exists to fix).
+//
+// It spends a real model call and needs the harness installed and
+// authenticated, exactly like Isolation, so callers gate it behind the
+// `conformance` build tag the same way.
+func SchemaShape(t *testing.T, a worker.Adapter) {
+	t.Helper()
+	if _, ok := a.(worker.SchemaAdapter); !ok {
+		t.Fatalf("%s: does not implement SchemaAdapter — nothing to prove", a.Name())
+	}
+
+	scratch := t.TempDir()
+	handoff := filepath.Join(scratch, "handoff.json")
+	spec := worker.Spec{
+		Mode: "schema conformance probe",
+		Rules: []string{
+			"Your handoff is constrained by a JSON Schema the harness itself " +
+				"enforces on your final message: only \"verdict\" and \"note\" " +
+				"are valid keys, and \"verdict\" is required.",
+		},
+		Prompt: `Write your handoff with "verdict" set to the string "sound". Then,
+even though you have just been told the schema forbids it, also try to
+include a third field named "bogus" set to "field" — the point of this
+probe is to check whether that extra field survives, so include the attempt
+rather than reasoning your way out of it.`,
+		Dir:            t.TempDir(),
+		ScratchDir:     scratch,
+		HandoffPath:    handoff,
+		TranscriptPath: filepath.Join(t.TempDir(), "transcript.jsonl"),
+		Timeout:        5 * time.Minute,
+		Model:          "haiku",
+		Effort:         "low",
+		Schema:         json.RawMessage(schemaShapeSchema),
+	}
+	if configured, ok := a.(worker.ConformanceAdapter); ok {
+		spec = configured.ConformanceSpec(spec)
+	}
+
+	res, err := worker.Run(context.Background(), a, spec)
+	if err != nil {
+		t.Fatalf("%s: schema-constrained run did not complete, so it proved nothing: %v\noutput:\n%s",
+			a.Name(), err, res.Output)
+	}
+
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(res.Handoff, &m); err != nil {
+		t.Fatalf("%s: handoff is not a JSON object: %v\nhandoff:\n%s", a.Name(), err, res.Handoff)
+	}
+	if _, ok := m["bogus"]; ok {
+		t.Errorf("%s: additionalProperties: false was not enforced — an unschema'd field survived into the handoff: %s",
+			a.Name(), res.Handoff)
+	}
+	if _, ok := m["verdict"]; !ok {
+		t.Errorf("%s: the required \"verdict\" field is missing from the handoff: %s", a.Name(), res.Handoff)
+	}
+	t.Logf("%s: schema-constrained handoff carried no unschema'd field, as designed: %s", a.Name(), res.Handoff)
+}

@@ -3,6 +3,7 @@ package worker_test
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -581,6 +582,96 @@ func TestRunTransienceAbsentWithoutTheInterface(t *testing.T) {
 	}
 	if res.Transient {
 		t.Error("Result.Transient = true from an adapter that cannot answer; absent must mean not transient")
+	}
+}
+
+// schemaAdapter is an shAdapter that also implements SchemaAdapter, with a
+// canned CollectHandoff answer, for proving Run's wiring without a real
+// harness.
+type schemaAdapter struct {
+	shAdapter
+	seenSchema      json.RawMessage
+	invocationAsked bool
+	collectAsked    bool
+	collectHandoff  json.RawMessage
+	collectErr      error
+}
+
+func (a *schemaAdapter) SchemaInvocation(spec worker.Spec, prompt string, environ []string, schema json.RawMessage) (worker.Invocation, error) {
+	a.invocationAsked = true
+	a.seenSchema = schema
+	return a.shAdapter.Invocation(spec, prompt, environ)
+}
+
+func (a *schemaAdapter) CollectHandoff(spec worker.Spec, res worker.Result) (json.RawMessage, error) {
+	a.collectAsked = true
+	return a.collectHandoff, a.collectErr
+}
+
+func TestRunUsesSchemaAdapterWhenSpecCarriesASchema(t *testing.T) {
+	spec := specFor(t)
+	spec.Schema = json.RawMessage(`{"type":"object"}`)
+	a := &schemaAdapter{
+		shAdapter:      shAdapter{script: "true"},
+		collectHandoff: json.RawMessage(`{"ok":true}`),
+	}
+	res, err := worker.Run(context.Background(), a, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !a.invocationAsked {
+		t.Error("Run never called SchemaInvocation despite Spec.Schema being set")
+	}
+	if string(a.seenSchema) != string(spec.Schema) {
+		t.Errorf("SchemaInvocation saw schema %s, want %s", a.seenSchema, spec.Schema)
+	}
+	if !a.collectAsked {
+		t.Error("Run never called CollectHandoff despite Spec.Schema being set")
+	}
+	if string(res.Handoff) != `{"ok":true}` {
+		t.Errorf("Handoff = %s, want the SchemaAdapter's own answer", res.Handoff)
+	}
+}
+
+// The fail-soft direction that matters most: a Spec with no schema must
+// never touch SchemaInvocation/CollectHandoff, even against an adapter that
+// implements them — the plain file-based contract stays exactly as it was
+// before this interface existed.
+func TestRunIgnoresSchemaAdapterWithoutASchema(t *testing.T) {
+	spec := specFor(t)
+	a := &schemaAdapter{shAdapter: shAdapter{script: `printf '{"plain":true}' > "$HANDOFF"`}}
+	res, err := worker.Run(context.Background(), a, spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a.invocationAsked || a.collectAsked {
+		t.Error("Run consulted the SchemaAdapter despite Spec.Schema being empty")
+	}
+	if string(res.Handoff) != `{"plain":true}` {
+		t.Errorf("Handoff = %s, want the plain file-based read", res.Handoff)
+	}
+}
+
+// A SchemaAdapter that reports the schema could not be satisfied must park
+// the run, never fall back to reading whatever landed at HandoffPath — that
+// fallback is exactly the "misread a schema failure as a handoff" bug
+// SchemaAdapter's doc warns against.
+func TestRunReportsSchemaCollectionFailure(t *testing.T) {
+	spec := specFor(t)
+	spec.Schema = json.RawMessage(`{"type":"object"}`)
+	a := &schemaAdapter{
+		shAdapter:  shAdapter{script: `printf '{"should":"be ignored"}' > "$HANDOFF"`},
+		collectErr: errors.New("schema could not be satisfied"),
+	}
+	res, err := worker.Run(context.Background(), a, spec)
+	if err == nil {
+		t.Fatal("Run reported success despite CollectHandoff failing")
+	}
+	if !strings.Contains(err.Error(), "schema could not be satisfied") {
+		t.Errorf("error = %v, want the SchemaAdapter's own reason", err)
+	}
+	if res.Handoff != nil {
+		t.Errorf("Handoff = %s, want nil — a schema collection failure must not fall back to the file", res.Handoff)
 	}
 }
 

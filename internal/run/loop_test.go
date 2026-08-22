@@ -516,6 +516,14 @@ func TestReviseRoundThenApproval(t *testing.T) {
 		!strings.Contains(revise.Prompt, "cap=1 allows two rounds") {
 		t.Errorf("revise prompt lacks the finding:\n%s", revise.Prompt)
 	}
+	// Each phase's Spec carries the shape-only schema its own Parse* call
+	// enforces: implement/revise get WorkSchema, review gets ReviewSchema.
+	wantSchemas := []json.RawMessage{WorkSchema, ReviewSchema, WorkSchema, ReviewSchema}
+	for i, want := range wantSchemas {
+		if string(f.workers.specs[i].Schema) != string(want) {
+			t.Errorf("phase %d (%s) schema = %s, want %s", i, f.workers.modes()[i], f.workers.specs[i].Schema, want)
+		}
+	}
 	if f.git.pushes < 2 {
 		t.Errorf("pushes %d, want the revise round pushed too", f.git.pushes)
 	}

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/mattwalters/wand/internal/covenant"
+	"github.com/mattwalters/wand/internal/schema"
 )
 
 // The handoff, and the validation that decides whether anything gets
@@ -86,6 +87,16 @@ type Draft struct {
 	// handoff nobody kept.
 	Dropped []string `json:"-"`
 }
+
+// DraftSchema is the shape-only JSON Schema (see internal/schema) a
+// schema-constrained scout or reviser's handoff is held to. "premise" is
+// the only required property: it is the one field meaningful on every
+// branch a draft can take. Everything else validate above enforces is
+// conditional on which branch — Understanding only when the premise is
+// sound, Reason only when it is wrong — and a schema cannot express
+// "required if X" without a value the model has no legitimate way to
+// produce being fabricated instead (WND-97's pattern/minLength probe).
+var DraftSchema = schema.FromStruct(Draft{}, "premise")
 
 // Approach is one way the work could be done.
 type Approach struct {
@@ -392,6 +403,15 @@ type Objection struct {
 	Consequence string `json:"consequence"`
 }
 
+// CritiqueSchema is the shape-only JSON Schema a schema-constrained critic's
+// handoff is held to — the ticket's own worked example (WND-97): "verdict"
+// is the only required property. Consequence is deliberately not required
+// even though ParseCritique below rejects an objection that lacks one —
+// requiring it here would make a model that has nothing to say invent
+// filler instead, which quietly disables that check rather than
+// strengthening it.
+var CritiqueSchema = schema.FromStruct(Critique{}, "verdict")
+
 // Verdicts a critique may carry.
 const (
 	VerdictSound  = "sound"
@@ -442,6 +462,14 @@ type Revision struct {
 	// nothing left to resolve.
 	Resolutions []Resolution `json:"resolutions,omitempty"`
 }
+
+// RevisionSchema is the shape-only JSON Schema a schema-constrained
+// reviser's after-critique handoff is held to. "premise" is the only
+// required property, inherited from the same reasoning DraftSchema states:
+// Resolutions is required one-for-one with the critique's objections only
+// when the premise stayed sound, which a schema cannot express without
+// forcing fabrication on the branch where it does not apply.
+var RevisionSchema = schema.FromStruct(Revision{}, "premise")
 
 // Resolution is what the reviser did with one objection: changed the plan
 // and said what changed, or left the objection standing and said why.
@@ -499,6 +527,12 @@ type Replan struct {
 	// whole draft is withdrawn and there is nothing to account for.
 	Changes string `json:"changes,omitempty"`
 }
+
+// ReplanSchema is the shape-only JSON Schema a schema-constrained reviser's
+// re-plan handoff is held to. "premise" is the only required property, for
+// the same reason RevisionSchema states: Changes is required only when the
+// premise stayed sound.
+var ReplanSchema = schema.FromStruct(Replan{}, "premise")
 
 // ParseReplan validates a reviser's handoff to a re-plan cycle: the draft
 // exactly as strictly as [ParseDraft], plus the changes narrative a re-plan

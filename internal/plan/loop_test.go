@@ -205,6 +205,7 @@ type workers struct {
 	modes    []string
 	prompts  []string
 	timeouts []time.Duration
+	schemas  []json.RawMessage
 }
 
 type workerResult struct {
@@ -222,6 +223,7 @@ func (w *workers) Run(ctx context.Context, spec worker.Spec) (worker.Result, err
 	w.modes = append(w.modes, spec.Mode)
 	w.prompts = append(w.prompts, spec.Prompt)
 	w.timeouts = append(w.timeouts, spec.Timeout)
+	w.schemas = append(w.schemas, spec.Schema)
 	if len(w.results) == 0 {
 		return worker.Result{}, fmt.Errorf("the loop spawned more workers than the test scripted")
 	}
@@ -775,6 +777,20 @@ func TestTheCriticRunsWhenTheCovenantAsksAndItsFindingsAreRevised(t *testing.T) 
 	if !strings.HasPrefix(h.work.modes[1], "critic") || !strings.HasPrefix(h.work.modes[2], "revise") {
 		t.Errorf("phases = %v", h.work.modes)
 	}
+	// Each phase's Spec carries the shape-only schema its own Parse* call
+	// enforces — a scout gets DraftSchema, the critic gets CritiqueSchema,
+	// and the reviser answering a critique gets RevisionSchema (which
+	// additionally requires a Resolution per objection, so it must not be
+	// handed the plain Draft schema).
+	if string(h.work.schemas[0]) != string(plan.DraftSchema) {
+		t.Errorf("scout schema = %s, want DraftSchema", h.work.schemas[0])
+	}
+	if string(h.work.schemas[1]) != string(plan.CritiqueSchema) {
+		t.Errorf("critic schema = %s, want CritiqueSchema", h.work.schemas[1])
+	}
+	if string(h.work.schemas[2]) != string(plan.RevisionSchema) {
+		t.Errorf("reviser-after-critique schema = %s, want RevisionSchema", h.work.schemas[2])
+	}
 	// The reviser is handed the objection, not asked to imagine one.
 	if !strings.Contains(h.work.prompts[2], "Vet cannot see blockers") {
 		t.Error("the reviser was not given the critic's objection")
@@ -916,6 +932,12 @@ func TestTheInterviewsAnswersReachAFreshReviser(t *testing.T) {
 	}
 	if !strings.Contains(h.work.prompts[1], "it is about the queue, not the vet pass") {
 		t.Error("the reviser was not given what the human said")
+	}
+	// Unlike the reviser answering a critique, an interview's free-form
+	// answers carry no per-objection resolutions — this reviser is held to
+	// the plain Draft shape, not RevisionSchema's.
+	if string(h.work.schemas[1]) != string(plan.DraftSchema) {
+		t.Errorf("interview reviser schema = %s, want DraftSchema", h.work.schemas[1])
 	}
 	if !strings.Contains(h.board.comments[0], "1 answer(s)") {
 		t.Errorf("the provenance does not report the interview:\n%s", h.board.comments[0])
@@ -1538,6 +1560,9 @@ func TestARePlanReadsCommentsAndRevisesThePlanInPlace(t *testing.T) {
 	want := []string{"claim:unlabel=label-re-plan", "section=plan", "comment", "estimate", "state=state-plan-review"}
 	if strings.Join(h.board.calls, ",") != strings.Join(want, ",") {
 		t.Fatalf("writes = %v\nwant  %v", h.board.calls, want)
+	}
+	if len(h.work.schemas) != 1 || string(h.work.schemas[0]) != string(plan.ReplanSchema) {
+		t.Errorf("replan reviser schema = %v, want exactly [ReplanSchema]", h.work.schemas)
 	}
 
 	if !strings.Contains(h.board.description, "Filter in Build") {
