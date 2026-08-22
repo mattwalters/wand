@@ -789,6 +789,34 @@ func TestRunningStripScreen(t *testing.T) {
 	tuitest.AssertScreen(t, "home-running", m, "")
 }
 
+// The usage panel — WND-55's answer to "how is the machine doing?" — is
+// exercised at rest by every other home-reaching golden through
+// home.Sample()'s own fixture (see "home", "home-sample" above). What is
+// worth a dedicated case is what those never hit: a board with no run
+// history at all, which has to say so honestly rather than rendering a row
+// of zeroes, and a terminal too narrow for a populated panel's lines,
+// which has to truncate rather than wrap and push the rest of the screen
+// down.
+func TestUsagePanelScreen(t *testing.T) {
+	empty := home.Sample()
+	empty.Usage = home.Usage{}
+	m := New(Config{
+		Snapshot: empty,
+		Backend:  &fakeBackend{},
+		Width:    screen.DefaultWidth,
+		Height:   screen.DefaultHeight,
+	})
+	tuitest.AssertScreen(t, "home-usage-empty", m, "")
+
+	narrow := New(Config{
+		Snapshot: home.Sample(),
+		Backend:  &fakeBackend{},
+		Width:    40,
+		Height:   screen.DefaultHeight,
+	})
+	tuitest.AssertScreenSized(t, "home-usage-narrow", narrow, "", 40, screen.DefaultHeight)
+}
+
 // --- refreshing from the detail screen -----------------------------------
 
 // The detail screen holds a copy of the row it was opened on, and refresh

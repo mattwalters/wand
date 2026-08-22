@@ -176,6 +176,124 @@ func TestConvergenceBreaksOutByHarnessAndVerb(t *testing.T) {
 	}
 }
 
+// runEnded is [run] plus Updated, for the two windowed-by-Updated report
+// functions below — CountOutcomes filters on it the way Velocity filters
+// PhaseRound.At, so the tests need to set it explicitly rather than relying
+// on the zero value [run] leaves it at.
+func runEnded(id, ticket, verb, harness string, outcome journal.Outcome, updated time.Time, rounds ...PhaseRound) RunSummary {
+	rs := run(id, ticket, verb, harness, outcome, rounds...)
+	rs.Updated = updated
+	return rs
+}
+
+func TestCountOutcomes(t *testing.T) {
+	early := time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)
+	late := time.Date(2026, 3, 5, 9, 0, 0, 0, time.UTC)
+	cutoff := time.Date(2026, 3, 3, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name  string
+		runs  []RunSummary
+		since time.Time
+		want  OutcomeCounts
+	}{
+		{name: "empty input", runs: nil, since: time.Time{}, want: OutcomeCounts{}},
+		{
+			name: "since cutoff excludes everything",
+			runs: []RunSummary{
+				runEnded("r1", "WND-1", "run", "claude-code", journal.Converged, early),
+				runEnded("r2", "WND-2", "run", "claude-code", journal.Parked, early),
+			},
+			since: late.Add(time.Hour),
+			want:  OutcomeCounts{},
+		},
+		{
+			name: "mixed outcomes past and before the cutoff",
+			runs: []RunSummary{
+				runEnded("r1", "WND-1", "run", "claude-code", journal.Converged, late),
+				runEnded("r2", "WND-2", "run", "codex", journal.Parked, late),
+				runEnded("r3", "WND-3", "run", "claude-code", journal.HandedBack, late),
+				runEnded("r4", "WND-4", "run", "claude-code", journal.Converged, late),
+				// Before the cutoff: must not count.
+				runEnded("r5", "WND-5", "run", "claude-code", journal.Converged, early),
+				// Still in progress: no outcome yet, must not count regardless of Updated.
+				runEnded("r6", "WND-6", "run", "claude-code", "", late),
+			},
+			since: cutoff,
+			want:  OutcomeCounts{Converged: 2, Parked: 1, HandedBack: 1},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := CountOutcomes(tt.runs, tt.since); got != tt.want {
+				t.Errorf("CountOutcomes = %+v, want %+v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestHarnessTokens(t *testing.T) {
+	early := time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC)
+	late := time.Date(2026, 3, 5, 9, 0, 0, 0, time.UTC)
+	cutoff := time.Date(2026, 3, 3, 0, 0, 0, 0, time.UTC)
+
+	tests := []struct {
+		name  string
+		runs  []RunSummary
+		since time.Time
+		want  []HarnessTotal
+	}{
+		{name: "empty input", runs: nil, since: time.Time{}, want: nil},
+		{
+			name: "since cutoff excludes everything",
+			runs: []RunSummary{
+				run("r1", "WND-1", "run", "claude-code", journal.Converged,
+					PhaseRound{Phase: "implement", Round: 1, TokensIn: i64(10), TokensOut: i64(5), At: early}),
+			},
+			since: late.Add(time.Hour),
+			want:  nil,
+		},
+		{
+			name: "mixed harnesses past and before the cutoff",
+			runs: []RunSummary{
+				run("r1", "WND-1", "run", "claude-code", journal.Converged,
+					PhaseRound{Phase: "implement", Round: 1, TokensIn: i64(100), TokensOut: i64(50), At: late},
+					// Before the cutoff: must not count.
+					PhaseRound{Phase: "review", Round: 1, TokensIn: i64(999), TokensOut: i64(999), At: early},
+				),
+				run("r2", "WND-2", "run", "codex", journal.Parked,
+					PhaseRound{Phase: "implement", Round: 1, TokensIn: i64(20), TokensOut: i64(8), At: late}),
+			},
+			since: cutoff,
+			want: []HarnessTotal{
+				{Harness: "claude-code", TokensIn: i64(100), TokensOut: i64(50)},
+				{Harness: "codex", TokensIn: i64(20), TokensOut: i64(8)},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := HarnessTokens(tt.runs, tt.since)
+			if len(got) != len(tt.want) {
+				t.Fatalf("HarnessTokens = %+v, want %+v", got, tt.want)
+			}
+			for i := range tt.want {
+				g, w := got[i], tt.want[i]
+				if g.Harness != w.Harness || tokenEq(g.TokensIn, w.TokensIn) == false || tokenEq(g.TokensOut, w.TokensOut) == false {
+					t.Errorf("row %d = %+v, want %+v", i, g, w)
+				}
+			}
+		})
+	}
+}
+
+func tokenEq(a, b *int64) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
 func TestAddTokensStaysNilWhenBothAbsent(t *testing.T) {
 	if got := addTokens(nil, nil); got != nil {
 		t.Errorf("addTokens(nil, nil) = %v, want nil, not a faked zero", *got)

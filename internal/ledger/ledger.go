@@ -81,6 +81,12 @@ type RunSummary struct {
 	Outcome journal.Outcome
 	Reason  string
 	Started time.Time
+	// Updated is when the run's journal last changed — state.Updated from
+	// journal.Replay, which lands on the outcome-ending record for an ended
+	// run. It is what windows outcome counts the same way PhaseRound.At
+	// windows Velocity: a run's own last-touched time, not any one
+	// phase-round inside it.
+	Updated time.Time
 	Rounds  []PhaseRound
 }
 
@@ -135,6 +141,7 @@ func summarize(state journal.State, recs []journal.Record) RunSummary {
 		Outcome: state.Outcome,
 		Reason:  state.Reason,
 		Started: state.Started,
+		Updated: state.Updated,
 	}
 
 	type key struct {
