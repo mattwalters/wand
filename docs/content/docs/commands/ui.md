@@ -31,6 +31,11 @@ screen naming the three and how much is waiting in each:
 ```
  wand · WND                                                     7 waiting on you
 
+  Usage
+    ▂▅▃█  13500 in · 8900 out
+    5 completed · 2 parked · 1 handed back
+    claude-code 70% · codex 29%
+
   1  Decide   2 waiting  judge the pool, rank it, promote it
   2  Review   3 waiting  bless plans, answer questions, merge PRs
   3  Unblock  2 waiting  clear parks, resolve stuck lanes
@@ -154,6 +159,43 @@ into an action. A run that is actually stuck this way is *also* a `stuck`
 row in that view — the strip says what the journal currently believes is
 running, Unblock says a person has to do something about it, and a run can
 be both at once until sweep reaps it.
+
+## Usage: how the machine has been doing
+
+Alongside *what is waiting on me?* and *what is the machine doing right
+now?* sits a third question, glanceable rather than interactive: *how has
+it been doing lately?* The usage panel answers it in three lines, over a
+fixed 7-day window:
+
+```
+  Usage
+    ▂▅▃█  13500 in · 8900 out
+    5 completed · 2 parked · 1 handed back
+    claude-code 70% · codex 29%
+```
+
+* A **token sparkline** — one block per day, tallest day full height — with
+  the window's totals beside it.
+* **Outcome counts** — how many runs converged, parked or handed back in the
+  window.
+* **Per-harness share** — what fraction of the window's tokens each harness
+  spent. Sorted by harness name, never by share: this is telemetry, not a
+  leaderboard.
+
+It is rendered from the same journal-walking aggregation
+[`wand stats`](../stats/) reports — one implementation, two surfaces, so a
+number here and the same number from `wand stats --since 168h` can never
+disagree. `wand stats` is the drill-down this panel deliberately is not:
+nothing on the panel takes a key press, and the window is fixed rather than
+a flag, the same way the Running strip above it is read-only.
+
+A board with no run history in the window says so rather than showing a row
+of zeroes:
+
+```
+  Usage
+    no phase activity recorded.
+```
 
 ## Blessing
 
