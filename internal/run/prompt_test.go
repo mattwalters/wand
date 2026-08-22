@@ -23,3 +23,23 @@ func TestImplementPromptCarriesTheBodyIsSpecContract(t *testing.T) {
 		}
 	}
 }
+
+// The docs-change-with-code rule (AGENTS.md) graduates from prose into a
+// standing reviewer dimension here. This test guards against the instruction
+// being silently deleted or reworded away in a future prompt edit — the only
+// way this check can regress, since the check itself runs inside an LLM
+// reviewer's judgment, not in Go code.
+func TestReviewPromptCarriesDocsDimension(t *testing.T) {
+	got := reviewPrompt("a ticket", "main")
+	for _, want := range []string{
+		"Docs change with the code",
+		"README.md",
+		"docs/",
+		"whether the docs moved with it",
+		"not a semantic audit",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("reviewPrompt does not carry %q:\n%s", want, got)
+		}
+	}
+}

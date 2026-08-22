@@ -90,6 +90,13 @@ Raise a finding only when you can state a concrete failure scenario — the inpu
 state under which the code misbehaves, and what goes wrong. A finding without a
 failure scenario is dropped in code without being read, so do not pad the list.
 
+Docs change with the code: check whether this diff touches behavior that README.md,
+PLAN.md, or docs/ describes, and if so, whether the docs moved with it in this change.
+If they did not, raise a finding — same schema as any other, with the failure scenario
+being the specific documented claim the diff now leaves stale. This is a diff-shape
+check, not a semantic audit: you are looking for documented behavior the diff changed
+without a matching doc change, not auditing docs for accuracy in general.
+
 Write your handoff as this JSON object:
 {"verdict": "approve" | "revise",
  "summary": "when approving: what you verified and why it is enough (required for approve)",
