@@ -1,11 +1,12 @@
 ---
 title: wand ui
 weight: 200
-summary: Home — everything waiting on a human, and the one place blessing happens.
+summary: Home — three views, one job each, and the one place blessing happens.
 ---
 
-`ui` opens home: one screen answering one question — *what is
-waiting on me?*
+`ui` opens home: a landing screen naming three views — Decide, Review,
+Unblock — one job each, rather than one flat list of everything waiting on
+a human.
 
 Bare `wand`, with a terminal attached and no flags, does the same thing:
 `wand` and `wand ui` are equivalent. `ui` is the explicit spelling — the one
@@ -21,55 +22,54 @@ wand ui --sample
 wand ui --dump-screen [--script KEYS] [--width N] [--height N]
 ```
 
-## The five queues
+## Home: three views, one job each
+
+A person sitting down at `wand ui` has come to do one of three jobs, not to
+scan one flat list of everything waiting on them. Home opens on a landing
+screen naming the three and how much is waiting in each:
 
 ```
  wand · WND                                                     7 waiting on you
 
-  Triage  2 to judge
-› WND-42  Low        doctor prints an empty drift section on a clean board
-  WND-41  —          guard: a raw state UUID is not matched
+  1  Decide   2 waiting  judge the pool, rank it, promote it
+  2  Review   3 waiting  bless plans, answer questions, merge PRs
+  3  Unblock  2 waiting  clear parks, resolve stuck lanes
 
-  Plan Review  1 to bless
-  WND-44  Urgent     home: a fifth queue for plans awaiting blessing
-
-  Needs Input  1 to answer
-  WND-38  High       Second harness adapter: which one?
-
-  Ready for human  1 to look at
-  WND-35  In Review  Run journal and lease store
-
-  Stalled  2 to resolve
-  WND-36  stuck      held by pid 48213 on studio.local, which is gone; the run …
-  WND-33  parked     the worktree was dirty at handoff; refusing to park noise …
-
-  judge  t ✦Todo  s ✦To Plan  b Backlog  u unranked  d duplicate  x cancel
-  ↑/k ↓/j move • enter open • r refresh • q quit
+  1 Decide • 2 Review • 3 Unblock • r refresh • q quit
 ```
 
-Each of the five is a queue nothing drains on its own, and each is
-invisible until something puts it on one screen:
+A number key opens one view; `esc` from inside a view returns here, and a
+number key pressed while already in a view jumps straight to another one.
+The header's count is global here — across all three — and scoped to just
+the active view once you are inside one.
 
-* **Triage** — what agents filed, waiting to be judged. Ranked in the same
+* **Decide** (`1`) — judge the pool, rank it, promote it. Sourced from
+  **Triage**: what agents filed, waiting to be judged, ranked in the same
   order [`wand queue`](../queue/) ranks work, so the ticket you bless first
-  is the one an agent starts first.
-* **Plan Review** — tickets carrying a finished plan, waiting on the
-  judgment that either blesses it into Todo or sends it back. Opening a row
-  shows the plan itself — the marker-fenced region [`wand plan`](../plan/)
-  wrote into the description — not the ticket's original body. See
-  [Blessing a plan](#blessing-a-plan) below.
-* **Needs Input** — runs parked on a question: a plan run that judged the
-  ticket's premise wrong, or a run that hands back. It means one thing —
-  answer me — never "a plan is ready to bless," which is Plan Review's job.
-* **Ready for human** — every open issue carrying the `ready-for-human`
-  label: a pull request to review, a merge to press. Closed issues are
-  dropped, because the label outlives the merge that answered it.
-* **Stalled** — runs the crash-only run journal says a person has to
-  resolve. Four kinds, worst first: `stuck` (the journal says it is running
-  and its holder is provably dead), `orphaned` (a live run whose ticket is
-  not in a started status — nothing on the board claims the run),
-  `unclear` (a holder on a machine this one cannot see, which is never swept
-  automatically), and `parked` (the run stopped and recorded why).
+  is the one an agent starts first. Blessing lives here — see
+  [Blessing](#blessing) below.
+* **Review** (`2`) — bless plans, answer questions, merge PRs: judgment on
+  work that already exists, not on what to start. Three queues:
+  * **Plan Review** — tickets carrying a finished plan, waiting on the
+    judgment that either blesses it into Todo or sends it back. Opening a
+    row shows the plan itself — the marker-fenced region
+    [`wand plan`](../plan/) wrote into the description — not the ticket's
+    original body. See [Blessing a plan](#blessing-a-plan) below.
+  * **Needs Input** — runs parked on a question: a plan run that judged the
+    ticket's premise wrong, or a run that hands back. It means one thing —
+    answer me — never "a plan is ready to bless," which is Plan Review's
+    job.
+  * **Ready for human** — every open issue carrying the `ready-for-human`
+    label: a pull request to review, a merge to press. Closed issues are
+    dropped, because the label outlives the merge that answered it.
+* **Unblock** (`3`) — clear parks, resolve stuck lanes: a repair of the
+  tooling, not a judgment about the work. Sourced from **Stalled** — runs
+  the crash-only run journal says a person has to resolve. Four kinds,
+  worst first: `stuck` (the journal says it is running and its holder is
+  provably dead), `orphaned` (a live run whose ticket is not in a started
+  status — nothing on the board claims the run), `unclear` (a holder on a
+  machine this one cannot see, which is never swept automatically), and
+  `parked` (the run stopped and recorded why).
 
   A parked run is the one a person can act on: `clear parked` removes the
   `parked` label from its ticket, and the row goes with it. That is not a
@@ -83,9 +83,23 @@ invisible until something puts it on one screen:
   stalled run is one that needs you, and a `stuck` one holds no lane at all
   — being provably dead is exactly what frees it.
 
-The sections are always all five, even when empty. A queue that vanished
-when it drained would teach you to stop looking for it, and the day it
-refilled you would not notice.
+Inside a view, every section is always shown, even when empty — a queue
+that vanished when it drained would teach you to stop looking for it, and
+the day it refilled you would not notice. A view that is *itself* fully
+empty — the common case for two of the three on most visits — says what
+would appear there rather than rendering nothing:
+
+```
+ wand · WND · Unblock                                     nothing waiting on you
+
+  nothing to unblock right now — stalled runs a person has to resolve will land
+  here.
+
+  Stalled
+    every run is either finished or being driven.
+
+  ↑/k ↓/j move • enter open • r refresh • q quit
+```
 
 **Backlog is deliberately absent.** A Backlog ticket is not waiting on you;
 it is the pool, and browsing a pool is Linear's job, done better there. Home
@@ -95,22 +109,25 @@ shows what has *stopped*, not what exists.
 two compose: refreshing while a row is open re-resolves that row against
 what came back, so the key you pressed to get current data cannot be the
 key that hides how stale it is. If the row is gone from the re-read board —
-somebody else judged it — the screen returns to the board and says so
+somebody else judged it — the screen returns to the view and says so
 rather than closing without a word. A refresh that *fails* says that too,
 on whichever screen you were on.
 
 ## What is running right now
 
-Above the four queues, when anything is running, sits a strip answering a
+On the landing screen, when anything is running, sits a strip answering a
 different question — not *what is waiting on me?* but *what is the machine
-doing?*:
+doing?* It belongs to none of the three jobs, so it renders there rather
+than inside any one view:
 
 ```
+ wand · WND                                                     7 waiting on you
+
   Running  2 in flight
   WND-12  implement (round 1) · claude-code · up 18m · hb 8s ago
   WND-7   possibly dead, sweep will confirm · scout · — · up 42m · hb 6m ago
 
-  Triage  2 to judge
+  1  Decide   2 waiting  judge the pool, rank it, promote it
   ...
 ```
 
@@ -131,19 +148,19 @@ pointed at a live run still reads exactly as it did before this existed.
 
 A run whose own liveness judgment says its holder is gone reads
 `possibly dead, sweep will confirm` rather than being dropped or guessed at
-a second time: that judgment is the same one [Stalled](#the-four-queues)
+a second time: that judgment is the same one [Unblock](#home-three-views-one-job-each)
 uses for a `stuck` run, and only [`wand sweep`](../sweep/) ever turns it
 into an action. A run that is actually stuck this way is *also* a `stuck`
-row below — the strip says what the journal currently believes is running,
-the Stalled section says a person has to do something about it, and a run
-can be both at once until sweep reaps it.
+row in that view — the strip says what the journal currently believes is
+running, Unblock says a person has to do something about it, and a run can
+be both at once until sweep reaps it.
 
 ## Blessing
 
 Promoting a ticket to **Todo** or **To Plan** is the transition
 [`wand guard`](../guard/) refuses everywhere else, because it hands out
 authorization an agent does not have. Home is the one place a person
-grants it — and it is a moment, not a keystroke:
+grants it — in the **Decide** view — and it is a moment, not a keystroke:
 
 ```
   ✦ Blessing
@@ -168,7 +185,8 @@ starts.
 
 ## Blessing a plan
 
-Opening a Plan Review row shows the plan [`wand plan`](../plan/) wrote — the
+Opening a Plan Review row, in the **Review** view, shows the plan
+[`wand plan`](../plan/) wrote — the
 marker-fenced region of the description, and nothing else. Not the ticket's
 original body, and not the scout's argued-options comment (the approaches it
 weighed, the trade-offs, the estimate): that stays in Linear, one click away
@@ -344,7 +362,7 @@ reading its output, which makes it the one kind an agent cannot check its
 own work on. So the renderer is exposed as a command:
 
 ```bash
-wand ui --script "j,t" --dump-screen
+wand ui --script "1,j,t" --dump-screen
 ```
 
 **The dump and the test suite share one renderer.** The output is
@@ -385,6 +403,13 @@ same parser backs the test harness, so a reproduction typed at a shell is
 the same input a test replays. Printable keys type into a text field, which
 is how a scripted `x,o,b,s,o,l,e,t,e` reaches the cancellation screen with a
 reason on it.
+
+Every script that reaches a queue row starts with `1`, `2` or `3` — the
+landing screen's own key, opening the view that row lives in — before the
+usual `j`/`k`/`enter` and disposition keys. A script that opens with a
+disposition or move key straight away, as if the landing screen were not
+there, does nothing on the first key: none of them mean anything on home
+itself.
 
 `--script` without `--dump-screen` is an error rather than a silent no-op.
 
@@ -448,7 +473,7 @@ wand ui --dump-screen
 Walk to the blessing screen and print it:
 
 ```bash
-wand ui --script "j,t" --dump-screen
+wand ui --script "1,j,t" --dump-screen
 ```
 
 At a size that is not the default:

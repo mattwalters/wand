@@ -1,0 +1,8 @@
+ wand · WND · Unblock                                           2 waiting on you
+
+  Stalled  2 to resolve
+  WND-36  stuck   held by pid 48213 on studio.local, which is gone; the run sto…
+› WND-33  parked  the worktree was dirty at handoff; refusing to park noise int…
+
+  judge  c clear parked
+  ↑/k ↓/j move • enter open • r refresh • q quit

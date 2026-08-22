@@ -24,6 +24,8 @@ const fieldLabelWidth = 13
 func (m Model) View() tea.View {
 	var body string
 	switch m.state {
+	case stateHome:
+		body = m.homeView()
 	case stateDetail:
 		body = m.detailView()
 	case stateConfirm:
@@ -35,6 +37,78 @@ func (m Model) View() tea.View {
 	v := tea.NewView(body)
 	v.AltScreen = true
 	return v
+}
+
+// --- the landing screen ---------------------------------------------------
+
+// homeView is the landing screen: the Running strip when anything is
+// running, then one line per view naming its key, its job, and how much is
+// waiting on it — three counts and a key each, rather than a screen that
+// picks one job for you.
+func (m Model) homeView() string {
+	var b strings.Builder
+	b.WriteString(m.headerView())
+	b.WriteString("\n\n")
+
+	if len(m.board.Running) > 0 {
+		cols := m.runningColumns()
+		for _, l := range m.runningLines(cols) {
+			b.WriteString(l.text)
+			b.WriteString("\n")
+		}
+		b.WriteString("\n")
+	}
+
+	titleWidth := 0
+	for _, vi := range home.Views {
+		titleWidth = max(titleWidth, len(vi.Title))
+	}
+	for _, vi := range home.Views {
+		b.WriteString(m.viewLine(vi, titleWidth))
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
+	b.WriteString(m.homeFooter())
+	return b.String()
+}
+
+// viewLine is one row of the landing screen: the key, the title, how much
+// is waiting, and the job — the job sentence is what makes an empty view
+// read as "nothing here yet" rather than "is this broken", the same reason
+// [viewEmptyIntro] exists for the view itself.
+func (m Model) viewLine(vi home.ViewInfo, titleWidth int) string {
+	n := m.board.WaitingIn(vi.View)
+	head := m.theme.Heading.Render(fmt.Sprintf("%s%s  %-*s", pad(gutter), vi.Key, titleWidth, vi.Title))
+	var count string
+	switch n {
+	case 0:
+		count = m.theme.Muted.Render("nothing waiting")
+	case 1:
+		count = m.theme.Body.Render("1 waiting")
+	default:
+		count = m.theme.Body.Render(fmt.Sprintf("%d waiting", n))
+	}
+	job := m.theme.Muted.Render("  " + vi.Job)
+	return head + "  " + count + job
+}
+
+func (m Model) homeFooter() string {
+	items := make([]string, 0, len(home.Views)+3)
+	for _, vi := range home.Views {
+		items = append(items, vi.Key+" "+vi.Title)
+	}
+	if !m.readOnly() {
+		items = append(items, "r refresh")
+	}
+	if m.engager != nil {
+		label := "e engage"
+		if m.engaged {
+			label = "e disengage"
+		}
+		items = append(items, label)
+	}
+	items = append(items, "q quit")
+	return m.theme.Muted.Render(pad(gutter) + strings.Join(items, " • "))
 }
 
 // --- the board -----------------------------------------------------------
@@ -113,7 +187,17 @@ func (m Model) headerView() string {
 		left += m.theme.Muted.Render("· " + m.board.Team)
 	}
 
+	// The count is global on home, where all three views are in play at
+	// once, and scoped to the active view everywhere inside one — "7
+	// waiting on you" is useful context on the landing screen and a
+	// confusing overcount inside a view that itself has one.
 	waiting := m.board.Waiting()
+	if m.state != stateHome {
+		if title := viewTitle(m.view); title != "" {
+			left += m.theme.Muted.Render(" · " + title)
+		}
+		waiting = m.board.WaitingIn(m.view)
+	}
 	var right string
 	switch waiting {
 	case 0:
@@ -167,17 +251,25 @@ func (m Model) engageLine() string {
 	return style.Render(pad(gutter) + "engaged · " + status)
 }
 
+// boardLines renders the active view's sections — never the Running strip,
+// which is home's alone (see [Model.homeView]) since nothing in it belongs
+// to any one of the three jobs. When the whole view is empty, a one-line
+// intro says what would appear there before the sections' own Empty text
+// repeats the point section by section: two of three views are empty more
+// often than not, and a screen with no explanation reads as broken rather
+// than as "nothing to do".
 func (m Model) boardLines() []line {
 	var lines []line
 	idx := 0
 	cols := m.columns()
+	sections := m.board.SectionsFor(m.view)
 
-	if len(m.board.Running) > 0 {
-		lines = append(lines, m.runningLines(cols)...)
+	if m.board.WaitingIn(m.view) == 0 {
+		lines = append(lines, line{text: m.wrap(m.theme.Muted, viewEmptyIntro(m.view)), row: -1})
 		lines = append(lines, line{row: -1})
 	}
 
-	for i, section := range m.board.Sections {
+	for i, section := range sections {
 		if i > 0 {
 			lines = append(lines, line{row: -1})
 		}
@@ -195,6 +287,35 @@ func (m Model) boardLines() []line {
 		}
 	}
 	return lines
+}
+
+// viewTitle names a view for the header breadcrumb, empty when v matches
+// nothing in home.Views — which never happens for a valid home.View, but a
+// lookup earns its "not found" case rather than assuming one.
+func viewTitle(v home.View) string {
+	for _, vi := range home.Views {
+		if vi.View == v {
+			return vi.Title
+		}
+	}
+	return ""
+}
+
+// viewEmptyIntro says what would appear in a view that currently has
+// nothing in it — the sentence [Model.boardLines] shows once, above the
+// sections' own per-queue Empty text, so a fully empty view reads as
+// "nothing here yet" rather than as a screen that failed to load.
+func viewEmptyIntro(v home.View) string {
+	switch v {
+	case home.ViewDecide:
+		return "nothing to decide right now — new Triage tickets and a ranked Backlog slice will land here."
+	case home.ViewReview:
+		return "nothing to review right now — plans awaiting a blessing, parked questions and ready-for-human work will land here."
+	case home.ViewUnblock:
+		return "nothing to unblock right now — stalled runs a person has to resolve will land here."
+	default:
+		return ""
+	}
 }
 
 func (m Model) sectionHeading(s home.Section) string {
@@ -240,6 +361,14 @@ func (m Model) columns() columns {
 		c.id = max(c.id, len(rowIdentifier(row)))
 		c.tag = max(c.tag, len([]rune(m.rowTag(row))))
 	}
+	return c
+}
+
+// runningColumns is the Running strip's own column widths — measured
+// separately from [Model.columns] now that the strip renders only on home,
+// never alongside a view's rows.
+func (m Model) runningColumns() columns {
+	var c columns
 	for _, a := range m.board.Running {
 		c.id = max(c.id, len(a.Ticket))
 		c.phase = max(c.phase, len(a.PhaseLabel()))

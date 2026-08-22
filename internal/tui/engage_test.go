@@ -255,6 +255,9 @@ func TestEngageToggleOffReleasesLock(t *testing.T) {
 
 // --- rendered header states -------------------------------------------------
 
+// The engaged line is header chrome, not part of any one view's job, so it
+// renders on the landing screen the same way it would inside a view — these
+// screens leave the model on stateHome (New's zero value) to prove that.
 func TestEngageHeaderScreens(t *testing.T) {
 	at := time.Date(2026, 1, 1, 12, 0, 0, 0, time.UTC)
 
@@ -262,21 +265,21 @@ func TestEngageHeaderScreens(t *testing.T) {
 	idle.engaged = true
 	idle.nextPollAt = at.Add(40 * time.Second)
 	idle.now = at
-	tuitest.AssertScreen(t, "board-engaged-idle", idle, "")
+	tuitest.AssertScreen(t, "home-engaged-idle", idle, "")
 
 	dispatched := boardEngaged(t, &fakeBackend{}, &fakeEngager{})
 	dispatched.engaged = true
 	dispatched.tickResult = EngageResult{Dispatched: true, Ticket: "WND-9", Verb: "run"}
 	dispatched.nextPollAt = at.Add(60 * time.Second)
 	dispatched.now = at
-	tuitest.AssertScreen(t, "board-engaged-dispatched", dispatched, "")
+	tuitest.AssertScreen(t, "home-engaged-dispatched", dispatched, "")
 
 	swept := boardEngaged(t, &fakeBackend{}, &fakeEngager{})
 	swept.engaged = true
 	swept.tickResult = EngageResult{Swept: true, SweptTicket: "WND-1", SweptAction: "reaped"}
 	swept.nextPollAt = at.Add(60 * time.Second)
 	swept.now = at
-	tuitest.AssertScreen(t, "board-engaged-swept", swept, "")
+	tuitest.AssertScreen(t, "home-engaged-swept", swept, "")
 }
 
 // Quitting while engaged must release the lock before the program actually

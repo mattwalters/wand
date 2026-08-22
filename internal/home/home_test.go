@@ -39,6 +39,90 @@ func TestBuildAlwaysHasFiveSections(t *testing.T) {
 	}
 }
 
+// Every Kind belongs to exactly one of the three views, and SectionsFor is
+// a lens over Build's own five sections — never a second construction path
+// that could drift from it.
+func TestSectionsForCoversEveryKindExactlyOnce(t *testing.T) {
+	b := Build(Snapshot{Team: "WND"})
+	seen := map[Kind]bool{}
+	for _, v := range []View{ViewDecide, ViewReview, ViewUnblock} {
+		for _, s := range b.SectionsFor(v) {
+			if seen[s.Kind] {
+				t.Errorf("Kind %q appears in more than one view", s.Kind)
+			}
+			seen[s.Kind] = true
+		}
+	}
+	for _, k := range []Kind{KindTriage, KindPlanReview, KindNeedsInput, KindReadyForHuman, KindStalled} {
+		if !seen[k] {
+			t.Errorf("Kind %q is not covered by any view", k)
+		}
+	}
+}
+
+func TestSectionsForGroupsByJob(t *testing.T) {
+	b := Build(Snapshot{Team: "WND"})
+	tests := []struct {
+		view  View
+		kinds []Kind
+	}{
+		{ViewDecide, []Kind{KindTriage}},
+		{ViewReview, []Kind{KindPlanReview, KindNeedsInput, KindReadyForHuman}},
+		{ViewUnblock, []Kind{KindStalled}},
+	}
+	for _, tt := range tests {
+		var got []Kind
+		for _, s := range b.SectionsFor(tt.view) {
+			got = append(got, s.Kind)
+		}
+		if len(got) != len(tt.kinds) {
+			t.Fatalf("view %v sections = %v, want %v", tt.view, got, tt.kinds)
+		}
+		for i := range tt.kinds {
+			if got[i] != tt.kinds[i] {
+				t.Errorf("view %v section %d = %q, want %q", tt.view, i, got[i], tt.kinds[i])
+			}
+		}
+	}
+}
+
+// WaitingIn and RowsIn must agree with each other, and together sum to the
+// board's own global Waiting — a per-view count that disagreed with the
+// rows it was counting would be a screen lying about itself.
+func TestWaitingInAgreesWithRowsInAndSumsToTheWhole(t *testing.T) {
+	b := Build(Sample())
+	sum := 0
+	for _, v := range []View{ViewDecide, ViewReview, ViewUnblock} {
+		rows := b.RowsIn(v)
+		if got := b.WaitingIn(v); got != len(rows) {
+			t.Errorf("view %v: WaitingIn = %d, len(RowsIn) = %d", v, got, len(rows))
+		}
+		sum += len(rows)
+	}
+	if sum != b.Waiting() {
+		t.Errorf("sum of per-view waiting = %d, want board total %d", sum, b.Waiting())
+	}
+}
+
+// Views' keys are exactly "1", "2", "3": the ticket's own recommendation,
+// and the one set of keys free of every disposition, engage, refresh, quit
+// and move binding.
+func TestViewsHaveDistinctKeys(t *testing.T) {
+	if len(Views) != 3 {
+		t.Fatalf("len(Views) = %d, want 3", len(Views))
+	}
+	seen := map[string]bool{}
+	for _, vi := range Views {
+		if vi.Key == "" {
+			t.Errorf("view %q has no key", vi.Title)
+		}
+		if seen[vi.Key] {
+			t.Errorf("key %q is bound to more than one view", vi.Key)
+		}
+		seen[vi.Key] = true
+	}
+}
+
 // The judgment queues are ranked the way the agent queue is ranked. Two
 // orderings would mean the ticket a human blessed first is not the one an
 // agent starts first, which makes the ranking they did meaningless.
@@ -160,9 +244,15 @@ func TestDispositionKeysAreUnique(t *testing.T) {
 
 // The disposition keys must not collide with the screen's own navigation.
 // A key that both moves the cursor and starts a cancellation is a key that
-// will one day cancel a ticket somebody was only scrolling past.
+// will one day cancel a ticket somebody was only scrolling past. "1", "2"
+// and "3" are the three views' own navigation keys (see [Views]) and belong
+// in this list for the same reason.
 func TestDispositionKeysAvoidNavigation(t *testing.T) {
-	for _, nav := range []string{"j", "k", "q", "enter", "esc", "r", "up", "down"} {
+	navKeys := []string{"j", "k", "q", "enter", "esc", "r", "e", "up", "down"}
+	for _, vi := range Views {
+		navKeys = append(navKeys, vi.Key)
+	}
+	for _, nav := range navKeys {
 		for name, disps := range map[string][]Disposition{"judgments": judgments, "planReviewJudgments": planReviewJudgments, "stalledJudgments": stalledJudgments} {
 			for _, d := range disps {
 				if d.Key == nav {
