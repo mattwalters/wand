@@ -70,6 +70,80 @@ func RenderVelocity(buckets []VelocityBucket) string {
 	return b.String()
 }
 
+// OutcomeCounts is how many ended runs closed with each outcome, within a
+// window — the usage panel's "N completed · N parked · N handed back" line,
+// and wand stats's own future fourth report.
+type OutcomeCounts struct {
+	Converged  int
+	Parked     int
+	HandedBack int
+}
+
+// CountOutcomes tallies ended runs by outcome, windowed on each run's own
+// Updated timestamp — when its journal last changed — the same "closed
+// within the window" question Velocity asks of a phase-round's At. A run
+// still in progress has no verdict yet and is excluded, the same rule
+// Convergence follows. since is the zero time takes the whole history.
+func CountOutcomes(runs []RunSummary, since time.Time) OutcomeCounts {
+	var c OutcomeCounts
+	for _, run := range runs {
+		if run.Outcome == "" {
+			continue
+		}
+		if run.Updated.IsZero() || run.Updated.Before(since) {
+			continue
+		}
+		switch run.Outcome {
+		case journal.Converged:
+			c.Converged++
+		case journal.Parked:
+			c.Parked++
+		case journal.HandedBack:
+			c.HandedBack++
+		}
+	}
+	return c
+}
+
+// HarnessTotal is one harness's token spend across every phase-round it
+// closed within the window.
+type HarnessTotal struct {
+	Harness   string
+	TokensIn  *int64
+	TokensOut *int64
+}
+
+// HarnessTokens sums tokens per harness across every phase-round that closed
+// at or after since — the same windowing basis Velocity uses on
+// PhaseRound.At. Sorted by harness name alphabetically: the usage panel's
+// per-harness share line is telemetry, not a leaderboard, the same rule
+// HarnessPhase follows.
+func HarnessTokens(runs []RunSummary, since time.Time) []HarnessTotal {
+	rows := make(map[string]*HarnessTotal)
+	var harnesses []string
+	for _, run := range runs {
+		for _, g := range run.Rounds {
+			if g.At.IsZero() || g.At.Before(since) {
+				continue
+			}
+			row, ok := rows[run.Harness]
+			if !ok {
+				row = &HarnessTotal{Harness: run.Harness}
+				rows[run.Harness] = row
+				harnesses = append(harnesses, run.Harness)
+			}
+			row.TokensIn = addTokens(row.TokensIn, g.TokensIn)
+			row.TokensOut = addTokens(row.TokensOut, g.TokensOut)
+		}
+	}
+	sort.Strings(harnesses)
+	out := make([]HarnessTotal, len(harnesses))
+	for i, h := range harnesses {
+		out[i] = *rows[h]
+	}
+	return out
+}
+
 // phasePipelineOrder ranks phases for display, never by a metric — the
 // not-list this ticket holds is that per-harness output must never look
 // like a leaderboard. Run's own pipeline is implement, review, revise,
