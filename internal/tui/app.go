@@ -764,7 +764,7 @@ func withoutIssue(s home.Snapshot, id, identifier string) home.Snapshot {
 	s.Triage = dropIssue(s.Triage, id, identifier)
 	s.PlanReview = dropIssue(s.PlanReview, id, identifier)
 	s.NeedsInput = dropIssue(s.NeedsInput, id, identifier)
-	s.ReadyForHuman = dropIssue(s.ReadyForHuman, id, identifier)
+	s.InReview = dropIssue(s.InReview, id, identifier)
 	return s
 }
 

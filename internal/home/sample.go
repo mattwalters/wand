@@ -56,11 +56,16 @@ func Sample() Snapshot {
 					"the estimate assumes the isolation suite passes unchanged.",
 			},
 		},
-		ReadyForHuman: []linear.Issue{
+		InReview: []linear.Issue{
 			{
 				Identifier: "WND-35", Title: "Run journal and lease store",
 				State: linear.IssueState{Name: "In Review", Type: "started"}, Priority: 2,
 				Labels: []string{"ready-for-human"}, Assignee: "Matt Walters", CreatedAt: at(1),
+			},
+			{
+				Identifier: "WND-46", Title: "sweep: dedupe re-review candidates against an open PR",
+				State: linear.IssueState{Name: "In Review", Type: "started"}, Priority: 3,
+				Assignee: "Matt Walters", CreatedAt: at(2),
 			},
 		},
 		Stalled: []StalledRun{

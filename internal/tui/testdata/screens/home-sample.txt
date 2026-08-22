@@ -1,8 +1,8 @@
- wand · WND                                                     7 waiting on you
+ wand · WND                                                     8 waiting on you
   sample board — reads no Linear team, and writes none
 
   1  Decide   2 waiting  judge the pool, rank it, promote it
-  2  Review   3 waiting  bless plans, answer questions, merge PRs
+  2  Review   4 waiting  bless plans, answer questions, merge PRs
   3  Unblock  2 waiting  clear parks, resolve stuck lanes
 
   1 Decide • 2 Review • 3 Unblock • q quit

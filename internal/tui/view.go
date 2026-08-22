@@ -310,7 +310,7 @@ func viewEmptyIntro(v home.View) string {
 	case home.ViewDecide:
 		return "nothing to decide right now — new Triage tickets and a ranked Backlog slice will land here."
 	case home.ViewReview:
-		return "nothing to review right now — plans awaiting a blessing, parked questions and ready-for-human work will land here."
+		return "nothing to review right now — plans awaiting a blessing, parked questions and work still in review will land here."
 	case home.ViewUnblock:
 		return "nothing to unblock right now — stalled runs a person has to resolve will land here."
 	default:
@@ -481,13 +481,26 @@ func (m Model) rowTag(row home.Row) string {
 	if row.IsStalled() {
 		return string(row.Stalled.Kind)
 	}
-	if row.Kind == home.KindReadyForHuman {
-		return row.Issue.State.Name
+	if row.Kind == home.KindInReview {
+		if hasLabel(row.Issue.Labels, home.ReadyForHumanLabel) {
+			return "ready for human"
+		}
+		return "—"
 	}
 	if row.Issue.Priority != 0 {
 		return linear.PriorityName(row.Issue.Priority)
 	}
 	return "—"
+}
+
+// hasLabel reports whether labels contains name.
+func hasLabel(labels []string, name string) bool {
+	for _, l := range labels {
+		if l == name {
+			return true
+		}
+	}
+	return false
 }
 
 func (m Model) footerView() string {
@@ -563,8 +576,8 @@ func (m Model) dispositionHelp() string {
 // user what they cannot do and not what they should.
 func noJudgment(k home.Kind) string {
 	switch k {
-	case home.KindReadyForHuman:
-		return "read-only: this one is asking for a review, which happens on the pull request"
+	case home.KindInReview:
+		return "read-only: review and merge happen on the pull request, not here"
 	case home.KindStalled:
 		return "read-only: a run is not a ticket — resolving one means going to the machine"
 	default:

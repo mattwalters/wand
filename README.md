@@ -161,7 +161,7 @@ rather than one flat list of everything waiting on you:
 ```
 
 **Decide** (`1`) is Triage: judge what agents filed, rank it, promote it.
-**Review** (`2`) is Plan Review, Needs Input and Ready for human together:
+**Review** (`2`) is Plan Review, Needs Input and In Review together:
 bless plans, answer questions, merge PRs — judgment on work that already
 exists, not on what to start. **Unblock** (`3`) is Stalled: clear parks,
 resolve runs no process is driving any more — a repair of the tooling, not

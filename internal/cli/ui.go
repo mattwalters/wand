@@ -46,7 +46,7 @@ func newUICmd() *cobra.Command {
 			"landing screen naming the three, and a number key opens one:\n\n" +
 			"  1 Decide   judge the pool, rank it, promote it (Triage)\n" +
 			"  2 Review   bless plans, answer questions, merge PRs (Plan Review,\n" +
-			"             Needs Input, Ready for human)\n" +
+			"             Needs Input, In Review)\n" +
 			"  3 Unblock  clear parks, resolve stuck lanes (Stalled)\n\n" +
 			"esc from a view returns to the landing screen; a number key jumps\n" +
 			"straight to another view without detouring back through it.\n\n" +

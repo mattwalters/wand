@@ -55,15 +55,17 @@ func TestReadFollowsTheCovenantsNames(t *testing.T) {
 		t.Fatalf("Read: %v", err)
 	}
 
-	if len(cl.states) != 3 || cl.states[0] != "Inbox" || cl.states[1] != "Plan Review" || cl.states[2] != "Blocked on me" {
+	if len(cl.states) != 4 || cl.states[0] != "Inbox" || cl.states[1] != "Plan Review" ||
+		cl.states[2] != "Blocked on me" || cl.states[3] != "In Review" {
 		t.Errorf("statuses read = %v, want the covenant's own names", cl.states)
 	}
-	// Two label reads: ready-for-human fills a queue, and parked decides
-	// which parked stalled runs are still a live obligation rather than a run
-	// that happened (WND-85). Both are covenant topology, so neither is
-	// renamed by a covenant file.
-	if len(cl.labels) != 2 || cl.labels[0] != ReadyForHumanLabel || cl.labels[1] != queue.ParkedLabel {
-		t.Errorf("labels read = %v, want %q then %q", cl.labels, ReadyForHumanLabel, queue.ParkedLabel)
+	// One label read: parked decides which parked stalled runs are still a
+	// live obligation rather than a run that happened (WND-85). Covenant
+	// topology, so not renamed by a covenant file. ready-for-human no longer
+	// drives a read of its own — In Review's rows carry their labels for
+	// free, and Build sorts on them.
+	if len(cl.labels) != 1 || cl.labels[0] != queue.ParkedLabel {
+		t.Errorf("labels read = %v, want %q", cl.labels, queue.ParkedLabel)
 	}
 	// The started read exists only to tell a held stalled run from an orphaned
 	// one; it is by type because a covenant may name two started columns.
@@ -73,7 +75,7 @@ func TestReadFollowsTheCovenantsNames(t *testing.T) {
 	if snap.Team != "WND" {
 		t.Errorf("team = %q, want WND", snap.Team)
 	}
-	if len(snap.Triage) != 1 || len(snap.PlanReview) != 1 || len(snap.NeedsInput) != 1 || len(snap.ReadyForHuman) != 1 {
+	if len(snap.Triage) != 1 || len(snap.PlanReview) != 1 || len(snap.NeedsInput) != 1 || len(snap.InReview) != 1 {
 		t.Errorf("snapshot = %+v, want one issue in each queue", snap)
 	}
 	if snap.Stalled != nil {
