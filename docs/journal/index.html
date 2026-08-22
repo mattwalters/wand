@@ -200,8 +200,8 @@ ticket has yet.</p>
 <p>Every <code>journal.Record</code> carries <code>kind</code>, <code>seq</code>, <code>at</code>, <code>phase</code> and <code>round</code> (see
 <code>internal/journal</code>&rsquo;s package doc for the record stream&rsquo;s own guarantees).
 On a <code>phase.ended</code> record, <code>detail</code> is a JSON object shaped like this
-(<code>run</code>-verb fields on the left; <code>plan</code> carries every field except
-<code>diff_stat</code>, since a plan run has no worktree):</p>
+(<code>run</code>-verb fields on the left; <code>plan</code> carries every field except the two
+diff stats, since a plan run has no worktree):</p>
 <table>
 	<thead>
 			<tr>
@@ -264,7 +264,17 @@ On a <code>phase.ended</code> record, <code>detail</code> is a JSON object shape
 			<tr>
 					<td><code>diff_stat</code></td>
 					<td>string</td>
-					<td><code>run</code> only; omitted when there is no diff yet</td>
+					<td><code>run</code> only; omitted when there is no diff yet — committed work, <code>base...HEAD</code></td>
+			</tr>
+			<tr>
+					<td><code>uncommitted_diff_stat</code></td>
+					<td>string</td>
+					<td><code>run</code> only; omitted when the worktree is clean — what the tree holds and no commit does</td>
+			</tr>
+			<tr>
+					<td><code>since_last_edit</code></td>
+					<td>string</td>
+					<td><code>run</code> only; omitted when the worktree is clean — a Go duration, how long before the phase ended the newest uncommitted file was written</td>
 			</tr>
 			<tr>
 					<td><code>attempt</code></td>
@@ -278,19 +288,44 @@ On a <code>phase.ended</code> record, <code>detail</code> is a JSON object shape
 			</tr>
 	</tbody>
 </table>
-<p>Two rules hold for every reader of this schema:</p>
+<p>Three rules hold for every reader of this schema:</p>
 <ul>
-<li><strong>Absent, never estimated.</strong> A harness that cannot report tokens, or
+<li>
+<p><strong>Absent, never estimated.</strong> A harness that cannot report tokens, or
 whose output a parser could not read, leaves <code>tokens_in</code>/<code>tokens_out</code>
 out of the object entirely — never a faked zero. A reader that treats a
-missing field as zero will undercount; it must treat it as unknown.</li>
-<li><strong>Terminal state and review round are not duplicated here.</strong> They live
+missing field as zero will undercount; it must treat it as unknown.</p>
+</li>
+<li>
+<p><strong>Terminal state and review round are not duplicated here.</strong> They live
 on the outer record: <code>kind: &quot;run.ended&quot;</code> carries <code>outcome</code>
 (<code>converged</code>/<code>handed_back</code>/<code>parked</code>) and <code>reason</code>, and every
 <code>phase.started</code>/<code>phase.ended</code> pair carries its own <code>round</code>. A reader
 wanting &ldquo;how many review rounds did this run take&rdquo; counts <em>distinct
 rounds</em> where <code>phase == &quot;review&quot;</code> — not <code>phase.ended</code> records — for the
-reason the next section explains.</li>
+reason the next section explains.</p>
+</li>
+<li>
+<p><strong>The two diff stats answer different questions.</strong> <code>diff_stat</code> is what
+would survive the worktree being removed, and what a PR would show.
+<code>uncommitted_diff_stat</code> is what the worker has touched but not committed
+— staged, unstaged, and a count of untracked files on the end
+(<code>&quot;4 files changed, 91 insertions(+), 2 deletions(-), 3 files untracked&quot;</code>).
+A worker killed at the timeout cap never reaches a commit, so <code>diff_stat</code>
+is empty for a run that did the whole ticket, and the uncommitted figure
+is the only record that it happened. Untracked files are counted rather
+than measured: producing insertion counts for them would mean staging
+them, and a diagnostic must not edit the worktree a park is preserving
+for a human to read.</p>
+<p><code>since_last_edit</code> dates that work: <code>&quot;0s&quot;</code> is a worker killed mid-edit,
+<code>&quot;22m14s&quot;</code> one that did everything in the first ten minutes and then
+stopped changing files. It is the newest mtime among the same uncommitted
+paths — the last <em>edit</em>, not the last sign of life, since a worker whose
+final half-hour went on reading code and running builds wrote nothing.
+Like the token counts, it is absent rather than zero when there was
+nothing to read it from: <code>&quot;0s&quot;</code> is a real reading and the most
+interesting one there is.</p>
+</li>
 </ul>
 <h2 id="a-retried-phase-and-review-rounds">A retried phase and review rounds</h2>
 <p>A phase that fails with an error the harness itself reported as
