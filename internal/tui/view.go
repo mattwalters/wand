@@ -9,6 +9,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/mattwalters/wand/internal/home"
+	"github.com/mattwalters/wand/internal/ledger"
 	"github.com/mattwalters/wand/internal/linear"
 )
 
@@ -58,6 +59,12 @@ func (m Model) homeView() string {
 		}
 		b.WriteString("\n")
 	}
+
+	for _, l := range m.usageLines() {
+		b.WriteString(l.text)
+		b.WriteString("\n")
+	}
+	b.WriteString("\n")
 
 	titleWidth := 0
 	for _, vi := range home.Views {
@@ -445,6 +452,125 @@ func ago(now, at time.Time) string {
 	default:
 		return fmt.Sprintf("%dh%dm", int(d.Hours()), int(d.Minutes())%60)
 	}
+}
+
+// --- the usage panel -------------------------------------------------------
+
+// usageBlockChars are eight levels of a filled block, low to high — a fixed
+// function of each bucket's own token total relative to the window's peak,
+// never of anything that varies between otherwise-identical renders, which
+// is what keeps the sparkline byte-stable under theme.Static.
+var usageBlockChars = []rune("▁▂▃▄▅▆▇█")
+
+// usageLines renders the usage panel: recent token velocity as a sparkline,
+// how runs recently ended, and where the tokens went by harness — home's
+// answer to "how is the machine doing?", laid over the same window `wand
+// stats --since` reports against (see internal/ledger). It sits on home
+// alone, between the Running strip and the three view lines, for the same
+// reason Running does: nothing in it belongs to any one of the three jobs.
+func (m Model) usageLines() []line {
+	heading := m.theme.Heading.Render(pad(gutter) + "Usage")
+	u := m.snap.Usage
+	if u.Empty() {
+		return []line{
+			{text: heading, row: -1},
+			{text: m.theme.Muted.Render(truncate(pad(gutter+2)+"no phase activity recorded.", m.width)), row: -1},
+		}
+	}
+	lines := []line{{text: heading, row: -1}}
+	lines = append(lines, line{text: m.theme.Body.Render(truncate(pad(gutter+2)+usageSparklineLine(u.Velocity), m.width)), row: -1})
+	lines = append(lines, line{text: m.theme.Body.Render(truncate(pad(gutter+2)+usageOutcomesLine(u.Outcomes), m.width)), row: -1})
+	if h := usageHarnessShareLine(u.Harness); h != "" {
+		lines = append(lines, line{text: m.theme.Muted.Render(truncate(pad(gutter+2)+h, m.width)), row: -1})
+	}
+	return lines
+}
+
+// usageSparklineLine renders one block character per bucket, sized off that
+// bucket's total tokens relative to the window's peak bucket, followed by
+// the window's own totals.
+func usageSparklineLine(buckets []ledger.VelocityBucket) string {
+	if len(buckets) == 0 {
+		return "no tokens recorded"
+	}
+	totals := make([]int64, len(buckets))
+	var totalIn, totalOut, peak int64
+	for i, b := range buckets {
+		in, out := tokenSum(b.TokensIn), tokenSum(b.TokensOut)
+		totals[i] = in + out
+		totalIn += in
+		totalOut += out
+		if totals[i] > peak {
+			peak = totals[i]
+		}
+	}
+	spark := make([]rune, len(totals))
+	for i, t := range totals {
+		spark[i] = usageBlockChar(t, peak)
+	}
+	return fmt.Sprintf("%s  %d in · %d out", string(spark), totalIn, totalOut)
+}
+
+// usageBlockChar picks the sparkline glyph for one bucket, relative to the
+// window's peak — the tallest bucket always renders full, an empty one
+// always renders the floor, and nothing in between is guessed at.
+func usageBlockChar(v, peak int64) rune {
+	if peak <= 0 || v <= 0 {
+		return usageBlockChars[0]
+	}
+	idx := int(float64(v) / float64(peak) * float64(len(usageBlockChars)-1))
+	if idx >= len(usageBlockChars) {
+		idx = len(usageBlockChars) - 1
+	}
+	return usageBlockChars[idx]
+}
+
+// usageOutcomesLine is the "N completed · N parked · N handed back" line —
+// the three ways a run ends, named the way journal.Outcome itself names
+// them rather than abbreviated.
+func usageOutcomesLine(o ledger.OutcomeCounts) string {
+	return fmt.Sprintf("%d completed · %d parked · %d handed back", o.Converged, o.Parked, o.HandedBack)
+}
+
+// usageHarnessShareLine is the per-harness share of the window's tokens —
+// telemetry, not a leaderboard, the same rule internal/ledger's own
+// per-harness tables follow: rows arrive pre-sorted by harness name, never
+// by share.
+func usageHarnessShareLine(rows []ledger.HarnessTotal) string {
+	if len(rows) == 0 {
+		return ""
+	}
+	sums := make([]int64, len(rows))
+	var total int64
+	for i, r := range rows {
+		sums[i] = tokenSum(r.TokensIn) + tokenSum(r.TokensOut)
+		total += sums[i]
+	}
+	parts := make([]string, len(rows))
+	for i, r := range rows {
+		name := r.Harness
+		if name == "" {
+			name = "—"
+		}
+		var pct int64
+		if total > 0 {
+			pct = 100 * sums[i] / total
+		}
+		parts[i] = fmt.Sprintf("%s %d%%", name, pct)
+	}
+	return strings.Join(parts, " · ")
+}
+
+// tokenSum reads an optional token count as a plain int64 for arithmetic
+// that does not need to distinguish "absent" from "reported zero" — the
+// sparkline and the share line only ever add these together, so the
+// distinction ledger's own *int64 fields preserve does not need to survive
+// past this point.
+func tokenSum(v *int64) int64 {
+	if v == nil {
+		return 0
+	}
+	return *v
 }
 
 func (m Model) rowView(row home.Row, selected bool, cols columns) string {

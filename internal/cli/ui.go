@@ -171,13 +171,29 @@ func sampleModel(width, height int) tui.Model {
 	})
 }
 
+// usageWindow is the usage panel's default lookback — the ticket's own
+// lean, and there is no flag for it yet. 7 days, not 30: `wand stats`
+// remains the drill-down for a longer history, and this panel exists to be
+// glanceable rather than configurable.
+const usageWindow = 7 * 24 * time.Hour
+
 // runHome reads the real board, then hands it to the program.
 //
-// The read happens before the alternate screen opens, deliberately: a
+// The clock is read first, before homeBackend is even constructed: since —
+// the usage panel's window cutoff — has to be fixed once for the whole
+// process, not recomputed on every refresh, or a refresh an hour later would
+// silently narrow the window by an hour rather than showing a stable 7-day
+// history. Stamping the initial board with the same reading is what lets
+// the Active-runs strip show elapsed and heartbeat age without View ever
+// reading the clock itself.
+//
+// The board read happens before the alternate screen opens, deliberately: a
 // Linear failure is then an ordinary command error on stderr rather than a
 // message trapped inside a full-screen app the user has to quit out of to
 // read.
 func runHome(cmd *cobra.Command, teamKey, harness, model, effort string, width, height int, interval time.Duration) error {
+	now := time.Now()
+
 	cov, fileTeamKey, _, err := covenantFromCwd()
 	if err != nil {
 		return err
@@ -195,18 +211,13 @@ func runHome(cmd *cobra.Command, teamKey, harness, model, effort string, width, 
 		return err
 	}
 
-	back := &homeBackend{cl: cl, runs: runs, cov: cov, teamKey: resolvedTeamKey}
+	back := &homeBackend{cl: cl, runs: runs, cov: cov, teamKey: resolvedTeamKey, since: now.Add(-usageWindow)}
 	ctx, cancel := context.WithTimeout(cmd.Context(), apiTimeout)
 	snap, err := back.Read(ctx)
 	cancel()
 	if err != nil {
 		return err
 	}
-	// Read just above is already the one non-deterministic act this
-	// command performs; stamping the board with the clock reading taken
-	// right beside it is what lets the Active-runs strip show elapsed and
-	// heartbeat age without View ever reading the clock itself.
-	now := time.Now()
 
 	tm := tui.New(tui.Config{
 		Snapshot: snap,
@@ -325,12 +336,16 @@ type homeBackend struct {
 	runs    home.Runs
 	cov     covenant.Covenant
 	teamKey string
+	// since is the usage panel's window cutoff, fixed once in runHome
+	// before the first read and reused on every refresh — see runHome's
+	// own doc for why it is not recomputed here.
+	since time.Time
 }
 
 func (b *homeBackend) Read(ctx context.Context) (home.Snapshot, error) {
 	ctx, cancel := context.WithTimeout(ctx, apiTimeout)
 	defer cancel()
-	return home.Read(ctx, b.cl, b.runs, b.cov, b.teamKey)
+	return home.Read(ctx, b.cl, b.runs, b.cov, b.teamKey, b.since)
 }
 
 func (b *homeBackend) Apply(ctx context.Context, in home.Intent) (home.Intent, error) {

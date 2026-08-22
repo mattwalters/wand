@@ -1,6 +1,11 @@
  wand · WND                                                     7 waiting on you
   engaged · idle · next poll in 40s
 
+  Usage
+    ▂▅▃█  13500 in · 8900 out
+    5 completed · 2 parked · 1 handed back
+    claude-code 70% · codex 29%
+
   1  Decide   2 waiting  judge the pool, rank it, promote it
   2  Review   3 waiting  bless plans, answer questions, merge PRs
   3  Unblock  2 waiting  clear parks, resolve stuck lanes
