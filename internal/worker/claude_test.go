@@ -1,7 +1,9 @@
 package worker_test
 
 import (
+	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/mattwalters/wand/internal/worker"
@@ -76,6 +78,75 @@ func TestClaudeCodeInvocation(t *testing.T) {
 	}
 	if inv.Stdin != prompt {
 		t.Errorf("the composed prompt is not what gets delivered")
+	}
+}
+
+func TestClaudeCodeSchemaInvocationAddsTheFlagInline(t *testing.T) {
+	spec := specFor(t)
+	schema := json.RawMessage(`{"type":"object","properties":{"verdict":{"type":"string"}},"required":["verdict"],"additionalProperties":false}`)
+	inv, err := worker.ClaudeCode{}.SchemaInvocation(spec, worker.Compose(spec), []string{"PATH=/usr/bin"}, schema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasFlag(inv.Argv, "--json-schema", string(schema)) {
+		t.Errorf("--json-schema not passed inline: %v", inv.Argv)
+	}
+}
+
+// claudeStructuredResultSample is a stream-json final "result" event
+// carrying structured_output, the shape a --json-schema run succeeds with.
+const claudeStructuredResultSample = `{"type":"result","subtype":"success","is_error":false,"terminal_reason":"completed","structured_output":{"verdict":"sound"}}`
+
+func TestClaudeCodeCollectHandoffReadsStructuredOutput(t *testing.T) {
+	got, err := worker.ClaudeCode{}.CollectHandoff(worker.Spec{}, worker.Result{Output: claudeStructuredResultSample})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != `{"verdict":"sound"}` {
+		t.Errorf("CollectHandoff = %s, want the structured_output object", got)
+	}
+}
+
+func TestClaudeCodeCollectHandoffWithNoiseAroundTheLine(t *testing.T) {
+	noisy := "warning: something on stderr\n" + claudeStructuredResultSample + "\n"
+	got, err := worker.ClaudeCode{}.CollectHandoff(worker.Spec{}, worker.Result{Output: noisy})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != `{"verdict":"sound"}` {
+		t.Errorf("CollectHandoff = %s, want the structured_output object found around the noise", got)
+	}
+}
+
+// This is the load-bearing case the ticket's live probe found: an
+// unsatisfiable schema still exits 0 with is_error false and subtype
+// "success" — every signal but structured_output's presence reads this as
+// a clean run.
+func TestClaudeCodeCollectHandoffFailsWhenStructuredOutputIsAbsent(t *testing.T) {
+	for name, output := range map[string]string{
+		"NoStructuredOutputField": `{"type":"result","subtype":"success","is_error":false,"result":"the model gave up and wrote prose instead"}`,
+		"StructuredOutputNull":    `{"type":"result","subtype":"success","structured_output":null}`,
+		"Empty":                   "",
+		"NoResultEvent":           `{"type":"assistant","message":"hi"}`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			got, err := worker.ClaudeCode{}.CollectHandoff(worker.Spec{}, worker.Result{Output: output})
+			if err == nil {
+				t.Fatalf("CollectHandoff = %s, nil error — want a failure, not a silent misread of a schema failure as a handoff", got)
+			}
+			if got != nil {
+				t.Errorf("CollectHandoff returned a handoff alongside an error: %s", got)
+			}
+		})
+	}
+}
+
+func TestClaudeCodeCollectHandoffRejectsNonObjectStructuredOutput(t *testing.T) {
+	_, err := worker.ClaudeCode{}.CollectHandoff(worker.Spec{}, worker.Result{
+		Output: `{"type":"result","structured_output":"just a string"}`,
+	})
+	if err == nil || !strings.Contains(err.Error(), "not a single JSON object") {
+		t.Errorf("err = %v, want a not-a-JSON-object error", err)
 	}
 }
 

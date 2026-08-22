@@ -87,6 +87,65 @@ func TestParseReviewUnknownVerdict(t *testing.T) {
 	}
 }
 
+// schemaNode is a loosely-typed view of a shape-only schema, for asserting
+// what internal/schema generated without re-implementing a JSON Schema
+// parser in the test.
+type schemaNode struct {
+	Type                 string                     `json:"type"`
+	Properties           map[string]json.RawMessage `json:"properties"`
+	Required             []string                   `json:"required"`
+	AdditionalProperties *bool                      `json:"additionalProperties"`
+}
+
+func decodeSchemaNode(t *testing.T, raw json.RawMessage) schemaNode {
+	t.Helper()
+	var n schemaNode
+	if err := json.Unmarshal(raw, &n); err != nil {
+		t.Fatalf("generated schema is not valid JSON: %v\n%s", err, raw)
+	}
+	return n
+}
+
+// TestWorkSchemaRequiresOnlyStatus holds the reasoning WorkSchema's own doc
+// states: Summary and Reason are each required on only one of "done" or
+// "blocked", so neither may be required by the schema — a model with
+// nothing legitimate to say on the other branch would invent filler
+// instead of admitting it (WND-97).
+func TestWorkSchemaRequiresOnlyStatus(t *testing.T) {
+	top := decodeSchemaNode(t, WorkSchema)
+	if top.Type != "object" {
+		t.Fatalf("type = %q, want object", top.Type)
+	}
+	if top.AdditionalProperties == nil || *top.AdditionalProperties {
+		t.Error("additionalProperties must be false — this is what catches a renamed field")
+	}
+	if len(top.Required) != 1 || top.Required[0] != "status" {
+		t.Errorf("required = %v, want [status]", top.Required)
+	}
+	for _, want := range []string{"status", "summary", "reason", "title", "description_corrections", "plan_deviations"} {
+		if _, ok := top.Properties[want]; !ok {
+			t.Errorf("missing property %q", want)
+		}
+	}
+}
+
+// TestReviewSchemaRequiresOnlyVerdict is ReviewSchema's counterpart: Summary
+// and Findings are each required on only one of "approve" or "revise".
+func TestReviewSchemaRequiresOnlyVerdict(t *testing.T) {
+	top := decodeSchemaNode(t, ReviewSchema)
+	if top.AdditionalProperties == nil || *top.AdditionalProperties {
+		t.Error("additionalProperties must be false")
+	}
+	if len(top.Required) != 1 || top.Required[0] != "verdict" {
+		t.Errorf("required = %v, want [verdict]", top.Required)
+	}
+	for _, want := range []string{"verdict", "summary", "findings"} {
+		if _, ok := top.Properties[want]; !ok {
+			t.Errorf("missing property %q", want)
+		}
+	}
+}
+
 func TestConcreteDropsScenariolessFindings(t *testing.T) {
 	kept, dropped := Concrete([]Finding{
 		{Summary: "real bug", FailureScenario: "call f(nil): panics"},

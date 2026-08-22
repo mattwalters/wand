@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/mattwalters/wand/internal/schema"
 )
 
 // WorkHandoff is what an implement, fix-CI or revise worker reports back.
@@ -35,6 +37,16 @@ type WorkHandoff struct {
 	// worker's transcript (the PW-191 lesson).
 	PlanDeviations []string `json:"plan_deviations,omitempty"`
 }
+
+// WorkSchema is the shape-only JSON Schema (see internal/schema) a
+// schema-constrained implement, fix-CI or revise worker's handoff is held
+// to. "status" is the only required property: it is the one field
+// meaningful whichever of "done" or "blocked" the worker reports. Summary
+// and Reason are each required on only one of those branches — ParseWork
+// enforces that — and a schema cannot express a conditional requirement
+// without a model that has nothing legitimate to say fabricating something
+// that satisfies it instead (WND-97's pattern/minLength probe).
+var WorkSchema = schema.FromStruct(WorkHandoff{}, "status")
 
 // Correction is one anchored description edit: the exact wording the work
 // disproved, and what should stand in its place (empty deletes).
@@ -91,6 +103,12 @@ type Finding struct {
 	FailureScenario string `json:"failure_scenario"`
 	Location        string `json:"location,omitempty"`
 }
+
+// ReviewSchema is the shape-only JSON Schema a schema-constrained review
+// worker's handoff is held to. "verdict" is the only required property, for
+// the same reason WorkSchema states: Summary and Findings are each required
+// on only one of "approve" or "revise", which ParseReview enforces.
+var ReviewSchema = schema.FromStruct(ReviewHandoff{}, "verdict")
 
 // ParseReview validates a review handoff. An error here parks the run: a
 // reviewer that produces no parseable handoff must never read as a clean

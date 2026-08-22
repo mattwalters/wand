@@ -1,7 +1,9 @@
 package worker
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"strings"
 )
 
@@ -74,6 +76,58 @@ func (c ClaudeCode) Invocation(spec Spec, prompt string, environ []string) (Invo
 	}
 
 	return Invocation{Argv: argv, Env: environ, Dir: spec.Dir, Stdin: prompt}, nil
+}
+
+// SchemaInvocation is Invocation plus --json-schema: claude -p takes the
+// schema inline (unlike Codex, which takes a file path — see
+// Codex.SchemaInvocation), forcing a StructuredOutput tool call validated
+// locally before the model is even spawned. The plain file-write half of
+// the contract (Compose's "write your result to <path>" line) is left
+// untouched: a worker under a schema still may write the file, but nothing
+// here depends on it — CollectHandoff below reads the schema-enforced
+// result off stdout instead.
+func (c ClaudeCode) SchemaInvocation(spec Spec, prompt string, environ []string, schema json.RawMessage) (Invocation, error) {
+	inv, err := c.Invocation(spec, prompt, environ)
+	if err != nil {
+		return Invocation{}, err
+	}
+	inv.Argv = append(inv.Argv, "--json-schema", string(schema))
+	return inv, nil
+}
+
+// CollectHandoff reads the handoff back out of the "structured_output"
+// field on the stream-json event stream's final "result" event, rather than
+// the file collect reads elsewhere.
+//
+// It gates on structured_output's presence, not on exit code, is_error,
+// subtype or terminal_reason: a live probe (2026-08-21, recorded in
+// WND-97) found an unsatisfiable schema still exits 0 with is_error false
+// and subtype "success" — Claude Code retries internally, gives up, and
+// falls back to prose in "result" instead. Every one of those signals reads
+// that run as a clean success; only structured_output's absence tells the
+// truth. Falling back to the prose in "result" would feed it straight into
+// a package's strict handoff parser, which is worse than refusing: a
+// schema failure must park, not be misread as a handoff.
+func (c ClaudeCode) CollectHandoff(spec Spec, res Result) (json.RawMessage, error) {
+	for _, line := range strings.Split(res.Output, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || line[0] != '{' {
+			continue
+		}
+		var r struct {
+			Type             string          `json:"type"`
+			StructuredOutput json.RawMessage `json:"structured_output"`
+		}
+		if err := json.Unmarshal([]byte(line), &r); err != nil || r.Type != "result" {
+			continue
+		}
+		so := bytes.TrimSpace(r.StructuredOutput)
+		if len(so) == 0 || string(so) == "null" {
+			return nil, errors.New("claude-code: the result carried no structured_output — the schema could not be satisfied, so the worker fell back to prose")
+		}
+		return validHandoff(so)
+	}
+	return nil, errors.New("claude-code: no result event found in the output")
 }
 
 // claudeUsage is the shape of the "usage" object on the final "result"

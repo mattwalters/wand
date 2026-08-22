@@ -1,6 +1,9 @@
 package worker_test
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 
@@ -52,6 +55,62 @@ func TestCodexInvocation(t *testing.T) {
 	}
 	if inv.Dir != spec.Dir || inv.Stdin != prompt {
 		t.Errorf("invocation did not preserve the runner's dir/prompt: %+v", inv)
+	}
+}
+
+func TestCodexSchemaInvocationWritesTheSchemaFileAndFlags(t *testing.T) {
+	spec := specFor(t)
+	schema := json.RawMessage(`{"type":"object","properties":{"status":{"type":"string"}},"required":["status"],"additionalProperties":false}`)
+	inv, err := worker.Codex{}.SchemaInvocation(spec, worker.Compose(spec), []string{"PATH=/usr/bin"}, schema)
+	if err != nil {
+		t.Fatal(err)
+	}
+	schemaPath := filepath.Join(spec.ScratchDir, "handoff-schema.json")
+	if !hasFlag(inv.Argv, "--output-schema", schemaPath) {
+		t.Errorf("--output-schema not pointed at %s: %v", schemaPath, inv.Argv)
+	}
+	if !hasFlag(inv.Argv, "--output-last-message", spec.HandoffPath) {
+		t.Errorf("--output-last-message not pointed at %s: %v", spec.HandoffPath, inv.Argv)
+	}
+	got, err := os.ReadFile(schemaPath)
+	if err != nil {
+		t.Fatalf("schema file was not written: %v", err)
+	}
+	if string(got) != string(schema) {
+		t.Errorf("schema file = %s, want %s", got, schema)
+	}
+}
+
+func TestCodexSchemaInvocationCreatesScratchDirIfMissing(t *testing.T) {
+	spec := specFor(t)
+	// Unlike worker.Run, which creates ScratchDir before calling the
+	// adapter, this calls SchemaInvocation directly against a scratch
+	// directory that does not exist yet — proving the adapter does not
+	// depend on that ordering.
+	spec.ScratchDir = filepath.Join(t.TempDir(), "not-yet-created")
+	spec.HandoffPath = filepath.Join(spec.ScratchDir, "handoff.json")
+	if _, err := (worker.Codex{}).SchemaInvocation(spec, worker.Compose(spec), nil, json.RawMessage(`{}`)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(spec.ScratchDir, "handoff-schema.json")); err != nil {
+		t.Errorf("schema file missing after SchemaInvocation created its own scratch dir: %v", err)
+	}
+}
+
+func TestCodexCollectHandoffReadsTheHandoffFile(t *testing.T) {
+	spec := specFor(t)
+	if err := os.WriteFile(spec.HandoffPath, []byte(`{"status":"done"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := worker.Codex{}.CollectHandoff(spec, worker.Result{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != `{"status":"done"}` {
+		t.Errorf("CollectHandoff = %s, want the file's contents", got)
+	}
+	if _, err := os.Stat(spec.HandoffPath); !os.IsNotExist(err) {
+		t.Error("CollectHandoff did not delete the handoff file after reading it")
 	}
 }
 

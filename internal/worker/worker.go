@@ -127,6 +127,15 @@ type Spec struct {
 	// Clock is the heartbeat's clock. Nil means time.Now — tests set it so
 	// heartbeat timing is reproducible, matching journal.Store.Now.
 	Clock func() time.Time
+
+	// Schema, if set, is the shape-only JSON Schema (keys and types,
+	// additionalProperties: false — never a value constraint; see
+	// internal/schema) the worker's handoff must satisfy. An adapter that
+	// implements SchemaAdapter uses it to constrain the harness's own final
+	// message, moving a renamed or extra field from a Go-validator refusal
+	// to a structural one (WND-97). Nil is always valid: it is today's
+	// behavior, and an adapter with no schema support simply never sees it.
+	Schema json.RawMessage
 }
 
 // Paths in a Spec must be absolute: the worker resolves a relative path
@@ -279,6 +288,42 @@ type TransienceAdapter interface {
 	Transient(res Result) bool
 }
 
+// SchemaAdapter optionally constrains a worker's handoff to a shape-only
+// JSON Schema instead of the plain file-write contract Compose states —
+// moving handoff shape from a Go validator's refusal, after the phase is
+// already paid for, to a structural guarantee the harness enforces before
+// the worker's final message is even accepted (WND-97).
+//
+// It fails soft by construction, beside UsageAdapter and TransienceAdapter
+// and for the same reason: Run only calls through this interface when
+// Spec.Schema is set and the resolved adapter implements it; an adapter
+// that does not, or a Spec with no schema, falls back to the plain
+// Invocation and today's file-based collect. --json-schema (or its Codex
+// equivalent) must never become a hard dependency on a particular harness
+// or CLI build.
+type SchemaAdapter interface {
+	Adapter
+	// SchemaInvocation is Invocation, constrained to schema: the returned
+	// Invocation's argv is built so the harness enforces schema on the
+	// worker's final message. Implementations may need one side effect
+	// Invocation itself never has — writing the schema somewhere the CLI
+	// can read it from disk (Codex takes a file path, not an inline flag)
+	// — which is why this is a distinct method rather than a schema
+	// parameter threaded through Invocation.
+	SchemaInvocation(spec Spec, prompt string, environ []string, schema json.RawMessage) (Invocation, error)
+
+	// CollectHandoff reads the handoff back out of a finished
+	// schema-constrained run. Where the harness still lands it at
+	// spec.HandoffPath (Codex, via --output-last-message) this is the same
+	// file-based read Run does without a schema; where it does not (Claude
+	// Code carries it only in the stdout event stream) this is the only
+	// way to reach it. Either way it must fail when the schema could not
+	// be honored rather than fall back to reading prose: a harness that
+	// gave up and wrote an explanation instead of a handoff must park, not
+	// be misread as one.
+	CollectHandoff(spec Spec, res Result) (json.RawMessage, error)
+}
+
 // Compose renders the contract the orchestrator hands down, followed by the
 // task. Every worker prompt starts with this: the mode, the rules, where to
 // scratch, where to hand off — stated, so the worker never has to probe.
@@ -412,8 +457,24 @@ func Run(ctx context.Context, a Adapter, spec Spec) (Result, error) {
 		return Result{ExitCode: -1}, err
 	}
 
+	if err := os.MkdirAll(spec.ScratchDir, 0o755); err != nil {
+		return Result{ExitCode: -1}, fmt.Errorf("worker: creating scratch dir: %w", err)
+	}
+
 	environ := ChildEnviron(spec, os.Environ())
-	inv, err := a.Invocation(spec, Compose(spec), environ)
+	// A SchemaAdapter is only consulted when the caller actually asked for
+	// a schema — an adapter without one, or a Spec with none, gets exactly
+	// today's plain Invocation, which is the fail-soft direction that
+	// matters (see SchemaAdapter's doc).
+	sa, hasSchemaAdapter := a.(SchemaAdapter)
+	useSchema := hasSchemaAdapter && len(spec.Schema) > 0
+	var inv Invocation
+	var err error
+	if useSchema {
+		inv, err = sa.SchemaInvocation(spec, Compose(spec), environ, spec.Schema)
+	} else {
+		inv, err = a.Invocation(spec, Compose(spec), environ)
+	}
 	if err != nil {
 		return Result{ExitCode: -1}, fmt.Errorf("worker: %s: %w", a.Name(), err)
 	}
@@ -426,9 +487,6 @@ func Run(ctx context.Context, a Adapter, spec Spec) (Result, error) {
 		inv.Env = environ
 	}
 
-	if err := os.MkdirAll(spec.ScratchDir, 0o755); err != nil {
-		return Result{ExitCode: -1}, fmt.Errorf("worker: creating scratch dir: %w", err)
-	}
 	// A handoff already sitting at the path is an earlier phase's output;
 	// left in place, this phase could "succeed" without its worker writing
 	// a thing.
@@ -493,9 +551,16 @@ func Run(ctx context.Context, a Adapter, spec Spec) (Result, error) {
 		return res, fmt.Errorf("worker: spawning %s: %w", a.Name(), runErr)
 	}
 
-	// Collect (and delete) the handoff even after a timeout, so a partial
-	// file cannot survive to satisfy a later phase.
-	handoff, herr := collect(spec.HandoffPath)
+	// Collect (and delete, where there is a file to delete) the handoff even
+	// after a timeout, so a partial file cannot survive to satisfy a later
+	// phase.
+	var handoff json.RawMessage
+	var herr error
+	if useSchema {
+		handoff, herr = sa.CollectHandoff(spec, res)
+	} else {
+		handoff, herr = collect(spec.HandoffPath)
+	}
 	res.Handoff = handoff
 
 	switch {
@@ -596,9 +661,17 @@ func collect(path string) (json.RawMessage, error) {
 	if err := os.Remove(path); err != nil {
 		return nil, fmt.Errorf("deleting handoff after read: %w", err)
 	}
-	// The contract says a single JSON object, and json.Valid alone would
-	// also accept `null`, a bare string or an array — any of which a later
-	// phase would unmarshal into all-zero fields without an error.
+	return validHandoff(raw)
+}
+
+// validHandoff trims raw and checks it is a single JSON object — the
+// contract says a single JSON object, and json.Valid alone would also
+// accept `null`, a bare string or an array, any of which a later phase
+// would unmarshal into all-zero fields without an error. Shared between the
+// file-based collect above and a SchemaAdapter's CollectHandoff (Claude
+// Code reads its handoff off stdout, not a file, but the same shape
+// requirement applies either way).
+func validHandoff(raw []byte) (json.RawMessage, error) {
 	trimmed := bytes.TrimSpace(raw)
 	if len(trimmed) == 0 || trimmed[0] != '{' || !json.Valid(trimmed) {
 		return nil, errors.New("handoff is not a single JSON object")

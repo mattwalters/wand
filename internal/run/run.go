@@ -55,6 +55,7 @@ package run
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -281,7 +282,7 @@ func (l *loop) run(ctx context.Context) Outcome {
 	l.ticketText = ticket.Render(l.issue, comments)
 
 	// --- implement ---------------------------------------------------
-	res, out := l.work(ctx, "implement", 1, l.workRules(), implementPrompt(l.ticketText))
+	res, out := l.work(ctx, "implement", 1, l.workRules(), implementPrompt(l.ticketText), WorkSchema)
 	if out != nil {
 		return *out
 	}
@@ -317,7 +318,7 @@ func (l *loop) run(ctx context.Context) Outcome {
 
 	// --- review rounds -----------------------------------------------
 	for round := 1; ; round++ {
-		res, out := l.work(ctx, "review", round, reviewRules(), reviewPrompt(l.ticketText, l.base.Ref))
+		res, out := l.work(ctx, "review", round, reviewRules(), reviewPrompt(l.ticketText, l.base.Ref), ReviewSchema)
 		if out != nil {
 			return *out
 		}
@@ -359,7 +360,7 @@ func (l *loop) run(ctx context.Context) Outcome {
 			continue
 		}
 
-		res, out = l.work(ctx, "revise", round, l.workRules(), revisePrompt(l.ticketText, findings))
+		res, out = l.work(ctx, "revise", round, l.workRules(), revisePrompt(l.ticketText, findings), WorkSchema)
 		if out != nil {
 			return *out
 		}
@@ -399,7 +400,7 @@ func (l *loop) run(ctx context.Context) Outcome {
 // also reuses HandoffPath, which is safe twice over: collect deletes a
 // handoff the moment it reads it, and worker.Run clears anything left at
 // the path before it spawns.
-func (l *loop) work(ctx context.Context, phase string, round int, rules []string, prompt string) (worker.Result, *Outcome) {
+func (l *loop) work(ctx context.Context, phase string, round int, rules []string, prompt string, schema json.RawMessage) (worker.Result, *Outcome) {
 	for attempt := 0; ; attempt++ {
 		if attempt == 0 {
 			fmt.Fprintf(l.d.Out, "phase %s round %d: spawning worker (%s)\n", phase, round, l.d.Harness)
@@ -430,6 +431,7 @@ func (l *loop) work(ctx context.Context, phase string, round int, rules []string
 			Out:            l.d.Out,
 			Label:          fmt.Sprintf("%s round %d", phase, round),
 			OnHeartbeat:    l.heartbeat(phase, round),
+			Schema:         schema,
 		}
 		start := time.Now()
 		res, err := l.d.Workers.Run(ctx, spec)
@@ -670,7 +672,7 @@ func (l *loop) green(ctx context.Context) *Outcome {
 				ciCapComment(caps.CIAttempts, verify, output, l.branch, l.prURL, l.tree, l.workState(ctx)),
 				fmt.Sprintf("the fix-CI cap (%d) ran out with verify still failing", caps.CIAttempts))
 		}
-		res, out := l.work(ctx, "fix-ci", l.ciFailures, l.workRules(), fixCIPrompt(verify, output))
+		res, out := l.work(ctx, "fix-ci", l.ciFailures, l.workRules(), fixCIPrompt(verify, output), WorkSchema)
 		if out != nil {
 			return out
 		}
