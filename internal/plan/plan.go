@@ -283,8 +283,9 @@ type planning struct {
 // free — this struct, journaled once per phase, is the plan-verb half of
 // the stable ledger schema described in the package doc of
 // internal/journal. It carries the same operational fields as run's own
-// phaseDetail (internal/run/run.go) except DiffStat: a plan run has no
-// worktree, so there is nothing for git diff to summarize.
+// phaseDetail (internal/run/run.go) except the three that come off a
+// worktree — the two diff stats and the last-edit marker — since a plan
+// run has no worktree for git to read.
 //
 // A metric a harness or this phase cannot report is omitted, never
 // estimated — TokensIn/TokensOut are pointers so a reported zero and "the

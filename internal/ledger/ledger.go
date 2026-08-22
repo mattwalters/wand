@@ -36,10 +36,10 @@ type Runs interface {
 }
 
 // phaseDetail decodes the phase.ended `detail` payload documented on
-// docs/content/docs/journal.md — plus `attempt`, which that table omits but
-// internal/run and internal/plan both write. It is defined here rather than
-// imported from either package because both structs are unexported: the
-// ledger reads the wire contract, not either orchestrator's internals.
+// docs/content/docs/journal.md — the fields this package's aggregations
+// need, not the whole record. It is defined here rather than imported from
+// either package because both structs are unexported: the ledger reads the
+// wire contract, not either orchestrator's internals.
 //
 // TokensIn/TokensOut stay pointers so a reported zero and "the harness
 // didn't say" remain distinguishable through the sums below — the same rule

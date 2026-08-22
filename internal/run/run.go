@@ -178,7 +178,7 @@ type loop struct {
 // the stable ledger schema described in the package doc of
 // internal/journal.
 //
-// The operational fields (Harness through DiffStat) follow one rule: a
+// The operational fields (Harness through SinceLastEdit) follow one rule: a
 // metric a harness or this phase cannot report is omitted, never
 // estimated. TokensIn/TokensOut are pointers for the same reason worker.
 // Usage's are — a reported zero and "the harness didn't say" must stay
@@ -210,8 +210,23 @@ type phaseDetail struct {
 	WallClock string `json:"wall_clock,omitempty"`
 	// DiffStat is git's own --shortstat of the worktree against the run's
 	// base, taken at the end of every phase — the run verb only, since
-	// a plan run has no worktree.
+	// a plan run has no worktree. It counts committed work: what would
+	// survive the worktree being removed.
 	DiffStat string `json:"diff_stat,omitempty"`
+	// Uncommitted is the same shortstat for what the tree holds and no
+	// commit does (see [TreeStat]). It is the field that answers "was it
+	// working, or was it wedged?" for a phase that was killed: a worker
+	// cut off at the timeout cap has committed nothing, so DiffStat is
+	// empty however much work it did, and this is where all of that work
+	// shows up.
+	Uncommitted string `json:"uncommitted_diff_stat,omitempty"`
+	// SinceLastEdit is how long before the phase ended the newest of those
+	// uncommitted paths was last written, as a Go duration string — "0s"
+	// for a worker killed mid-edit, "22m14s" for one that did its work and
+	// then stopped doing anything. Absent when there was nothing to read
+	// it from, never zero standing in for unknown: zero is the reading
+	// that says the kill landed on a working worker.
+	SinceLastEdit string `json:"since_last_edit,omitempty"`
 	// Attempt is which spawn of this phase-and-round this record ends,
 	// counting from 1. It is above 1 only when an earlier attempt failed
 	// transiently and was retried, so a reader who has never seen a retry
@@ -451,9 +466,18 @@ func (l *loop) work(ctx context.Context, phase string, round int, rules []string
 		}
 		// Best-effort, like workState: a metrics call that cannot run (no
 		// commits yet, a transient git failure) must not park a run over a
-		// diff stat, so a failure here just leaves the field absent.
+		// diff stat, so a failure here just leaves the fields absent.
+		//
+		// Taken for every phase, including one that failed or was killed —
+		// that is the case the uncommitted half exists for, and a stat
+		// skipped on the failure path would be missing exactly when it is
+		// the only evidence left.
 		if stat, derr := l.d.Git.DiffStat(ctx, l.tree, l.base.Ref); derr == nil {
-			detail.DiffStat = stat
+			detail.DiffStat = stat.Committed
+			detail.Uncommitted = stat.Uncommitted
+			if stat.SinceLastEdit != nil {
+				detail.SinceLastEdit = stat.SinceLastEdit.Truncate(time.Millisecond).String()
+			}
 		}
 		if err != nil {
 			detail.Error = err.Error()
